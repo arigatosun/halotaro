@@ -9,6 +9,10 @@ module.exports = {
   ],
   theme: {
     extend: {
+      colors: {
+        background: "white",
+        // 他の色はそのままにしてください
+      },
       textColor: {
         DEFAULT: "#1a202c", // デフォルトのテキストカラー
       },

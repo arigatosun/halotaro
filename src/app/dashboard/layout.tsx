@@ -13,7 +13,7 @@ export default function DashboardLayout({
   const isReservationPage = pathname === "/dashboard/reservations";
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-yellow-50 to-red-50">
+    <div className="min-h-screen ">
       <Header />
       <main
         className={`flex-1 ${
