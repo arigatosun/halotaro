@@ -12,6 +12,7 @@ import {
   Store,
   UserCircle,
 } from "lucide-react";
+import Image from "next/image";
 
 const Header = () => {
   const pathname = usePathname();
@@ -27,7 +28,15 @@ const Header = () => {
     <div className="flex flex-col">
       <nav className="bg-white w-full p-4 shadow-lg">
         <div className="container mx-auto flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-red-600">ハロタロ</h1>
+          <Image
+            src="/images/logo-tag.png"
+            alt="ハロタロ"
+            width={200}
+            height={100}
+            priority
+            className="object-contain"
+            sizes="(max-width: 768px) 100px, 150px"
+          />
           <ul className="flex space-x-4 justify-center flex-grow">
             <NavItem
               href="/dashboard"
