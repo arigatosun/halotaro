@@ -20,7 +20,7 @@ const WeeklyRevenueChart: React.FC<WeeklyRevenueChartProps> = ({
   return (
     <Card className="col-span-4 bg-white border-none shadow-lg">
       <CardHeader>
-        <CardTitle className="text-orange-dark">週間売上推移</CardTitle>
+        <CardTitle>週間売上推移</CardTitle>
       </CardHeader>
       <CardContent className="pl-2">
         <div

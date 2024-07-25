@@ -1,182 +1,187 @@
 "use client";
 
 import React, { useState } from "react";
-import { Mail, Bell, Smartphone } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AlertCircle, Bell, Mail, Smartphone } from "lucide-react";
 
-interface NotificationSettings {
-  sendConfirmationEmail: boolean;
-  sendReminderEmail: boolean;
-  sendCancellationEmail: boolean;
-  sendSMS: boolean;
-  sendPushNotification: boolean;
-  reminderTiming: number;
-  emailTemplate: string;
+interface NotificationSetting {
+  id: string;
+  name: string;
+  email: boolean;
+  sms: boolean;
+  push: boolean;
 }
 
-const initialNotificationSettings: NotificationSettings = {
-  sendConfirmationEmail: true,
-  sendReminderEmail: true,
-  sendCancellationEmail: true,
-  sendSMS: false,
-  sendPushNotification: false,
-  reminderTiming: 24,
-  emailTemplate: "予約確認メールのテンプレート",
-};
+const NotificationSettingsView: React.FC = () => {
+  const [emailAddress, setEmailAddress] = useState("user@example.com");
+  const [phoneNumber, setPhoneNumber] = useState("090-1234-5678");
+  const [notificationTime, setNotificationTime] = useState("immediately");
+  const [notificationSettings, setNotificationSettings] = useState<
+    NotificationSetting[]
+  >([
+    { id: "1", name: "新規予約", email: true, sms: false, push: true },
+    { id: "2", name: "予約変更", email: true, sms: false, push: true },
+    { id: "3", name: "予約キャンセル", email: true, sms: true, push: true },
+    { id: "4", name: "レビュー投稿", email: true, sms: false, push: false },
+    { id: "5", name: "売上報告", email: true, sms: false, push: false },
+  ]);
 
-const NotificationSettingsPage: React.FC = () => {
-  const [settings, setSettings] = useState<NotificationSettings>(
-    initialNotificationSettings
-  );
-
-  const handleCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, checked } = e.target;
-    setSettings((prev) => ({ ...prev, [name]: checked }));
-  };
-
-  const handleInputChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+  const handleNotificationToggle = (
+    id: string,
+    type: "email" | "sms" | "push"
   ) => {
-    const { name, value } = e.target;
-    setSettings((prev) => ({ ...prev, [name]: value }));
+    setNotificationSettings(
+      notificationSettings.map((setting) =>
+        setting.id === id ? { ...setting, [type]: !setting[type] } : setting
+      )
+    );
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    // ここでAPIを呼び出して設定を保存する
-    console.log("保存された通知設定:", settings);
-    alert("通知設定が保存されました");
+  const handleSave = () => {
+    console.log("Settings saved:", {
+      emailAddress,
+      phoneNumber,
+      notificationTime,
+      notificationSettings,
+    });
+    // ここで設定を保存するAPIを呼び出す
   };
 
   return (
-    <div className="max-w-4xl mx-auto p-6">
-      <h1 className="text-3xl font-bold mb-6">通知設定</h1>
-      <form onSubmit={handleSubmit}>
-        <div className="bg-white shadow-md rounded px-8 pt-6 pb-8 mb-4">
-          <h2 className="text-xl font-semibold mb-4">メール通知</h2>
-          <div className="mb-4">
-            <label className="flex items-center">
-              <input
-                type="checkbox"
-                name="sendConfirmationEmail"
-                checked={settings.sendConfirmationEmail}
-                onChange={handleCheckboxChange}
-                className="mr-2"
-              />
-              <Mail className="mr-2" />
-              予約確認メールを送信する
-            </label>
-          </div>
-          <div className="mb-4">
-            <label className="flex items-center">
-              <input
-                type="checkbox"
-                name="sendReminderEmail"
-                checked={settings.sendReminderEmail}
-                onChange={handleCheckboxChange}
-                className="mr-2"
-              />
-              <Bell className="mr-2" />
-              リマインダーメールを送信する
-            </label>
-          </div>
-          <div className="mb-4">
-            <label className="flex items-center">
-              <input
-                type="checkbox"
-                name="sendCancellationEmail"
-                checked={settings.sendCancellationEmail}
-                onChange={handleCheckboxChange}
-                className="mr-2"
-              />
-              <Mail className="mr-2" />
-              キャンセル確認メールを送信する
-            </label>
-          </div>
-        </div>
+    <div className="p-8 max-w-4xl mx-auto">
+      <h2 className="text-2xl font-bold mb-6">通知設定</h2>
 
-        <div className="bg-white shadow-md rounded px-8 pt-6 pb-8 mb-4">
-          <h2 className="text-xl font-semibold mb-4">その他の通知方法</h2>
-          <div className="mb-4">
-            <label className="flex items-center">
-              <input
-                type="checkbox"
-                name="sendSMS"
-                checked={settings.sendSMS}
-                onChange={handleCheckboxChange}
-                className="mr-2"
-              />
-              <Smartphone className="mr-2" />
-              SMSで通知を送信する
-            </label>
-          </div>
-          <div className="mb-4">
-            <label className="flex items-center">
-              <input
-                type="checkbox"
-                name="sendPushNotification"
-                checked={settings.sendPushNotification}
-                onChange={handleCheckboxChange}
-                className="mr-2"
-              />
-              <Bell className="mr-2" />
-              プッシュ通知を送信する
-            </label>
-          </div>
-        </div>
+      <Tabs defaultValue="general" className="mb-6">
+        <TabsList>
+          <TabsTrigger value="general">一般設定</TabsTrigger>
+          <TabsTrigger value="notifications">通知項目</TabsTrigger>
+        </TabsList>
 
-        <div className="bg-white shadow-md rounded px-8 pt-6 pb-8 mb-4">
-          <h2 className="text-xl font-semibold mb-4">リマインダー設定</h2>
-          <div className="mb-4">
-            <label
-              className="block text-gray-700 text-sm font-bold mb-2"
-              htmlFor="reminderTiming"
-            >
-              リマインダー送信タイミング（予約時間の何時間前）
-            </label>
-            <input
-              className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-              id="reminderTiming"
-              type="number"
-              name="reminderTiming"
-              value={settings.reminderTiming}
-              onChange={handleInputChange}
-              min="1"
-              max="72"
-            />
-          </div>
-        </div>
+        <TabsContent value="general">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">一般通知設定</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="email">通知用メールアドレス</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={emailAddress}
+                  onChange={(e) => setEmailAddress(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="phone">通知用電話番号（SMS用）</Label>
+                <Input
+                  id="phone"
+                  type="tel"
+                  value={phoneNumber}
+                  onChange={(e) => setPhoneNumber(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>通知のタイミング</Label>
+                <RadioGroup
+                  value={notificationTime}
+                  onValueChange={setNotificationTime}
+                >
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="immediately" id="immediately" />
+                    <Label htmlFor="immediately">即時</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="daily" id="daily" />
+                    <Label htmlFor="daily">1日1回まとめて</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="weekly" id="weekly" />
+                    <Label htmlFor="weekly">週1回まとめて</Label>
+                  </div>
+                </RadioGroup>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-        <div className="bg-white shadow-md rounded px-8 pt-6 pb-8 mb-4">
-          <h2 className="text-xl font-semibold mb-4">メールテンプレート</h2>
-          <div className="mb-4">
-            <label
-              className="block text-gray-700 text-sm font-bold mb-2"
-              htmlFor="emailTemplate"
-            >
-              予約確認メールのテンプレート
-            </label>
-            <textarea
-              className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-              id="emailTemplate"
-              name="emailTemplate"
-              value={settings.emailTemplate}
-              onChange={handleInputChange}
-              rows={6}
-            />
-          </div>
-        </div>
+        <TabsContent value="notifications">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">通知項目設定</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <table className="w-full">
+                <thead>
+                  <tr>
+                    <th>通知項目</th>
+                    <th className="text-center">
+                      <Mail className="inline-block" /> メール
+                    </th>
+                    <th className="text-center">
+                      <Smartphone className="inline-block" /> SMS
+                    </th>
+                    <th className="text-center">
+                      <Bell className="inline-block" /> プッシュ通知
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {notificationSettings.map((setting) => (
+                    <tr key={setting.id}>
+                      <td>{setting.name}</td>
+                      <td className="text-center">
+                        <Checkbox
+                          checked={setting.email}
+                          onCheckedChange={() =>
+                            handleNotificationToggle(setting.id, "email")
+                          }
+                        />
+                      </td>
+                      <td className="text-center">
+                        <Checkbox
+                          checked={setting.sms}
+                          onCheckedChange={() =>
+                            handleNotificationToggle(setting.id, "sms")
+                          }
+                        />
+                      </td>
+                      <td className="text-center">
+                        <Checkbox
+                          checked={setting.push}
+                          onCheckedChange={() =>
+                            handleNotificationToggle(setting.id, "push")
+                          }
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
 
-        <div className="flex items-center justify-between">
-          <button
-            className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
-            type="submit"
-          >
-            設定を保存
-          </button>
-        </div>
-      </form>
+      <Alert className="mb-6">
+        <AlertCircle className="h-4 w-4" />
+        <AlertTitle>注意</AlertTitle>
+        <AlertDescription>
+          重要な通知をオフにすると、サービスの利用に支障が出る可能性があります。
+        </AlertDescription>
+      </Alert>
+
+      <Button onClick={handleSave}>設定を保存</Button>
     </div>
   );
 };
 
-export default NotificationSettingsPage;
+export default NotificationSettingsView;

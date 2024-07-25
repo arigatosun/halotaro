@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { addDays, format } from "date-fns";
+import { ja } from "date-fns/locale";
 import { Calendar as CalendarIcon } from "lucide-react";
 import { DateRange } from "react-day-picker";
 
@@ -38,14 +39,14 @@ export function DatePickerWithRange({
             {date?.from ? (
               date.to ? (
                 <>
-                  {format(date.from, "LLL dd, y")} -{" "}
-                  {format(date.to, "LLL dd, y")}
+                  {format(date.from, "yyyy年MM月dd日", { locale: ja })} -{" "}
+                  {format(date.to, "yyyy年MM月dd日", { locale: ja })}
                 </>
               ) : (
-                format(date.from, "LLL dd, y")
+                format(date.from, "yyyy年MM月dd日", { locale: ja })
               )
             ) : (
-              <span>Pick a date</span>
+              <span>日付を選択</span>
             )}
           </Button>
         </PopoverTrigger>
@@ -57,6 +58,13 @@ export function DatePickerWithRange({
             selected={date}
             onSelect={setDate}
             numberOfMonths={2}
+            locale={ja}
+            formatters={{
+              formatWeekdayName: (day) =>
+                ["日", "月", "火", "水", "木", "金", "土"][day.getDay()],
+              formatCaption: (date) =>
+                `${date.getFullYear()}年 ${date.getMonth() + 1}月`,
+            }}
           />
         </PopoverContent>
       </Popover>

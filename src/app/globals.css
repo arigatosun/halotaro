@@ -16,7 +16,7 @@
     --secondary-foreground: 24 9.8% 10%;
     --muted: 60 4.8% 95.9%;
     --muted-foreground: 25 5.3% 44.7%;
-    --accent: 60 54.3% 58.8%;
+    --accent: 48 100% 50%;
     --accent-foreground: 24 9.8% 10%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 60 9.1% 97.8%;
@@ -24,6 +24,10 @@
     --input: 20 5.9% 90%;
     --ring: 24.6 95% 53.1%;
     --radius: 0.5rem;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --main-header-height: 80px; /* メインヘッダーの高さに応じて調整 */
+    --sub-header-height: 48px; /* サブヘッダーの高さに応じて調整 */
   }
 
   .dark {
@@ -62,4 +66,38 @@
   .border-border {
     border-color: hsl(var(--border));
   }
+}
+
+html,
+body {
+  overflow-x: hidden;
+  width: 100%;
+}
+
+body {
+  position: relative;
+}
+
+/* スクロールバーのスタイリング（オプション） */
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #888;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+.header-main {
+  height: var(--main-header-height);
+}
+
+.header-sub {
+  height: var(--sub-header-height);
 }

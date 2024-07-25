@@ -12,6 +12,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { Calendar, DollarSign, TrendingUp, Download } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 // ダミーデータ
 const salesData = [
@@ -41,7 +42,7 @@ const SalesManagement: React.FC = () => {
     <div className="p-4">
       <h1 className="text-2xl font-bold mb-4">売上管理</h1>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <SalesCard
           title="総売上"
           value={`¥${totalSales.toLocaleString()}`}
@@ -54,46 +55,45 @@ const SalesManagement: React.FC = () => {
           icon={<TrendingUp className="w-6 h-6" />}
           trend="+5% 先月比"
         />
-        <SalesCard
-          title="売上目標達成率"
-          value="85%"
-          icon={<Calendar className="w-6 h-6" />}
-          trend="目標: ¥500,000"
-        />
       </div>
 
       <div className="bg-white p-4 rounded-lg shadow mb-6">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-semibold">売上推移</h2>
           <div className="space-x-2">
-            <button
+            <Button
               onClick={() => handleDateRangeChange("daily")}
-              className={`px-3 py-1 rounded ${
-                dateRange === "daily" ? "bg-blue-500 text-white" : "bg-gray-200"
-              }`}
+              variant={dateRange === "daily" ? "default" : "outline"}
+              className={
+                dateRange === "daily"
+                  ? "bg-primary text-primary-foreground"
+                  : ""
+              }
             >
               日次
-            </button>
-            <button
+            </Button>
+            <Button
               onClick={() => handleDateRangeChange("weekly")}
-              className={`px-3 py-1 rounded ${
+              variant={dateRange === "weekly" ? "default" : "outline"}
+              className={
                 dateRange === "weekly"
-                  ? "bg-blue-500 text-white"
-                  : "bg-gray-200"
-              }`}
+                  ? "bg-primary text-primary-foreground"
+                  : ""
+              }
             >
               週次
-            </button>
-            <button
+            </Button>
+            <Button
               onClick={() => handleDateRangeChange("monthly")}
-              className={`px-3 py-1 rounded ${
+              variant={dateRange === "monthly" ? "default" : "outline"}
+              className={
                 dateRange === "monthly"
-                  ? "bg-blue-500 text-white"
-                  : "bg-gray-200"
-              }`}
+                  ? "bg-primary text-primary-foreground"
+                  : ""
+              }
             >
               月次
-            </button>
+            </Button>
           </div>
         </div>
         <ResponsiveContainer width="100%" height={300}>
@@ -128,10 +128,10 @@ const SalesManagement: React.FC = () => {
       <div className="bg-white p-4 rounded-lg shadow">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-semibold">売上詳細</h2>
-          <button className="flex items-center bg-green-500 text-white px-3 py-1 rounded">
+          <Button variant={"outline"}>
             <Download className="w-4 h-4 mr-2" />
             エクスポート
-          </button>
+          </Button>
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-full bg-white">

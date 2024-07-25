@@ -17,22 +17,6 @@ interface AnimatedNumberProps {
   value: number;
 }
 
-// カスタムテーマの色を定義
-const colors = {
-  orange: {
-    DEFAULT: "#FF9F1C",
-    light: "#FFB347",
-    dark: "#E58E1A",
-  },
-  yellow: {
-    DEFAULT: "#FFBF69",
-    light: "#FFD699",
-    dark: "#E5AC5F",
-  },
-  background: "#FFF5E6",
-  text: "#2A2A2A",
-};
-
 // RevenueData 型をインポートまたは再定義
 interface RevenueData {
   name: string;
@@ -96,14 +80,12 @@ const StatCard: React.FC<StatCardProps> = ({
 }) => (
   <Card className="bg-white border-none shadow-lg">
     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-      <CardTitle className="text-sm font-medium text-orange-dark">
-        {title}
-      </CardTitle>
-      <Icon className="h-4 w-4 text-orange-dark" />
+      <CardTitle className="text-sm font-medium">{title}</CardTitle>
+      <Icon className="h-4 w-4" />
     </CardHeader>
     <CardContent>
-      <div className="text-2xl font-bold text-orange-dark">{value}</div>
-      <p className="text-xs text-orange-dark opacity-70">{subtext}</p>
+      <div className="text-2xl font-bold ">{value}</div>
+      <p className="text-xs  opacity-70">{subtext}</p>
     </CardContent>
   </Card>
 );
@@ -119,12 +101,7 @@ const Dashboard = () => {
 
   return (
     <div className="p-8">
-      <h2
-        className="text-3xl font-bold mb-8"
-        style={{ color: colors.orange.dark }}
-      >
-        ダッシュボード
-      </h2>
+      <h2 className="text-3xl font-bold mb-8">ダッシュボード</h2>
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
         <StatCard
           title="本日の予約"
@@ -160,21 +137,18 @@ const Dashboard = () => {
         <WeeklyRevenueChart revenueData={revenueData} animate={animate} />
         <Card className="col-span-3 bg-white border-none shadow-lg">
           <CardHeader>
-            <CardTitle className="text-orange-dark">次の予約</CardTitle>
+            <CardTitle>次の予約</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
               {upcomingAppointments.map((appointment, index) => (
-                <div
-                  key={index}
-                  className="flex items-center bg-gradient-to-r from-orange-light to-yellow-light p-3 rounded-md"
-                >
+                <div key={index} className="flex items-center  p-3 rounded-md">
                   <Clock className="h-4 w-4 text-orange-dark mr-2" />
                   <div>
-                    <p className="text-sm font-semibold text-orange-dark">
+                    <p className="text-sm font-semibold ">
                       {appointment.time} - {appointment.client}
                     </p>
-                    <p className="text-xs text-orange-dark opacity-70">
+                    <p className="text-xs  opacity-70">
                       {appointment.service} (担当: {appointment.staff})
                     </p>
                   </div>

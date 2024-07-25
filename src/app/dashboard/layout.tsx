@@ -13,12 +13,10 @@ export default function DashboardLayout({
   const isReservationPage = pathname === "/dashboard/reservations";
 
   return (
-    <div className="min-h-screen ">
+    <div>
       <Header />
       <main
-        className={`flex-1 ${
-          isReservationPage ? "p-0" : "p-4 sm:p-8"
-        } overflow-auto`}
+        className={`pt-[calc(var(--main-header-height)+var(--sub-header-height)+2rem)] p-0 overflow-auto`}
       >
         <div
           className={isReservationPage ? "w-full h-full" : "max-w-7xl mx-auto"}
