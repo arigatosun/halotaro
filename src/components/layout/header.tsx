@@ -12,6 +12,7 @@ import {
   Store,
   UserCircle,
 } from "lucide-react";
+import Image from "next/image";
 
 const Header = () => {
   const pathname = usePathname();
@@ -24,67 +25,77 @@ const Header = () => {
   };
 
   return (
-    <div className="flex flex-col">
-      <nav className="bg-white w-full p-4 shadow-lg">
-        <div className="container mx-auto flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-red-600">ハロタロ</h1>
-          <ul className="flex space-x-4 justify-center flex-grow">
-            <NavItem
-              href="/dashboard"
-              icon={<LayoutDashboard className="w-5 h-5" />}
-              isActive={isActive("/dashboard")}
-            >
-              ダッシュボード
-            </NavItem>
-            <NavItem
-              href="/dashboard/reservations"
-              icon={<Calendar className="w-5 h-5" />}
-              isActive={isActive("/dashboard/reservations")}
-            >
-              予約管理
-            </NavItem>
-            <NavItem
-              href="/dashboard/listing/salon"
-              icon={<Store className="w-5 h-5" />}
-              isActive={isActive("/dashboard/listings")}
-            >
-              掲載管理
-            </NavItem>
-            <NavItem
-              href="/dashboard/customers"
-              icon={<UserCircle className="w-5 h-5" />}
-              isActive={isActive("/dashboard/customers")}
-            >
-              お客様管理
-            </NavItem>
-            <NavItem
-              href="/dashboard/sales"
-              icon={<DollarSign className="w-5 h-5" />}
-              isActive={isActive("/dashboard/sales")}
-            >
-              売上管理
-            </NavItem>
-            <NavItem
-              href="/dashboard/settings"
-              icon={<Settings className="w-5 h-5" />}
-              isActive={isActive("/dashboard/settings")}
-            >
-              設定
-            </NavItem>
-          </ul>
-          <ul>
-            <NavItem
-              href="/dashboard/logout"
-              icon={<LogOut className="w-5 h-5" />}
-              isActive={false}
-            >
-              ログアウト
-            </NavItem>
-          </ul>
-        </div>
-      </nav>
+    <header className="fixed top-0 left-0 right-0 z-50">
+      <div className="bg-white">
+        <nav className="w-full p-4 shadow-lg header-main">
+          <div className="container mx-auto flex items-center justify-between">
+            <Image
+              src="/images/logo-tag.png"
+              alt="ハロタロ"
+              width={200}
+              height={100}
+              priority
+              className="object-contain"
+              sizes="(max-width: 768px) 100px, 150px"
+            />
+            <ul className="flex space-x-4 justify-center flex-grow">
+              <NavItem
+                href="/dashboard"
+                icon={<LayoutDashboard className="w-5 h-5" />}
+                isActive={isActive("/dashboard")}
+              >
+                ダッシュボード
+              </NavItem>
+              <NavItem
+                href="/dashboard/reservations"
+                icon={<Calendar className="w-5 h-5" />}
+                isActive={isActive("/dashboard/reservations")}
+              >
+                予約管理
+              </NavItem>
+              <NavItem
+                href="/dashboard/listing/salon"
+                icon={<Store className="w-5 h-5" />}
+                isActive={isActive("/dashboard/listings")}
+              >
+                掲載管理
+              </NavItem>
+              <NavItem
+                href="/dashboard/customer"
+                icon={<UserCircle className="w-5 h-5" />}
+                isActive={isActive("/dashboard/customer")}
+              >
+                お客様管理
+              </NavItem>
+              <NavItem
+                href="/dashboard/sales"
+                icon={<DollarSign className="w-5 h-5" />}
+                isActive={isActive("/dashboard/sales")}
+              >
+                売上管理
+              </NavItem>
+              <NavItem
+                href="/dashboard/settings"
+                icon={<Settings className="w-5 h-5" />}
+                isActive={isActive("/dashboard/settings")}
+              >
+                設定
+              </NavItem>
+            </ul>
+            <ul>
+              <NavItem
+                href="/dashboard/logout"
+                icon={<LogOut className="w-5 h-5" />}
+                isActive={false}
+              >
+                ログアウト
+              </NavItem>
+            </ul>
+          </div>
+        </nav>
+      </div>
       <SubHeader pathname={pathname} />
-    </div>
+    </header>
   );
 };
 
@@ -104,8 +115,8 @@ const NavItem: React.FC<NavItemProps> = ({
   <li>
     <Link
       href={href}
-      className={`flex items-center py-2 px-4 text-gray-700 hover:bg-red-100 rounded transition duration-300 ${
-        isActive ? "bg-red-100" : ""
+      className={`flex items-center py-2 px-4 text-gray-700 hover:bg-orange-100 rounded transition duration-300 ${
+        isActive ? "bg-orange-100 text-orange-600" : ""
       }`}
     >
       {icon}
@@ -129,19 +140,21 @@ const SubHeader: React.FC<{ pathname: string }> = ({ pathname }) => {
       { href: "/dashboard/listing/staff", label: "スタッフ" },
       { href: "/dashboard/listing/menu", label: "メニュー" },
     ],
-    "/dashboard/customers": [
-      { href: "/dashboard/customers/list", label: "お客様一覧" },
+    "/dashboard/customer": [
+      { href: "/dashboard/customer", label: "お客様一覧" },
     ],
     "/dashboard/sales": [
       { href: "/dashboard/sales", label: "売上管理TOP" },
+      { href: "/dashboard/sales/sales-details", label: "売上明細" },
       { href: "/dashboard/sales/closing", label: "レジ締め" },
       { href: "/dashboard/sales/withdrawal", label: "出金申請" },
     ],
     "/dashboard/settings": [
-      { href: "/dashboard/settings/salon", label: "サロン設定" },
-      { href: "/dashboard/settings/payment", label: "決済設定" },
+      { href: "/dashboard/settings", label: "基本設定" },
+      { href: "/dashboard/settings/service", label: "サービス設定" },
+      { href: "/dashboard/settings/banking", label: "振込先口座設定" },
       { href: "/dashboard/settings/notification", label: "通知設定" },
-      { href: "/dashboard/settings/hotpepper", label: "ホットペッパー連携" },
+      { href: "/dashboard/settings/salonboard", label: "サロンボード連携" },
     ],
   };
 
@@ -158,7 +171,7 @@ const SubHeader: React.FC<{ pathname: string }> = ({ pathname }) => {
   };
 
   return (
-    <div className="bg-gray-100 w-full p-2">
+    <div className="bg-gray-100 w-full p-2 shadow-md header-sub">
       <div className="container mx-auto">
         <ul className="flex space-x-4 justify-center">
           {currentSubPages.map((page) => (
@@ -167,8 +180,8 @@ const SubHeader: React.FC<{ pathname: string }> = ({ pathname }) => {
                 href={page.href}
                 className={`py-1 px-3 rounded ${
                   isSubItemActive(page.href)
-                    ? "bg-red-100 text-red-600"
-                    : "text-gray-600 hover:bg-red-50"
+                    ? "bg-orange-100 text-orange-600"
+                    : "text-gray-600 hover:bg-orange-50"
                 }`}
               >
                 {page.label}

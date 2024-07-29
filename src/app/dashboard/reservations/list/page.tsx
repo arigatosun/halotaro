@@ -1,5 +1,16 @@
-import ReservationListPage from "@/sections/Dashboard/reservation/list/reservation-list-view";
+import dynamic from "next/dynamic";
+import { Suspense } from "react";
 
-export default function Login() {
-  return <ReservationListPage />;
+// クライアントサイドでのみレンダリングされるようにダイナミックインポートを使用
+const ReservationListPage = dynamic(
+  () => import("@/sections/Dashboard/reservation/list/reservation-list-view"),
+  { ssr: false }
+);
+
+export default function ReservationList() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <ReservationListPage />
+    </Suspense>
+  );
 }

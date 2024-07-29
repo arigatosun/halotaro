@@ -2,70 +2,102 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --foreground-rgb: 0, 0, 0;
-  --background-rgb: 255, 255, 255;
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 20 14.3% 4.1%;
+    --card: 0 0% 100%;
+    --card-foreground: 20 14.3% 4.1%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 20 14.3% 4.1%;
+    --primary: 24.6 95% 53.1%;
+    --primary-foreground: 60 9.1% 97.8%;
+    --secondary: 60 54.3% 58.8%;
+    --secondary-foreground: 24 9.8% 10%;
+    --muted: 60 4.8% 95.9%;
+    --muted-foreground: 25 5.3% 44.7%;
+    --accent: 48 100% 50%;
+    --accent-foreground: 24 9.8% 10%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 60 9.1% 97.8%;
+    --border: 20 5.9% 90%;
+    --input: 20 5.9% 90%;
+    --ring: 24.6 95% 53.1%;
+    --radius: 0.5rem;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --main-header-height: 80px; /* メインヘッダーの高さに応じて調整 */
+    --sub-header-height: 48px; /* サブヘッダーの高さに応じて調整 */
+  }
+
+  .dark {
+    --background: 20 14.3% 4.1%;
+    --foreground: 60 9.1% 97.8%;
+    --card: 20 14.3% 4.1%;
+    --card-foreground: 60 9.1% 97.8%;
+    --popover: 20 14.3% 4.1%;
+    --popover-foreground: 60 9.1% 97.8%;
+    --primary: 20.5 90.2% 48.2%;
+    --primary-foreground: 60 9.1% 97.8%;
+    --secondary: 12 6.5% 15.1%;
+    --secondary-foreground: 60 9.1% 97.8%;
+    --muted: 12 6.5% 15.1%;
+    --muted-foreground: 24 5.4% 63.9%;
+    --accent: 12 6.5% 15.1%;
+    --accent-foreground: 60 9.1% 97.8%;
+    --destructive: 0 72.2% 50.6%;
+    --destructive-foreground: 60 9.1% 97.8%;
+    --border: 12 6.5% 15.1%;
+    --input: 12 6.5% 15.1%;
+    --ring: 20.5 90.2% 48.2%;
+  }
 }
 
-/* ダークモード設定を削除するか、明示的に適用する場合のみ使用 */
-/* @media (prefers-color-scheme: dark) {
-  :root {
-    --foreground-rgb: 255, 255, 255;
-    --background-rgb: 0, 0, 0;
-  }
-} */
-
 @layer base {
-  html {
-    @apply text-gray-900 bg-white;
-  }
-  body {
-    color: rgb(var(--foreground-rgb));
-    background-color: rgb(var(--background-rgb));
+  * {
+    @apply border-border;
   }
 }
 
 @layer utilities {
-  .text-balance {
-    text-wrap: balance;
+  .text-foreground {
+    color: hsl(var(--foreground));
   }
-
-  .no-marker::marker,
-  .no-marker > li::marker,
-  .no-marker::before,
-  .no-marker > li::before {
-    content: none !important;
-    display: none !important;
-  }
-
-  .no-marker,
-  .no-marker > li {
-    list-style-type: none !important;
+  .border-border {
+    border-color: hsl(var(--border));
   }
 }
-.fc-resource-timeline-divider {
-  background-color: #e5e5e5;
+
+html,
+body {
+  overflow-x: hidden;
+  width: 100%;
 }
 
-.fc-timeline-event {
-  background-color: var(--fc-event-bg-color, #3788d8);
-  border: 1px solid var(--fc-event-border-color, #3788d8);
+body {
+  position: relative;
 }
 
-.fc-timeline-slot-cushion {
-  font-weight: normal;
-  color: #666;
+/* スクロールバーのスタイリング（オプション） */
+::-webkit-scrollbar {
+  width: 10px;
 }
 
-.fc-timeline-slot-label {
-  font-weight: bold;
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
 }
 
-/* 白い背景を適用 */
-.fc .fc-view-harness {
-  background-color: white;
+::-webkit-scrollbar-thumb {
+  background: #888;
 }
 
-.fc .fc-scrollgrid {
-  border: 1px solid #ddd;
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+.header-main {
+  height: var(--main-header-height);
+}
+
+.header-sub {
+  height: var(--sub-header-height);
 }
