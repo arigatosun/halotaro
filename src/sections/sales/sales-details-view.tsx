@@ -31,6 +31,7 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination";
+import { DateRange } from "react-day-picker";
 
 // サンプルデータ生成関数
 const generateSampleData = (count: number) => {
@@ -76,9 +77,7 @@ const generateSampleData = (count: number) => {
 };
 
 const SalesDetailView: React.FC = () => {
-  const [dateRange, setDateRange] = useState<
-    { from: Date; to: Date } | undefined
-  >();
+  const [dateRange, setDateRange] = useState<DateRange | undefined>();
   const [staff, setStaff] = useState<string>("");
   const [customer, setCustomer] = useState<string>("");
   const [menu, setMenu] = useState<string>("");
@@ -132,7 +131,10 @@ const SalesDetailView: React.FC = () => {
             </div>
             <div className="flex items-center space-x-2">
               <Label>検索期間:</Label>
-              <DatePickerWithRange />
+              <DatePickerWithRange
+                date={dateRange}
+                onDateChange={(newDateRange) => setDateRange(newDateRange)}
+              />
             </div>
           </div>
           <div className="grid grid-cols-3 gap-4 mb-4">
