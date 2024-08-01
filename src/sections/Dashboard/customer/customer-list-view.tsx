@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/pagination";
 import Link from "next/link";
 import { Checkbox } from "@/components/ui/checkbox";
+import { DateRange } from "react-day-picker";
 
 // Customer型を定義
 type Customer = {
@@ -55,6 +56,7 @@ const CustomerListPage: React.FC<{ initialCustomers: Customer[] }> = ({
   } | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [dateRange, setDateRange] = useState<DateRange | undefined>();
 
   useEffect(() => {
     setIsClient(true);
@@ -123,7 +125,10 @@ const CustomerListPage: React.FC<{ initialCustomers: Customer[] }> = ({
       <Card className="mb-8">
         <CardContent className="p-6">
           <div className="space-y-4">
-            <DatePickerWithRange />
+            <DatePickerWithRange
+              date={dateRange}
+              onDateChange={(newDateRange) => setDateRange(newDateRange)}
+            />
             <div className="flex flex-wrap gap-2">
               <Input
                 placeholder="お客様名(カナ)"
