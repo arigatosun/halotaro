@@ -137,6 +137,15 @@ const SalesDetailView: React.FC = () => {
           </div>
           <div className="grid grid-cols-3 gap-4 mb-4">
             <div>
+              <Label htmlFor="customer">お客様名:</Label>
+              <Input
+                id="customer"
+                value={customer}
+                onChange={(e) => setCustomer(e.target.value)}
+                placeholder="お客様名を入力"
+              />
+            </div>
+            <div>
               <Label htmlFor="staff">スタッフ:</Label>
               <Select value={staff} onValueChange={setStaff}>
                 <SelectTrigger id="staff">

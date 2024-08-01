@@ -5,39 +5,40 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, Bell, Mail, Smartphone } from "lucide-react";
+import { AlertCircle, Bell, Mail, Plus, Trash2 } from "lucide-react";
 
 interface NotificationSetting {
   id: string;
   name: string;
   email: boolean;
-  sms: boolean;
   push: boolean;
 }
 
+interface StaffEmail {
+  id: string;
+  email: string;
+}
+
 const NotificationSettingsView: React.FC = () => {
-  const [emailAddress, setEmailAddress] = useState("user@example.com");
-  const [phoneNumber, setPhoneNumber] = useState("090-1234-5678");
+  const [staffEmails, setStaffEmails] = useState<StaffEmail[]>([
+    { id: "1", email: "user@example.com" },
+  ]);
   const [notificationTime, setNotificationTime] = useState("immediately");
   const [notificationSettings, setNotificationSettings] = useState<
     NotificationSetting[]
   >([
-    { id: "1", name: "新規予約", email: true, sms: false, push: true },
-    { id: "2", name: "予約変更", email: true, sms: false, push: true },
-    { id: "3", name: "予約キャンセル", email: true, sms: true, push: true },
-    { id: "4", name: "レビュー投稿", email: true, sms: false, push: false },
-    { id: "5", name: "売上報告", email: true, sms: false, push: false },
+    { id: "1", name: "新規予約", email: true, push: true },
+    { id: "2", name: "予約変更", email: true, push: true },
+    { id: "3", name: "予約キャンセル", email: true, push: true },
+    { id: "4", name: "レビュー投稿", email: true, push: false },
+    { id: "5", name: "売上報告", email: true, push: false },
   ]);
 
-  const handleNotificationToggle = (
-    id: string,
-    type: "email" | "sms" | "push"
-  ) => {
+  const handleNotificationToggle = (id: string, type: "email" | "push") => {
     setNotificationSettings(
       notificationSettings.map((setting) =>
         setting.id === id ? { ...setting, [type]: !setting[type] } : setting
@@ -45,10 +46,26 @@ const NotificationSettingsView: React.FC = () => {
     );
   };
 
+  const handleAddStaffEmail = () => {
+    const newId = (staffEmails.length + 1).toString();
+    setStaffEmails([...staffEmails, { id: newId, email: "" }]);
+  };
+
+  const handleRemoveStaffEmail = (id: string) => {
+    setStaffEmails(staffEmails.filter((email) => email.id !== id));
+  };
+
+  const handleStaffEmailChange = (id: string, value: string) => {
+    setStaffEmails(
+      staffEmails.map((email) =>
+        email.id === id ? { ...email, email: value } : email
+      )
+    );
+  };
+
   const handleSave = () => {
     console.log("Settings saved:", {
-      emailAddress,
-      phoneNumber,
+      staffEmails,
       notificationTime,
       notificationSettings,
     });
@@ -72,42 +89,38 @@ const NotificationSettingsView: React.FC = () => {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="email">通知用メールアドレス</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={emailAddress}
-                  onChange={(e) => setEmailAddress(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="phone">通知用電話番号（SMS用）</Label>
-                <Input
-                  id="phone"
-                  type="tel"
-                  value={phoneNumber}
-                  onChange={(e) => setPhoneNumber(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>通知のタイミング</Label>
-                <RadioGroup
-                  value={notificationTime}
-                  onValueChange={setNotificationTime}
+                <Label>スタッフ用通知メールアドレス</Label>
+                {staffEmails.map((staffEmail, index) => (
+                  <div
+                    key={staffEmail.id}
+                    className="flex items-center space-x-2"
+                  >
+                    <Input
+                      type="email"
+                      value={staffEmail.email}
+                      onChange={(e) =>
+                        handleStaffEmailChange(staffEmail.id, e.target.value)
+                      }
+                      placeholder={`スタッフ ${index + 1} のメールアドレス`}
+                    />
+                    {staffEmails.length > 1 && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleRemoveStaffEmail(staffEmail.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                ))}
+                <Button
+                  onClick={handleAddStaffEmail}
+                  variant="outline"
+                  className="mt-2"
                 >
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="immediately" id="immediately" />
-                    <Label htmlFor="immediately">即時</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="daily" id="daily" />
-                    <Label htmlFor="daily">1日1回まとめて</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="weekly" id="weekly" />
-                    <Label htmlFor="weekly">週1回まとめて</Label>
-                  </div>
-                </RadioGroup>
+                  <Plus className="h-4 w-4 mr-2" /> メールアドレスを追加
+                </Button>
               </div>
             </CardContent>
           </Card>
@@ -127,9 +140,6 @@ const NotificationSettingsView: React.FC = () => {
                       <Mail className="inline-block" /> メール
                     </th>
                     <th className="text-center">
-                      <Smartphone className="inline-block" /> SMS
-                    </th>
-                    <th className="text-center">
                       <Bell className="inline-block" /> プッシュ通知
                     </th>
                   </tr>
@@ -143,14 +153,6 @@ const NotificationSettingsView: React.FC = () => {
                           checked={setting.email}
                           onCheckedChange={() =>
                             handleNotificationToggle(setting.id, "email")
-                          }
-                        />
-                      </td>
-                      <td className="text-center">
-                        <Checkbox
-                          checked={setting.sms}
-                          onCheckedChange={() =>
-                            handleNotificationToggle(setting.id, "sms")
                           }
                         />
                       </td>

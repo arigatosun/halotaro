@@ -8,10 +8,14 @@ import {
   TrendingUp,
   ArrowUpRight,
   LucideIcon,
+  ArrowRight,
+  XCircle,
+  X,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import WeeklyRevenueChart from "@/components/revenue/weekly-revenue-chart";
+import Link from "next/link";
 
 interface AnimatedNumberProps {
   value: number;
@@ -100,7 +104,7 @@ const Dashboard = () => {
   console.log("Dashboard rendered, animate:", animate); // デバッグ用ログ
 
   return (
-    <div className="p-8">
+    <div className="p-8 pt-0">
       <h2 className="text-3xl font-bold mb-8">ダッシュボード</h2>
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
         <StatCard
@@ -126,29 +130,35 @@ const Dashboard = () => {
           subtext="全スタッフ 6名"
         />
         <StatCard
-          title="平均施術時間"
-          value="1時間 15分"
-          icon={Clock}
-          subtext="先週比 -5分"
+          title="キャンセル率"
+          value="5.2%"
+          icon={X}
+          subtext="先週比 -0.8%"
         />
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
         <WeeklyRevenueChart revenueData={revenueData} animate={animate} />
         <Card className="col-span-3 bg-white border-none shadow-lg">
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>次の予約</CardTitle>
+            <Link
+              href="/dashboard/reservations"
+              className="text-sm text-orange-500 hover:underline"
+            >
+              予約一覧→
+            </Link>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
               {upcomingAppointments.map((appointment, index) => (
-                <div key={index} className="flex items-center  p-3 rounded-md">
-                  <Clock className="h-4 w-4 text-orange-dark mr-2" />
+                <div key={index} className="flex items-center p-3 rounded-md">
+                  <Clock className="h-4 w-4 text-orange-500 mr-2" />
                   <div>
-                    <p className="text-sm font-semibold ">
+                    <p className="text-sm font-semibold">
                       {appointment.time} - {appointment.client}
                     </p>
-                    <p className="text-xs  opacity-70">
+                    <p className="text-xs opacity-70">
                       {appointment.service} (担当: {appointment.staff})
                     </p>
                   </div>
