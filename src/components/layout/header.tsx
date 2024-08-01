@@ -1,6 +1,7 @@
 "use client";
 import React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
@@ -13,15 +14,31 @@ import {
   UserCircle,
 } from "lucide-react";
 import Image from "next/image";
+import { supabase } from "@/lib/supabaseClient";
 
 const Header = () => {
   const pathname = usePathname();
+  const router = useRouter();
 
   const isActive = (path: string) => {
     if (path === "/dashboard") {
       return pathname === "/dashboard";
     }
     return pathname.startsWith(path) && pathname !== "/dashboard";
+  };
+
+  const handleLogout = async () => {
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      router.push("/auth/login");
+    } catch (error) {
+      if (error instanceof Error) {
+        console.error("ログアウトエラー:", error.message);
+      } else {
+        console.error("不明なログアウトエラーが発生しました");
+      }
+    }
   };
 
   return (
@@ -84,7 +101,7 @@ const Header = () => {
             </ul>
             <ul>
               <NavItem
-                href="/dashboard/logout"
+                onClick={handleLogout} // hrefの代わりにonClickを使用
                 icon={<LogOut className="w-5 h-5" />}
                 isActive={false}
               >
@@ -100,10 +117,11 @@ const Header = () => {
 };
 
 interface NavItemProps {
-  href: string;
+  href?: string;
   icon: React.ReactNode;
   children: React.ReactNode;
   isActive: boolean;
+  onClick?: () => void;
 }
 
 const NavItem: React.FC<NavItemProps> = ({
@@ -111,19 +129,37 @@ const NavItem: React.FC<NavItemProps> = ({
   icon,
   children,
   isActive,
-}) => (
-  <li>
-    <Link
-      href={href}
-      className={`flex items-center py-2 px-4 text-gray-700 hover:bg-orange-100 rounded transition duration-300 ${
-        isActive ? "bg-orange-100 text-orange-600" : ""
-      }`}
-    >
+  onClick,
+}) => {
+  const content = (
+    <>
       {icon}
       <span className="ml-2">{children}</span>
-    </Link>
-  </li>
-);
+    </>
+  );
+
+  const className = `flex items-center py-2 px-4 text-gray-700 hover:bg-orange-100 rounded transition duration-300 ${
+    isActive ? "bg-orange-100 text-orange-600" : ""
+  }`;
+
+  if (onClick) {
+    return (
+      <li>
+        <button onClick={onClick} className={className}>
+          {content}
+        </button>
+      </li>
+    );
+  }
+
+  return (
+    <li>
+      <Link href={href || "#"} className={className}>
+        {content}
+      </Link>
+    </li>
+  );
+};
 
 const SubHeader: React.FC<{ pathname: string }> = ({ pathname }) => {
   const subPages = {
@@ -147,6 +183,7 @@ const SubHeader: React.FC<{ pathname: string }> = ({ pathname }) => {
       { href: "/dashboard/sales", label: "売上管理TOP" },
       { href: "/dashboard/sales/sales-details", label: "売上明細" },
       { href: "/dashboard/sales/closing", label: "レジ締め" },
+      { href: "/dashboard/sales/closing-list", label: "レジ締め一覧" },
       { href: "/dashboard/sales/withdrawal", label: "出金申請" },
     ],
     "/dashboard/settings": [

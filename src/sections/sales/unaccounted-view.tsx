@@ -1,195 +1,239 @@
-"use client";
+import React from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Label } from "@/components/ui/label";
+import ReservationTable from "@/components/ReservationTable";
 
-import React, { useState, useEffect } from "react";
-import { Clock, DollarSign, ShoppingBag, Plus, X } from "lucide-react";
-
-interface Reservation {
-  id: string;
-  customerName: string;
-  date: string;
-  time: string;
-  service: string;
-  servicePrice: number;
-  productSales: ProductSale[];
-  totalAmount: number;
-}
-
-interface ProductSale {
-  id: string;
-  name: string;
-  price: number;
-}
-
-const initialReservations: Reservation[] = [
-  {
-    id: "1",
-    customerName: "山田太郎",
-    date: "2023-07-15",
-    time: "14:00",
-    service: "カット",
-    servicePrice: 5000,
-    productSales: [],
-    totalAmount: 5000,
-  },
-  {
-    id: "2",
-    customerName: "佐藤花子",
-    date: "2023-07-15",
-    time: "15:30",
-    service: "カラー",
-    servicePrice: 8000,
-    productSales: [{ id: "p1", name: "シャンプー", price: 2000 }],
-    totalAmount: 10000,
-  },
-  // 他の予約データ...
-];
-
-const UnaccountedSales: React.FC = () => {
-  const [reservations, setReservations] =
-    useState<Reservation[]>(initialReservations);
-  const [selectedReservation, setSelectedReservation] =
-    useState<Reservation | null>(null);
-  const [newProductName, setNewProductName] = useState("");
-  const [newProductPrice, setNewProductPrice] = useState("");
-
-  useEffect(() => {
-    // ここで未計上予約データを取得するAPIを呼び出す
-    // setReservations(fetchedReservations);
-  }, []);
-
-  const handleAddProduct = (reservationId: string) => {
-    if (!newProductName || !newProductPrice) return;
-
-    const updatedReservations = reservations.map((reservation) => {
-      if (reservation.id === reservationId) {
-        const newProduct: ProductSale = {
-          id: Date.now().toString(),
-          name: newProductName,
-          price: Number(newProductPrice),
-        };
-        const updatedProductSales = [...reservation.productSales, newProduct];
-        const newTotalAmount =
-          reservation.servicePrice +
-          updatedProductSales.reduce((sum, product) => sum + product.price, 0);
-        return {
-          ...reservation,
-          productSales: updatedProductSales,
-          totalAmount: newTotalAmount,
-        };
-      }
-      return reservation;
-    });
-
-    setReservations(updatedReservations);
-    setNewProductName("");
-    setNewProductPrice("");
-    // ここで更新をサーバーに送信するAPIを呼び出す
-  };
-
-  const handleRemoveProduct = (reservationId: string, productId: string) => {
-    const updatedReservations = reservations.map((reservation) => {
-      if (reservation.id === reservationId) {
-        const updatedProductSales = reservation.productSales.filter(
-          (product) => product.id !== productId
-        );
-        const newTotalAmount =
-          reservation.servicePrice +
-          updatedProductSales.reduce((sum, product) => sum + product.price, 0);
-        return {
-          ...reservation,
-          productSales: updatedProductSales,
-          totalAmount: newTotalAmount,
-        };
-      }
-      return reservation;
-    });
-
-    setReservations(updatedReservations);
-    // ここで更新をサーバーに送信するAPIを呼び出す
-  };
-
+const CompactRegisterClosingUI: React.FC = () => {
   return (
-    <div className="p-4">
-      <h1 className="text-2xl font-bold mb-4">未計上予約管理</h1>
-      <p className="mb-4 text-gray-600">
-        ※ 未計上の予約は翌日AM1:00に自動的に計上されます。
-      </p>
-      <div className="space-y-4">
-        {reservations.map((reservation) => (
-          <div key={reservation.id} className="bg-white p-4 rounded-lg shadow">
-            <div className="flex justify-between items-center mb-2">
-              <h2 className="text-lg font-semibold">
-                {reservation.customerName}
-              </h2>
-              <div className="text-sm text-gray-500">
-                <Clock className="inline-block w-4 h-4 mr-1" />
-                {reservation.date} {reservation.time}
+    <div className="p-4 max-w-7xl mx-auto">
+      <h1 className="text-2xl font-bold mb-4">レジ締め</h1>
+      <Alert className="mb-4">
+        <AlertTitle>注意事項</AlertTitle>
+        <AlertDescription className="text-sm">
+          一日の業務終了時にレジ締めを行い、お金のやり取りが正しかったかを確認してください。
+          営業開始時にお釣り用に準備していたお金を[レジ準備金]に、実際にキャッシュドロアに入っている金額を[実際のレジ金]に入力し、レジ金の過不足が発生していないかを確認してください。
+        </AlertDescription>
+      </Alert>
+
+      <Card className="mb-4">
+        <CardContent className="p-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <h3 className="font-semibold mb-2 text-sm">会計のレジ金情報</h3>
+              <Table>
+                <TableBody className="text-sm">
+                  {[
+                    { label: "現金", value: 14000 },
+                    { label: "ギフト券", value: 0 },
+                    { label: "ポイント", value: 0 },
+                    { label: "スマート支払い", value: 0 },
+                    { label: "クレジットカード", value: 0 },
+                    { label: "電子マネー", value: 0 },
+                  ].map((item) => (
+                    <TableRow key={item.label}>
+                      <TableCell className="py-1">{item.label}</TableCell>
+                      <TableCell className="text-right py-1">
+                        {item.value.toLocaleString()} 円
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+
+            <div>
+              <h3 className="font-semibold mb-2 text-sm">
+                会計以外のレジ金情報
+              </h3>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between items-center">
+                  <Label htmlFor="preparedCash" className="text-sm">
+                    レジ準備金
+                  </Label>
+                  <div className="flex items-center">
+                    <Input
+                      id="preparedCash"
+                      type="number"
+                      className="w-24 text-right text-sm h-8"
+                      defaultValue="0"
+                    />
+                    <span className="ml-1">円</span>
+                  </div>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span>レジ入金額</span>
+                  <span>0 円</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span>レジ出金額</span>
+                  <span className="text-red-500">-0 円</span>
+                </div>
               </div>
             </div>
-            <div className="mb-2">
-              <span className="font-medium">サービス:</span>{" "}
-              {reservation.service}
-              <span className="ml-2 text-gray-600">
-                (¥{reservation.servicePrice.toLocaleString()})
-              </span>
-            </div>
-            <div className="mb-2">
-              <h3 className="font-medium">商品販売:</h3>
-              <ul className="list-disc list-inside">
-                {reservation.productSales.map((product) => (
-                  <li
-                    key={product.id}
-                    className="flex justify-between items-center"
-                  >
-                    <span>
-                      {product.name} (¥{product.price.toLocaleString()})
-                    </span>
-                    <button
-                      onClick={() =>
-                        handleRemoveProduct(reservation.id, product.id)
-                      }
-                      className="text-red-500 hover:text-red-700"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div className="mb-2">
-              <span className="font-medium">合計金額:</span> ¥
-              {reservation.totalAmount.toLocaleString()}
-            </div>
-            <div className="mt-4">
-              <h3 className="font-medium mb-2">商品販売を追加:</h3>
-              <div className="flex space-x-2">
-                <input
-                  type="text"
-                  value={newProductName}
-                  onChange={(e) => setNewProductName(e.target.value)}
-                  placeholder="商品名"
-                  className="flex-grow px-2 py-1 border rounded"
-                />
-                <input
-                  type="number"
-                  value={newProductPrice}
-                  onChange={(e) => setNewProductPrice(e.target.value)}
-                  placeholder="価格"
-                  className="w-24 px-2 py-1 border rounded"
-                />
-                <button
-                  onClick={() => handleAddProduct(reservation.id)}
-                  className="bg-green-500 text-white px-3 py-1 rounded flex items-center"
-                >
-                  <Plus className="w-4 h-4 mr-1" /> 追加
-                </button>
+
+            <div>
+              <h3 className="font-semibold mb-2 text-sm">レジ金計算結果</h3>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between items-center">
+                  <span>想定のレジ金</span>
+                  <span className="font-bold">14,000 円</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span>レジ過不足金額</span>
+                  <span className="font-bold text-red-500">-14,000 円</span>
+                </div>
+                <div>
+                  <Label htmlFor="actualCash" className="text-sm">
+                    実際のレジ金
+                  </Label>
+                  <div className="flex items-center mt-1">
+                    <Input
+                      id="actualCash"
+                      type="number"
+                      className="text-right text-sm h-8"
+                      defaultValue="0"
+                    />
+                    <span className="ml-1">円</span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
-        ))}
+        </CardContent>
+      </Card>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+        <div>
+          <Label htmlFor="closingDate" className="text-sm">
+            レジ締め日
+          </Label>
+          <Input id="closingDate" type="date" className="mt-1 h-8 text-sm" />
+        </div>
+        <div>
+          <Label className="text-sm">レジ締め対象日</Label>
+          <Input
+            value="2024年07月28日(日)17:50 ～"
+            readOnly
+            className="mt-1 bg-gray-100 h-8 text-sm"
+          />
+        </div>
+        <div>
+          <Label htmlFor="closingStaff" className="text-sm">
+            レジ締め担当者
+          </Label>
+          <Select>
+            <SelectTrigger id="closingStaff" className="mt-1 h-8 text-sm">
+              <SelectValue placeholder="選択してください" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="staff1">スタッフ1</SelectItem>
+              <SelectItem value="staff2">スタッフ2</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
+
+      <div className="mb-5">
+        <Label htmlFor="closingMemo" className="text-sm">
+          レジ締めメモ
+        </Label>
+        <Textarea
+          id="closingMemo"
+          placeholder="メモを入力"
+          className="mt-1 text-sm"
+          rows={3}
+        />
+      </div>
+
+      <div className="flex justify-end mb-8">
+        <Button
+          size="sm"
+          className="bg-orange-500 hover:bg-orange-600 text-white"
+        >
+          レジ締めの完了
+        </Button>
+      </div>
+
+      <Card className="mb-5">
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle>未会計予約一覧</CardTitle>
+          <AlertDescription className="text-sm text-red-500">
+            以下の予約は会計が行われていません。必要に応じて会計やキャンセルを行ってください。
+          </AlertDescription>
+        </CardHeader>
+        <CardContent>
+          <ReservationTable
+            filterOptions={{
+              dateRange: undefined,
+              statuses: ["受付待ち"],
+              customerName: "",
+              reservationNumber: "",
+              staff: "all",
+              reservationRoute: "all",
+            }}
+          />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>レジ締め対象 会計一覧</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>来店日時</TableHead>
+                <TableHead>お客様名</TableHead>
+                <TableHead>スタッフ</TableHead>
+                <TableHead>メニュー・店販</TableHead>
+                <TableHead>お支払金額</TableHead>
+                <TableHead>支払方法</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              <TableRow>
+                <TableCell>2024/07/28 15:00</TableCell>
+                <TableCell>山田 太郎</TableCell>
+                <TableCell>佐藤 花子</TableCell>
+                <TableCell>カット・カラー</TableCell>
+                <TableCell>12,000円</TableCell>
+                <TableCell>現金</TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell>2024/07/28 16:30</TableCell>
+                <TableCell>鈴木 一郎</TableCell>
+                <TableCell>田中 優子</TableCell>
+                <TableCell>パーマ</TableCell>
+                <TableCell>15,000円</TableCell>
+                <TableCell>クレジットカード</TableCell>
+              </TableRow>
+              {/* 必要に応じて行を追加 */}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
     </div>
   );
 };
 
-export default UnaccountedSales;
+export default CompactRegisterClosingUI;

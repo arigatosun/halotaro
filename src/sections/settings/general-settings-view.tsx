@@ -15,6 +15,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { useAuth } from "@/lib/useAuth"; // 認証フックをインポート
 
 interface CancelPolicy {
   id: string;
@@ -29,9 +30,8 @@ interface ReservationMessage {
 }
 
 const BasicInfoSettingsView: React.FC = () => {
-  const [reservationUrl, setReservationUrl] = useState(
-    "https://halotaro.com/reserve"
-  );
+  const { user, loading } = useAuth(); // 認証情報を取得
+  const [reservationUrl, setReservationUrl] = useState("");
   const [isCustomDomainEnabled, setIsCustomDomainEnabled] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
   const [isReservationEnabled, setIsReservationEnabled] = useState(true);
@@ -55,6 +55,12 @@ const BasicInfoSettingsView: React.FC = () => {
       message: "ご予約から1週間が経ちました。ご来店をお待ちしております。",
     },
   ]);
+
+  useEffect(() => {
+    if (user) {
+      setReservationUrl(`https://halotaro.com/reservation-user/${user.id}`);
+    }
+  }, [user]);
 
   useEffect(() => {
     generateCancelPolicyText();

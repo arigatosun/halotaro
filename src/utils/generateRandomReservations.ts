@@ -1,6 +1,6 @@
 // src/utils/generateRandomReservations.ts
 
-import { faker } from "@faker-js/faker";
+import { faker } from "@faker-js/faker/locale/ja";
 
 export interface Reservation {
   key: string;
@@ -13,30 +13,40 @@ export interface Reservation {
   price: number;
 }
 
-const staffMembers = ["佐藤 健", "鈴木 愛", "田中 誠", "渡辺 美咲", "高橋 淳"];
-const services = [
+const statuses = [
+  "受付待ち",
+  "受付済み",
+  "施術中",
+  "来店処理済み",
+  "お客様キャンセル",
+  "サロンキャンセル",
+  "無断キャンセル",
+];
+
+const beautyServices = [
   "カット",
   "カラー",
   "パーマ",
+  "ストレートパーマ",
   "トリートメント",
   "ヘッドスパ",
-  "セット",
+  "眉カット",
+  "メイク",
+  "ネイル",
+  "まつげエクステ",
+  "フェイシャル",
 ];
-const statuses = ["受付済み", "来店済み", "施術中", "会計済み", "キャンセル"];
 
 const generateRandomReservations = (count: number): Reservation[] => {
   return Array.from({ length: count }, (_, index) => ({
-    key: index.toString(),
-    date: faker.date
-      .between({ from: "2024-07-01", to: "2024-07-31" })
-      .toISOString()
-      .split("T")[0],
+    key: faker.string.uuid(),
+    date: faker.date.future().toISOString().split("T")[0],
     time: faker.date.future().toTimeString().slice(0, 5),
     status: faker.helpers.arrayElement(statuses),
-    customerName: faker.person.lastName() + " " + faker.person.firstName(),
-    staff: faker.helpers.arrayElement(staffMembers),
-    service: faker.helpers.arrayElement(services),
-    price: faker.number.int({ min: 3000, max: 20000 }),
+    customerName: `${faker.person.lastName()} ${faker.person.firstName()}`,
+    staff: `${faker.person.lastName()}`,
+    service: faker.helpers.arrayElement(beautyServices),
+    price: Math.floor(faker.number.int({ min: 3000, max: 20000 }) / 100) * 100,
   }));
 };
 

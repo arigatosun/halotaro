@@ -3,6 +3,10 @@
 import React, { useEffect, useState } from "react";
 import { Scissors, Clock, DollarSign, Edit, Trash2, Plus } from "lucide-react";
 
+import { message } from "antd";
+import { useAuth } from "@/contexts/authcontext";
+import { supabase } from "@/lib/supabaseClient";
+
 interface MenuItem {
   id: string;
   name: string;
@@ -10,56 +14,38 @@ interface MenuItem {
   price: number;
   duration: number;
   category: string;
+  user_id: string;
 }
 
-const initialMenuItems: MenuItem[] = [
-  {
-    id: "1",
-    name: "カット",
-    description: "シンプルなカットサービス",
-    price: 5000,
-    duration: 60,
-    category: "カット",
-  },
-  {
-    id: "2",
-    name: "カラー",
-    description: "豊富な色から選べるカラーリング",
-    price: 8000,
-    duration: 120,
-    category: "カラー",
-  },
-  {
-    id: "3",
-    name: "パーマ",
-    description: "ナチュラルなウェーブをつくるパーマ",
-    price: 10000,
-    duration: 150,
-    category: "パーマ",
-  },
-  {
-    id: "4",
-    name: "トリートメント",
-    description: "髪質改善トリートメント",
-    price: 6000,
-    duration: 90,
-    category: "トリートメント",
-  },
-];
-
 const MenuManagement: React.FC = () => {
-  const [menuItems, setMenuItems] = useState<MenuItem[]>(initialMenuItems);
+  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [selectedMenuItem, setSelectedMenuItem] = useState<MenuItem | null>(
     null
   );
   const [isEditing, setIsEditing] = useState(false);
+  const { user } = useAuth();
 
   useEffect(() => {
-    // 初回レンダリング時に最初のメニュー項目を選択
-    if (menuItems.length > 0 && !selectedMenuItem) {
-      setSelectedMenuItem(menuItems[0]);
+    if (user) {
+      fetchMenuItems();
     }
-  }, [menuItems, selectedMenuItem]);
+  }, [user]);
+
+  const fetchMenuItems = async () => {
+    const { data, error } = await supabase
+      .from("menu_items")
+      .select("*")
+      .order("id", { ascending: true });
+
+    if (error) {
+      message.error("メニュー項目の取得に失敗しました");
+    } else {
+      setMenuItems(data || []);
+      if (data && data.length > 0 && !selectedMenuItem) {
+        setSelectedMenuItem(data[0]);
+      }
+    }
+  };
 
   const handleMenuItemSelect = (item: MenuItem) => {
     setSelectedMenuItem(item);
@@ -70,31 +56,65 @@ const MenuManagement: React.FC = () => {
     setIsEditing(true);
   };
 
-  const handleSaveMenuItem = (updatedItem: MenuItem) => {
-    setMenuItems(
-      menuItems.map((item) => (item.id === updatedItem.id ? updatedItem : item))
-    );
-    setSelectedMenuItem(updatedItem);
-    setIsEditing(false);
+  const handleSaveMenuItem = async (updatedItem: MenuItem) => {
+    const { data, error } = await supabase
+      .from("menu_items")
+      .update(updatedItem)
+      .eq("id", updatedItem.id);
+
+    if (error) {
+      message.error("メニューの更新に失敗しました");
+    } else {
+      setMenuItems(
+        menuItems.map((item) =>
+          item.id === updatedItem.id ? updatedItem : item
+        )
+      );
+      setSelectedMenuItem(updatedItem);
+      setIsEditing(false);
+      message.success("メニューを更新しました");
+    }
   };
 
-  const handleDeleteMenuItem = (itemId: string) => {
-    setMenuItems(menuItems.filter((item) => item.id !== itemId));
-    setSelectedMenuItem(null);
+  const handleDeleteMenuItem = async (itemId: string) => {
+    const { error } = await supabase
+      .from("menu_items")
+      .delete()
+      .eq("id", itemId);
+
+    if (error) {
+      message.error("メニューの削除に失敗しました");
+    } else {
+      setMenuItems(menuItems.filter((item) => item.id !== itemId));
+      setSelectedMenuItem(null);
+      message.success("メニューを削除しました");
+    }
   };
 
-  const handleAddMenuItem = () => {
-    const newItem: MenuItem = {
-      id: String(Date.now()),
+  const handleAddMenuItem = async () => {
+    const newItem: Omit<MenuItem, "id"> = {
       name: "新規メニュー",
       description: "",
       price: 0,
       duration: 60,
       category: "",
+      user_id: user?.id || "",
     };
-    setMenuItems([...menuItems, newItem]);
-    setSelectedMenuItem(newItem);
-    setIsEditing(true);
+
+    const { data, error } = await supabase
+      .from("menu_items")
+      .insert(newItem)
+      .select();
+
+    if (error) {
+      message.error("新しいメニューの追加に失敗しました");
+    } else if (data) {
+      const addedItem = data[0] as MenuItem;
+      setMenuItems([...menuItems, addedItem]);
+      setSelectedMenuItem(addedItem);
+      setIsEditing(true);
+      message.success("新しいメニューを追加しました");
+    }
   };
 
   return (
@@ -186,7 +206,7 @@ const MenuItemEditForm: React.FC<{
   item: MenuItem;
   onSave: (item: MenuItem) => void;
 }> = ({ item, onSave }) => {
-  const [editedItem, setEditedItem] = useState(item);
+  const [editedItem, setEditedItem] = useState<MenuItem>(item);
 
   const handleChange = (
     e: React.ChangeEvent<
@@ -194,13 +214,13 @@ const MenuItemEditForm: React.FC<{
     >
   ) => {
     const { name, value } = e.target;
-    setEditedItem({
-      ...editedItem,
+    setEditedItem((prev) => ({
+      ...prev,
       [name]: name === "price" || name === "duration" ? Number(value) : value,
-    });
+    }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     onSave(editedItem);
   };

@@ -25,10 +25,29 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Portal } from "@radix-ui/react-select";
 
 // ダミーデータ
+// ダミーデータを更新
 const withdrawalHistory = [
-  { id: 1, date: "2023-07-01", amount: 100000, status: "処理中" },
-  { id: 2, date: "2023-06-15", amount: 150000, status: "完了" },
-  { id: 3, date: "2023-06-01", amount: 200000, status: "完了" },
+  {
+    id: 1,
+    date: "2023-07-01",
+    amount: 100000,
+    status: "処理中",
+    account: "●●銀行 東京支店 普通 1234567",
+  },
+  {
+    id: 2,
+    date: "2023-06-15",
+    amount: 150000,
+    status: "完了",
+    account: "▲▲銀行 大阪支店 普通 7654321",
+  },
+  {
+    id: 3,
+    date: "2023-06-01",
+    amount: 200000,
+    status: "完了",
+    account: "●●銀行 東京支店 普通 1234567",
+  },
 ];
 
 const WithdrawalRequestView: React.FC = () => {
@@ -141,6 +160,7 @@ const WithdrawalRequestView: React.FC = () => {
               <TableRow>
                 <TableHead className="text-sm">日付</TableHead>
                 <TableHead className="text-sm text-right">金額</TableHead>
+                <TableHead className="text-sm">振込先口座</TableHead>
                 <TableHead className="text-sm">ステータス</TableHead>
               </TableRow>
             </TableHeader>
@@ -151,6 +171,7 @@ const WithdrawalRequestView: React.FC = () => {
                   <TableCell className="text-sm text-right">
                     ¥{item.amount.toLocaleString()}
                   </TableCell>
+                  <TableCell className="text-sm">{item.account}</TableCell>
                   <TableCell className="text-sm">
                     <span
                       className={`px-2 py-1 rounded text-xs ${
