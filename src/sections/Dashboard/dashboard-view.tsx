@@ -1,41 +1,14 @@
+// Dashboard.tsx
 "use client";
 import React, { useEffect, useState } from "react";
-import {
-  Calendar,
-  Users,
-  DollarSign,
-  Clock,
-  TrendingUp,
-  ArrowUpRight,
-  LucideIcon,
-  ArrowRight,
-  XCircle,
-  X,
-} from "lucide-react";
+import { Calendar, DollarSign, Clock, LucideIcon } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import WeeklyRevenueChart from "@/components/revenue/weekly-revenue-chart";
 import Link from "next/link";
+import CancellationCard from "@/components/CancellationCard";
 
 interface AnimatedNumberProps {
   value: number;
 }
-
-// RevenueData 型をインポートまたは再定義
-interface RevenueData {
-  name: string;
-  revenue: number;
-}
-
-const revenueData = [
-  { name: "月", revenue: 15000 },
-  { name: "火", revenue: 18000 },
-  { name: "水", revenue: 22000 },
-  { name: "木", revenue: 20000 },
-  { name: "金", revenue: 25000 },
-  { name: "土", revenue: 30000 },
-  { name: "日", revenue: 28000 },
-];
 
 const upcomingAppointments = [
   { time: "14:00", client: "山田花子", service: "カット", staff: "佐藤" },
@@ -68,7 +41,6 @@ const AnimatedNumber: React.FC<AnimatedNumberProps> = ({ value }) => {
   return <span>{displayValue.toLocaleString()}</span>;
 };
 
-// StatCard コンポーネントの props 型定義
 interface StatCardProps {
   title: string;
   value: React.ReactNode;
@@ -82,64 +54,48 @@ const StatCard: React.FC<StatCardProps> = ({
   icon: Icon,
   subtext,
 }) => (
-  <Card className="bg-white border-none shadow-lg">
+  <Card className="bg-white border-none shadow-lg h-full">
     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
       <CardTitle className="text-sm font-medium">{title}</CardTitle>
       <Icon className="h-4 w-4" />
     </CardHeader>
     <CardContent>
-      <div className="text-2xl font-bold ">{value}</div>
-      <p className="text-xs  opacity-70">{subtext}</p>
+      <div className="text-2xl font-bold">{value}</div>
+      <p className="text-xs opacity-70">{subtext}</p>
     </CardContent>
   </Card>
 );
 
 const Dashboard = () => {
-  const [animate, setAnimate] = useState(false);
-
-  useEffect(() => {
-    setAnimate(true);
-  }, []);
-
-  console.log("Dashboard rendered, animate:", animate); // デバッグ用ログ
+  const upcomingAppointments = [
+    { time: "14:00", client: "山田花子", service: "カット", staff: "佐藤" },
+    { time: "15:30", client: "鈴木一郎", service: "カラー", staff: "田中" },
+    { time: "17:00", client: "佐藤美咲", service: "パーマ", staff: "高橋" },
+  ];
 
   return (
     <div className="p-8 pt-0">
       <h2 className="text-3xl font-bold mb-8">ダッシュボード</h2>
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
-        <StatCard
-          title="本日の予約"
-          value={<AnimatedNumber value={12} />}
-          icon={Calendar}
-          subtext="前日比 +2 予約"
-        />
-        <StatCard
-          title="本日の売上"
-          value={
-            <>
-              ¥<AnimatedNumber value={58000} />
-            </>
-          }
-          icon={DollarSign}
-          subtext="前日比 +15%"
-        />
-        <StatCard
-          title="稼働中のスタッフ"
-          value={<AnimatedNumber value={4} />}
-          icon={Users}
-          subtext="全スタッフ 6名"
-        />
-        <StatCard
-          title="キャンセル率"
-          value="5.2%"
-          icon={X}
-          subtext="先週比 -0.8%"
-        />
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-        <WeeklyRevenueChart revenueData={revenueData} animate={animate} />
-        <Card className="col-span-3 bg-white border-none shadow-lg">
+      <div className="grid gap-4 lg:grid-cols-3 mb-8">
+        <div className="space-y-4 lg:space-y-0 lg:grid lg:grid-rows-2 lg:gap-4">
+          <StatCard
+            title="本日の予約"
+            value={<AnimatedNumber value={12} />}
+            icon={Calendar}
+            subtext="前日比 +2 予約"
+          />
+          <StatCard
+            title="本日の売上"
+            value={
+              <>
+                ¥<AnimatedNumber value={58000} />
+              </>
+            }
+            icon={DollarSign}
+            subtext="前日比 +15%"
+          />
+        </div>
+        <Card className="bg-white border-none shadow-lg lg:col-span-2">
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>次の予約</CardTitle>
             <Link
@@ -168,6 +124,7 @@ const Dashboard = () => {
           </CardContent>
         </Card>
       </div>
+      <CancellationCard />
     </div>
   );
 };
