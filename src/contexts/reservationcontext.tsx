@@ -1,5 +1,4 @@
 import React, { createContext, useContext, useState } from "react";
-import { Dayjs } from "dayjs";
 
 interface SelectedMenuItem {
   id: string;
@@ -7,15 +6,18 @@ interface SelectedMenuItem {
   price: number;
 }
 
+interface SelectedStaff {
+  id: string;
+  name: string;
+}
+
 interface ReservationContextType {
   selectedMenus: SelectedMenuItem[];
   setSelectedMenus: React.Dispatch<React.SetStateAction<SelectedMenuItem[]>>;
-  selectedDate: Date | undefined;
-  setSelectedDate: React.Dispatch<React.SetStateAction<Date | undefined>>;
-  selectedTime: string;
-  setSelectedTime: React.Dispatch<React.SetStateAction<string>>;
-  selectedStaff: string | null;
-  setSelectedStaff: React.Dispatch<React.SetStateAction<string | null>>;
+  selectedDateTime: Date | null;
+  setSelectedDateTime: React.Dispatch<React.SetStateAction<Date | null>>;
+  selectedStaff: SelectedStaff | null;
+  setSelectedStaff: React.Dispatch<React.SetStateAction<SelectedStaff | null>>;
   customerInfo: {
     name: string;
     email: string;
@@ -39,9 +41,10 @@ export const ReservationProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
   const [selectedMenus, setSelectedMenus] = useState<SelectedMenuItem[]>([]);
-  const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
-  const [selectedTime, setSelectedTime] = useState<string>("");
-  const [selectedStaff, setSelectedStaff] = useState<string | null>(null);
+  const [selectedDateTime, setSelectedDateTime] = useState<Date | null>(null);
+  const [selectedStaff, setSelectedStaff] = useState<SelectedStaff | null>(
+    null
+  );
   const [customerInfo, setCustomerInfo] = useState({
     name: "",
     email: "",
@@ -55,10 +58,8 @@ export const ReservationProvider: React.FC<{ children: React.ReactNode }> = ({
       value={{
         selectedMenus,
         setSelectedMenus,
-        selectedDate,
-        setSelectedDate,
-        selectedTime,
-        setSelectedTime,
+        selectedDateTime,
+        setSelectedDateTime,
         selectedStaff,
         setSelectedStaff,
         customerInfo,

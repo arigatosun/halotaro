@@ -14,13 +14,8 @@ const ReservationComplete: React.FC = () => {
   const [status, setStatus] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const searchParams = useSearchParams();
-  const {
-    selectedMenus,
-    selectedDate,
-    selectedTime,
-    selectedStaff,
-    customerInfo,
-  } = useReservation();
+  const { selectedMenus, selectedDateTime, selectedStaff, customerInfo } =
+    useReservation();
 
   useEffect(() => {
     const clientSecret = searchParams.get("payment_intent_client_secret");
@@ -72,9 +67,12 @@ const ReservationComplete: React.FC = () => {
         ご予約ありがとうございます。以下の内容で予約を承りました。
       </Typography>
       <Typography variant="body1">
-        予約日時: {selectedDate?.toLocaleDateString()} {selectedTime}
+        予約日時:{" "}
+        {selectedDateTime ? selectedDateTime.toLocaleString() : "Not selected"}
       </Typography>
-      <Typography variant="body1">担当スタッフ: {selectedStaff}</Typography>
+      <Typography variant="body1">
+        担当スタッフ: {selectedStaff ? selectedStaff.name : "Not selected"}
+      </Typography>
       <Typography variant="body1">お客様名: {customerInfo.name}</Typography>
       <Typography variant="body1" paragraph>
         選択したメニュー: {selectedMenus.map((menu) => menu.name).join(", ")}
