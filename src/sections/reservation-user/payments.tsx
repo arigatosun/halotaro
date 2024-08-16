@@ -1,79 +1,165 @@
-import React, { useState } from "react";
-import { Typography, Button, TextField } from "@mui/material";
+import React, { useState, useEffect } from "react";
+import {
+  Elements,
+  PaymentElement,
+  useStripe,
+  useElements,
+} from "@stripe/react-stripe-js";
 import { useReservation } from "@/contexts/reservationcontext";
+import getStripe from "@/lib/stripe";
 
-interface PaymentProps {
-  onNext: () => void;
+interface PaymentFormProps {
   onBack: () => void;
+  onPaymentComplete: (status: string) => void;
+  clientSecret: string;
 }
 
-const Payment: React.FC<PaymentProps> = ({ onNext, onBack }) => {
-  const [cardNumber, setCardNumber] = useState("");
-  const [expiryDate, setExpiryDate] = useState("");
-  const [cvv, setCvv] = useState("");
+const PaymentForm: React.FC<PaymentFormProps> = ({
+  onBack,
+  onPaymentComplete,
+  clientSecret,
+}) => {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [error, setError] = useState<string | null>(null);
+  const [processing, setProcessing] = useState(false);
 
-  const { selectedMenus } = useReservation();
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setProcessing(true);
 
-  // この部分は実際のメニューデータと連携する必要があります
-  const menuItems = [
-    { id: "1", name: "カット", price: 5000 },
-    { id: "2", name: "カラー", price: 8000 },
-    // ...
-  ];
+    if (!stripe || !elements) {
+      setError("Stripe.js has not loaded yet.");
+      setProcessing(false);
+      return;
+    }
 
-  const selectedMenuItems = menuItems.filter((item) =>
-    selectedMenus.includes(item.id)
-  );
-  const totalPrice = selectedMenuItems.reduce(
-    (sum, item) => sum + item.price,
-    0
-  );
+    try {
+      const result = await stripe.confirmPayment({
+        elements,
+        confirmParams: {
+          return_url: `${window.location.origin}/reservation-complete`,
+        },
+        redirect: "if_required",
+      });
 
-  const handleSubmit = () => {
-    // ここで決済処理を行う
-    console.log("Payment processed");
-    onNext();
+      if (result.error) {
+        setError(result.error.message || "An error occurred during payment");
+        onPaymentComplete("failed");
+      } else {
+        // Payment succeeded
+        onPaymentComplete("succeeded");
+      }
+    } catch (err: any) {
+      console.error("Error fetching PaymentIntent:", err);
+      setError(
+        `決済の準備中にエラーが発生しました: ${err.message}. もう一度お試しください。`
+      );
+    } finally {
+      setProcessing(false);
+    }
   };
 
   return (
-    <div>
-      <Typography variant="h4" gutterBottom>
-        お支払い
-      </Typography>
-      <Typography variant="h6" gutterBottom>
-        合計金額: ¥{totalPrice.toLocaleString()}
-      </Typography>
-      <TextField
-        label="カード番号"
-        value={cardNumber}
-        onChange={(e) => setCardNumber(e.target.value)}
-        fullWidth
-        margin="normal"
+    <form onSubmit={handleSubmit}>
+      <PaymentElement />
+      <button type="button" onClick={onBack}>
+        戻る
+      </button>
+      <button type="submit" disabled={!stripe || processing}>
+        支払う
+      </button>
+      {error && <div>{error}</div>}
+    </form>
+  );
+};
+
+interface PaymentProps {
+  onBack: () => void;
+  onPaymentComplete: (status: string) => void;
+  userId: string;
+  selectedMenuId: string;
+}
+
+const Payment: React.FC<PaymentProps> = ({
+  onBack,
+  onPaymentComplete,
+  userId,
+  selectedMenuId,
+}) => {
+  const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const [connectedAccountId, setConnectedAccountId] = useState<string | null>(
+    null
+  );
+  const [paymentStatus, setPaymentStatus] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const { selectedMenus, calculateTotalAmount } = useReservation();
+
+  useEffect(() => {
+    const fetchPaymentIntent = async () => {
+      try {
+        const response = await fetch("/api/create-payment-intent", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId, selectedMenuIds: [selectedMenuId] }),
+        });
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const data = await response.json();
+        console.log("Received PaymentIntent data:", data);
+        setClientSecret(data.clientSecret);
+        setConnectedAccountId(data.connectedAccountId); // サーバーから Connected Account ID を受け取る
+      } catch (err) {
+        console.error("Error fetching PaymentIntent:", err);
+        setError(
+          "決済の準備中にエラーが発生しました。もう一度お試しください。"
+        );
+      }
+    };
+
+    fetchPaymentIntent();
+  }, [userId, selectedMenuId]);
+
+  const handlePaymentComplete = (status: string) => {
+    setPaymentStatus(status);
+    onPaymentComplete(status); // 親コンポーネントに状態を伝達
+  };
+
+  if (!clientSecret) {
+    return <div>Loading...</div>;
+  }
+
+  if (paymentStatus) {
+    return (
+      <div>
+        {paymentStatus === "succeeded" ? (
+          <div>
+            <h2>支払いが完了しました</h2>
+            <p>予約が確定しました。</p>
+          </div>
+        ) : (
+          <div>
+            <h2>支払いに失敗しました</h2>
+            <p>もう一度お試しください。</p>
+            <button onClick={() => setPaymentStatus(null)}>再試行</button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <Elements
+      stripe={getStripe(connectedAccountId ?? undefined)}
+      options={{ clientSecret }}
+    >
+      <PaymentForm
+        onBack={onBack}
+        onPaymentComplete={handlePaymentComplete}
+        clientSecret={clientSecret}
       />
-      <TextField
-        label="有効期限 (MM/YY)"
-        value={expiryDate}
-        onChange={(e) => setExpiryDate(e.target.value)}
-        fullWidth
-        margin="normal"
-      />
-      <TextField
-        label="CVV"
-        value={cvv}
-        onChange={(e) => setCvv(e.target.value)}
-        fullWidth
-        margin="normal"
-      />
-      <Button onClick={onBack}>戻る</Button>
-      <Button
-        variant="contained"
-        color="primary"
-        onClick={handleSubmit}
-        disabled={!cardNumber || !expiryDate || !cvv}
-      >
-        支払いを完了する
-      </Button>
-    </div>
+    </Elements>
   );
 };
 

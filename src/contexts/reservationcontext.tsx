@@ -1,15 +1,21 @@
 import React, { createContext, useContext, useState } from "react";
 import { Dayjs } from "dayjs";
 
+interface SelectedMenuItem {
+  id: string;
+  name: string;
+  price: number;
+}
+
 interface ReservationContextType {
-  selectedMenus: string[];
-  setSelectedMenus: React.Dispatch<React.SetStateAction<string[]>>;
+  selectedMenus: SelectedMenuItem[];
+  setSelectedMenus: React.Dispatch<React.SetStateAction<SelectedMenuItem[]>>;
   selectedDate: Date | undefined;
   setSelectedDate: React.Dispatch<React.SetStateAction<Date | undefined>>;
   selectedTime: string;
   setSelectedTime: React.Dispatch<React.SetStateAction<string>>;
-  selectedStaff: string;
-  setSelectedStaff: React.Dispatch<React.SetStateAction<string>>;
+  selectedStaff: string | null;
+  setSelectedStaff: React.Dispatch<React.SetStateAction<string | null>>;
   customerInfo: {
     name: string;
     email: string;
@@ -22,6 +28,7 @@ interface ReservationContextType {
       phone: string;
     }>
   >;
+  calculateTotalAmount: (menus: any[]) => number;
 }
 
 const ReservationContext = createContext<ReservationContextType | undefined>(
@@ -31,16 +38,18 @@ const ReservationContext = createContext<ReservationContextType | undefined>(
 export const ReservationProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
-  const [selectedMenus, setSelectedMenus] = useState<string[]>([]);
+  const [selectedMenus, setSelectedMenus] = useState<SelectedMenuItem[]>([]);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
   const [selectedTime, setSelectedTime] = useState<string>("");
-  const [selectedStaff, setSelectedStaff] = useState<string>("");
+  const [selectedStaff, setSelectedStaff] = useState<string | null>(null);
   const [customerInfo, setCustomerInfo] = useState({
     name: "",
     email: "",
     phone: "",
   });
-
+  const calculateTotalAmount = (menus: any[]) => {
+    return menus.reduce((total, menu) => total + menu.price, 0);
+  };
   return (
     <ReservationContext.Provider
       value={{
@@ -54,6 +63,7 @@ export const ReservationProvider: React.FC<{ children: React.ReactNode }> = ({
         setSelectedStaff,
         customerInfo,
         setCustomerInfo,
+        calculateTotalAmount,
       }}
     >
       {children}

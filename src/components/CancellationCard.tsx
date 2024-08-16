@@ -27,22 +27,29 @@ const dailyData: CancellationData[] = [
   { date: "6/5", count: 4, rate: 10 },
   { date: "6/6", count: 1, rate: 2.5 },
   { date: "6/7", count: 2, rate: 5 },
+  { date: "6/8", count: 2, rate: 5 },
+  { date: "6/9", count: 1, rate: 2.5 },
+  { date: "6/10", count: 3, rate: 7.5 },
+  { date: "6/11", count: 2, rate: 5 },
+  { date: "6/12", count: 4, rate: 10 },
+  { date: "6/13", count: 1, rate: 2.5 },
+  { date: "6/14", count: 2, rate: 5 },
 ];
 
 const weeklyData: CancellationData[] = [
-  { date: "Week 1", count: 15, rate: 5.4 },
-  { date: "Week 2", count: 12, rate: 4.3 },
-  { date: "Week 3", count: 18, rate: 6.5 },
-  { date: "Week 4", count: 10, rate: 3.6 },
+  { date: "1週目", count: 15, rate: 5.4 },
+  { date: "2週目", count: 12, rate: 4.3 },
+  { date: "3週目", count: 18, rate: 6.5 },
+  { date: "4週目", count: 10, rate: 3.6 },
 ];
 
 const monthlyData: CancellationData[] = [
-  { date: "Jan", count: 62, rate: 5.2 },
-  { date: "Feb", count: 58, rate: 4.8 },
-  { date: "Mar", count: 71, rate: 5.9 },
-  { date: "Apr", count: 65, rate: 5.4 },
-  { date: "May", count: 60, rate: 5.0 },
-  { date: "Jun", count: 55, rate: 4.6 },
+  { date: "1月", count: 62, rate: 5.2 },
+  { date: "2月", count: 58, rate: 4.8 },
+  { date: "3月", count: 71, rate: 5.9 },
+  { date: "4月", count: 65, rate: 5.4 },
+  { date: "5月", count: 60, rate: 5.0 },
+  { date: "6月", count: 55, rate: 4.6 },
 ];
 
 const CancellationCard: React.FC = () => {
@@ -62,10 +69,7 @@ const CancellationCard: React.FC = () => {
   };
 
   return (
-    <Card className="bg-white border-none shadow-lg">
-      <CardHeader>
-        <CardTitle className="text-xl font-semibold">キャンセル分析</CardTitle>
-      </CardHeader>
+    <Card className="bg-white border-none shadow-lg mt-10">
       <CardContent>
         <div className="grid grid-cols-2 gap-8 mb-6">
           <div className="text-center">

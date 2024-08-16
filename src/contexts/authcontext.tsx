@@ -1,4 +1,10 @@
-import React, { createContext, useState, useEffect, useContext } from "react";
+import React, {
+  createContext,
+  useState,
+  useEffect,
+  useContext,
+  useCallback,
+} from "react";
 import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -6,12 +12,13 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
+  refreshAuthState: () => Promise<void>;
 }
-
 const AuthContext = createContext<AuthContextType>({
   user: null,
   session: null,
   loading: true,
+  refreshAuthState: async () => {},
 });
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
@@ -29,13 +36,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         data: { session },
       } = await supabase.auth.getSession();
 
-      // only update the react state if the component is still mounted
       if (mounted) {
         if (session) {
           setUser(session.user);
           setSession(session);
         }
-
         setLoading(false);
       }
     }
@@ -61,8 +66,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     };
   }, []);
 
+  // 認証状態を更新する関数を追加
+  const refreshAuthState = useCallback(async () => {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (session) {
+      setUser(session.user);
+      setSession(session);
+    } else {
+      setUser(null);
+      setSession(null);
+    }
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ user, session, loading }}>
+    <AuthContext.Provider value={{ user, session, loading, refreshAuthState }}>
       {children}
     </AuthContext.Provider>
   );
