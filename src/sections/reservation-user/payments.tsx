@@ -10,7 +10,7 @@ import getStripe from "@/lib/stripe";
 
 interface PaymentFormProps {
   onBack: () => void;
-  onPaymentComplete: (status: string) => void;
+  onPaymentComplete: (status: string, paymentIntent?: any) => void;
   clientSecret: string;
 }
 
@@ -46,14 +46,13 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
       if (result.error) {
         setError(result.error.message || "An error occurred during payment");
         onPaymentComplete("failed");
-      } else {
-        // Payment succeeded
-        onPaymentComplete("succeeded");
+      } else if (result.paymentIntent) {
+        onPaymentComplete("succeeded", result.paymentIntent);
       }
     } catch (err: any) {
-      console.error("Error fetching PaymentIntent:", err);
+      console.error("Error confirming payment:", err);
       setError(
-        `決済の準備中にエラーが発生しました: ${err.message}. もう一度お試しください。`
+        `決済の確認中にエラーが発生しました: ${err.message}. もう一度お試しください。`
       );
     } finally {
       setProcessing(false);
@@ -76,7 +75,7 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
 
 interface PaymentProps {
   onBack: () => void;
-  onPaymentComplete: (status: string) => void;
+  onPaymentComplete: (status: string, paymentIntent?: any) => void;
   userId: string;
   selectedMenuId: string;
 }
@@ -91,9 +90,8 @@ const Payment: React.FC<PaymentProps> = ({
   const [connectedAccountId, setConnectedAccountId] = useState<string | null>(
     null
   );
-  const [paymentStatus, setPaymentStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const { selectedMenus, calculateTotalAmount } = useReservation();
+  const { setPaymentInfo } = useReservation();
 
   useEffect(() => {
     const fetchPaymentIntent = async () => {
@@ -109,7 +107,7 @@ const Payment: React.FC<PaymentProps> = ({
         const data = await response.json();
         console.log("Received PaymentIntent data:", data);
         setClientSecret(data.clientSecret);
-        setConnectedAccountId(data.connectedAccountId); // サーバーから Connected Account ID を受け取る
+        setConnectedAccountId(data.connectedAccountId);
       } catch (err) {
         console.error("Error fetching PaymentIntent:", err);
         setError(
@@ -121,32 +119,20 @@ const Payment: React.FC<PaymentProps> = ({
     fetchPaymentIntent();
   }, [userId, selectedMenuId]);
 
-  const handlePaymentComplete = (status: string) => {
-    setPaymentStatus(status);
-    onPaymentComplete(status); // 親コンポーネントに状態を伝達
+  const handlePaymentComplete = (status: string, paymentIntent?: any) => {
+    if (status === "succeeded" && paymentIntent) {
+      setPaymentInfo({
+        method: "credit_card",
+        status: paymentIntent.status,
+        stripePaymentIntentId: paymentIntent.id,
+        amount: paymentIntent.amount,
+      });
+    }
+    onPaymentComplete(status, paymentIntent);
   };
 
   if (!clientSecret) {
     return <div>Loading...</div>;
-  }
-
-  if (paymentStatus) {
-    return (
-      <div>
-        {paymentStatus === "succeeded" ? (
-          <div>
-            <h2>支払いが完了しました</h2>
-            <p>予約が確定しました。</p>
-          </div>
-        ) : (
-          <div>
-            <h2>支払いに失敗しました</h2>
-            <p>もう一度お試しください。</p>
-            <button onClick={() => setPaymentStatus(null)}>再試行</button>
-          </div>
-        )}
-      </div>
-    );
   }
 
   return (

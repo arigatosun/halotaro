@@ -6,13 +6,14 @@ import Payment from "./payments";
 interface ReservationConfirmationAndPaymentProps {
   onNext: () => void;
   onBack: () => void;
+  onPaymentComplete: (status: string, paymentIntent?: any) => void;
   userId: string;
   selectedMenuId: string;
 }
 
 const ReservationConfirmationAndPayment: React.FC<
   ReservationConfirmationAndPaymentProps
-> = ({ onNext, onBack, userId, selectedMenuId }) => {
+> = ({ onNext, onBack, onPaymentComplete, userId, selectedMenuId }) => {
   const [showPayment, setShowPayment] = useState(false);
 
   const handleConfirmation = () => {
@@ -30,10 +31,8 @@ const ReservationConfirmationAndPayment: React.FC<
       ) : (
         <Payment
           onBack={handlePaymentBack}
-          onPaymentComplete={(status) => {
-            if (status === "succeeded") {
-              onNext();
-            }
+          onPaymentComplete={(status, paymentIntent) => {
+            onPaymentComplete(status, paymentIntent);
           }}
           userId={userId}
           selectedMenuId={selectedMenuId}

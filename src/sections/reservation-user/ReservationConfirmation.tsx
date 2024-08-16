@@ -2,6 +2,7 @@ import React from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useReservation } from "@/contexts/reservationcontext";
+import { formatDateTime } from "@/utils/fomatDateTime";
 
 interface ReservationConfirmationProps {
   onNext: () => void;
@@ -14,8 +15,7 @@ const ReservationConfirmation: React.FC<ReservationConfirmationProps> = ({
 }) => {
   const {
     selectedMenus,
-    selectedDate,
-    selectedTime,
+    selectedDateTime,
     selectedStaff,
     customerInfo,
     calculateTotalAmount,
@@ -47,12 +47,22 @@ const ReservationConfirmation: React.FC<ReservationConfirmationProps> = ({
             <div>
               <dt className="font-semibold">予約日時:</dt>
               <dd>
-                {selectedDate?.toLocaleDateString()} {selectedTime}
+                {" "}
+                {selectedDateTime
+                  ? selectedDateTime.toLocaleString("ja-JP", {
+                      year: "numeric",
+                      month: "long",
+                      day: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                      weekday: "long",
+                    })
+                  : "日時未選択"}
               </dd>
             </div>
             <div>
               <dt className="font-semibold">担当スタッフ:</dt>
-              <dd>{selectedStaff}</dd>
+              <dd>{selectedStaff ? selectedStaff.name : "指定なし"}</dd>
             </div>
             <div>
               <dt className="font-semibold">お客様情報:</dt>

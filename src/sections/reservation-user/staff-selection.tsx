@@ -2,31 +2,35 @@ import React from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useReservation } from "@/contexts/reservationcontext";
+import { Staff, useStaffManagement } from "@/hooks/useStaffManagement";
 
 interface StaffSelectionProps {
-  onSelectStaff: (staffId: string | null) => void;
+  onSelectStaff: (staff: Staff | null) => void;
   onBack: () => void;
   selectedMenuId: string;
+  userId: string;
 }
 
 const StaffSelection: React.FC<StaffSelectionProps> = ({
   onSelectStaff,
   onBack,
   selectedMenuId,
+  userId,
 }) => {
   const { setSelectedStaff } = useReservation();
+  const { staffList, loading, error } = useStaffManagement(userId);
 
-  // TODO: スタッフデータをAPIから取得するロジックを実装
-  const staffList = [
-    { id: "1", name: "斉藤憲司" },
-    { id: "2", name: "徳 美加" },
-    { id: "3", name: "鳥山 洋花" },
-  ];
-
-  const handleStaffSelect = (staffId: string | null) => {
-    setSelectedStaff(staffId);
-    onSelectStaff(staffId);
+  const handleStaffSelect = (staff: Staff | null) => {
+    if (staff) {
+      setSelectedStaff({ id: staff.id, name: staff.name });
+    } else {
+      setSelectedStaff(null);
+    }
+    onSelectStaff(staff);
   };
+
+  if (loading) return <div>Loading...</div>;
+  if (error) return <div>Error: {error.message}</div>;
 
   return (
     <div className="space-y-6">
@@ -44,21 +48,26 @@ const StaffSelection: React.FC<StaffSelectionProps> = ({
           </div>
         </CardContent>
       </Card>
-      {staffList.map((staff) => (
-        <Card key={staff.id} className="mb-4">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <span>{staff.name}</span>
-              <Button
-                onClick={() => handleStaffSelect(staff.id)}
-                className="bg-orange-500 hover:bg-orange-600 text-white"
-              >
-                選択する
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      ))}
+      {staffList
+        .filter((staff) => staff.is_published)
+        .map((staff) => (
+          <Card key={staff.id} className="mb-4">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="font-bold">{staff.name}</span>
+                  <p className="text-sm text-gray-500">{staff.role}</p>
+                </div>
+                <Button
+                  onClick={() => handleStaffSelect(staff)}
+                  className="bg-orange-500 hover:bg-orange-600 text-white"
+                >
+                  選択する
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
       <Button onClick={onBack} variant="outline">
         戻る
       </Button>

@@ -101,3 +101,11 @@ body {
 .header-sub {
   height: var(--sub-header-height);
 }
+.rbc-event {
+  background-color: transparent !important;
+  color: orange !important;
+}
+.rbc-event-content {
+  text-align: center !important;
+  font-weight: bold;
+}
