@@ -1,3 +1,4 @@
+// contexts/reservationcontext.tsx
 import React, { createContext, useContext, useState } from "react";
 
 interface SelectedMenuItem {
@@ -31,6 +32,8 @@ interface ReservationContextType {
     }>
   >;
   calculateTotalAmount: (menus: any[]) => number;
+  paymentInfo: any | null;
+  setPaymentInfo: (info: any | null) => void;
 }
 
 const ReservationContext = createContext<ReservationContextType | undefined>(
@@ -45,6 +48,7 @@ export const ReservationProvider: React.FC<{ children: React.ReactNode }> = ({
   const [selectedStaff, setSelectedStaff] = useState<SelectedStaff | null>(
     null
   );
+  const [paymentInfo, setPaymentInfo] = useState<any | null>(null);
   const [customerInfo, setCustomerInfo] = useState({
     name: "",
     email: "",
@@ -64,6 +68,8 @@ export const ReservationProvider: React.FC<{ children: React.ReactNode }> = ({
         setSelectedStaff,
         customerInfo,
         setCustomerInfo,
+        paymentInfo,
+        setPaymentInfo,
         calculateTotalAmount,
       }}
     >

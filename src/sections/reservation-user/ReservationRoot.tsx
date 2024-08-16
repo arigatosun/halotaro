@@ -1,3 +1,4 @@
+// ReservationRoot.tsx
 import React, { useState } from "react";
 import MenuSelection from "@/sections/reservation-user/menu-selection";
 import StaffSelection from "@/sections/reservation-user/staff-selection";
@@ -57,7 +58,14 @@ function ReservationContent({ userId }: ReservationRootProps) {
     handleNext();
   };
 
+  const handlePaymentComplete = (status: string, paymentIntent?: any) => {
+    if (status === "succeeded") {
+      setActiveStep(4);
+    }
+  };
+
   const getStepContent = (step: number) => {
+    console.log("Current step:", step);
     switch (step) {
       case 0:
         return menuSelectionCompleted ? (
@@ -84,12 +92,13 @@ function ReservationContent({ userId }: ReservationRootProps) {
           <ReservationConfirmationAndPayment
             onNext={handleNext}
             onBack={handleBack}
+            onPaymentComplete={handlePaymentComplete}
             userId={userId}
             selectedMenuId={selectedMenuId!}
           />
         );
       case 4:
-        return <ReservationComplete />;
+        return <ReservationComplete userId={userId} />;
       default:
         return "Unknown step";
     }
