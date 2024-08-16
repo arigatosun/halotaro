@@ -1,7 +1,6 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/authcontext";
-import { supabase } from "@/lib/supabaseClient";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -29,96 +28,48 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { toast, useToast } from "@/components/ui/use-toast";
-import { PlusCircle, Pencil, Trash2 } from "lucide-react";
 import { Toaster } from "@/components/ui/toaster";
-
-interface MenuItem {
-  id: number;
-  name: string;
-  category: string;
-  description: string;
-  price: number;
-  duration: number;
-  is_reservable: boolean;
-  user_id: string;
-}
+import { PlusCircle, Pencil, Trash2 } from "lucide-react";
+import { useMenuItems } from "@/hooks/useMenuItems";
+import { MenuItem } from "@/types/menuItem";
 
 const MenuSettingsPage: React.FC = () => {
-  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
-  const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
-  const [editingMenu, setEditingMenu] = useState<MenuItem | null>(null);
-  const { user } = useAuth();
-  const { toast } = useToast();
+  const { user, loading: authLoading, refreshAuthState } = useAuth();
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
-    if (user) {
-      fetchMenuItems();
+    if (!authLoading && !user && retryCount < 3) {
+      refreshAuthState();
+      setRetryCount((prev) => prev + 1);
     }
-  }, [user]);
+  }, [user, authLoading, refreshAuthState, retryCount]);
 
-  const fetchMenuItems = async () => {
-    const { data, error } = await supabase
-      .from("menu_items")
-      .select("*")
-      .eq("user_id", user?.id)
-      .order("id", { ascending: true });
+  if (authLoading) {
+    return <div>認証状態を確認中...</div>;
+  }
 
-    if (error) {
-      toast({
-        variant: "destructive",
-        title: "エラー",
-        description: "メニュー項目の取得に失敗しました",
-      });
-    } else {
-      setMenuItems(data || []);
-    }
-  };
+  if (!user) {
+    return <div>認証に失敗しました。ページをリロードしてください。</div>;
+  }
 
-  const handleToggleReservable = async (id: number, is_reservable: boolean) => {
-    const { error } = await supabase
-      .from("menu_items")
-      .update({ is_reservable })
-      .eq("id", id);
+  return <AuthenticatedMenuSettingsPage userId={user.id} />;
+};
 
-    if (error) {
-      toast({
-        variant: "destructive",
-        title: "エラー",
-        description: "予約可否の更新に失敗しました",
-      });
-    } else {
-      setMenuItems(
-        menuItems.map((item) =>
-          item.id === id ? { ...item, is_reservable } : item
-        )
-      );
-      toast({
-        title: "成功",
-        description: "予約可否を更新しました",
-      });
-    }
-  };
+const AuthenticatedMenuSettingsPage: React.FC<{ userId: string }> = ({
+  userId,
+}) => {
+  const {
+    menuItems,
+    loading,
+    error,
+    addMenuItem,
+    updateMenuItem,
+    deleteMenuItem,
+    toggleReservable,
+  } = useMenuItems(userId);
 
-  const handleDelete = async (id: number) => {
-    if (confirm("このメニューを削除してもよろしいですか？")) {
-      const { error } = await supabase.from("menu_items").delete().eq("id", id);
-
-      if (error) {
-        toast({
-          variant: "destructive",
-          title: "エラー",
-          description: "メニューの削除に失敗しました",
-        });
-      } else {
-        setMenuItems(menuItems.filter((item) => item.id !== id));
-        toast({
-          title: "成功",
-          description: "メニューを削除しました",
-        });
-      }
-    }
-  };
+  const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
+  const [editingMenu, setEditingMenu] = useState<MenuItem | null>(null);
 
   const handleEdit = (menu: MenuItem) => {
     setEditingMenu(menu);
@@ -133,51 +84,31 @@ const MenuSettingsPage: React.FC = () => {
   const handleModalSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
-    const values = Object.fromEntries(formData.entries());
+    const values = Object.fromEntries(formData.entries()) as unknown as Omit<
+      MenuItem,
+      "id" | "user_id"
+    >;
 
     try {
       if (editingMenu) {
-        const { error } = await supabase
-          .from("menu_items")
-          .update({ ...values, user_id: user?.id })
-          .eq("id", editingMenu.id);
-
-        if (error) throw error;
-
-        setMenuItems(
-          menuItems.map((item) =>
-            item.id === editingMenu.id ? { ...item, ...values } : item
-          )
-        );
-        toast({
-          title: "成功",
-          description: "メニューを更新しました",
-        });
+        await updateMenuItem({ ...editingMenu, ...values });
       } else {
-        const { data, error } = await supabase
-          .from("menu_items")
-          .insert({ ...values, user_id: user?.id, is_reservable: true })
-          .select();
-
-        if (error) throw error;
-
-        if (data) {
-          setMenuItems([...menuItems, data[0]]);
-          toast({
-            title: "成功",
-            description: "新しいメニューを追加しました",
-          });
-        }
+        await addMenuItem({ ...values, user_id: userId });
       }
       setIsModalOpen(false);
     } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "エラー",
-        description: "操作に失敗しました",
-      });
+      console.error("操作に失敗しました:", error);
+      // エラーメッセージをユーザーに表示
     }
   };
+
+  if (loading) return <div>メニューデータを読み込み中...</div>;
+  if (error) {
+    if (error.message === "Unauthorized") {
+      return <div>認証エラーが発生しました。再度ログインしてください。</div>;
+    }
+    return <div>エラーが発生しました: {error.message}</div>;
+  }
 
   return (
     <div className="p-6">
@@ -290,7 +221,7 @@ const MenuSettingsPage: React.FC = () => {
                 <Switch
                   checked={item.is_reservable}
                   onCheckedChange={(checked) =>
-                    handleToggleReservable(item.id, checked)
+                    toggleReservable(item.id, checked)
                   }
                 />
               </TableCell>
@@ -305,7 +236,7 @@ const MenuSettingsPage: React.FC = () => {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => handleDelete(item.id)}
+                  onClick={() => deleteMenuItem(item.id)}
                   className="ml-2"
                 >
                   <Trash2 className="h-4 w-4" />

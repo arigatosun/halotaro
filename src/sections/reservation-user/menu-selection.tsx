@@ -1,65 +1,99 @@
-import React from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
+// src/components/MenuSelection.tsx
+import React, { useState } from "react";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useReservation } from "@/contexts/reservationcontext";
-import { useMenuItems, MenuItem } from "@/hooks/useMenuItems";
+import { useMenuItems } from "@/hooks/useMenuItems";
+import { MenuItem } from "@/types/menuItem";
 
 interface MenuSelectionProps {
-  onNext: () => void;
+  onSelectMenu: (menuId: string) => void;
   userId: string;
 }
 
-const MenuSelection: React.FC<MenuSelectionProps> = ({ onNext, userId }) => {
-  const { selectedMenus, setSelectedMenus } = useReservation();
+const MenuSelection: React.FC<MenuSelectionProps> = ({
+  onSelectMenu,
+  userId,
+}) => {
+  const { setSelectedMenus } = useReservation();
   const { menuItems, loading, error } = useMenuItems(userId);
+  const [activeTab, setActiveTab] = useState("all");
 
   const handleMenuSelect = (menuId: string) => {
-    setSelectedMenus((prev) =>
-      prev.includes(menuId)
-        ? prev.filter((id) => id !== menuId)
-        : [...prev, menuId]
-    );
+    const selectedMenu = menuItems.find((menu) => menu.id === Number(menuId));
+    if (selectedMenu) {
+      setSelectedMenus([
+        {
+          id: selectedMenu.id.toString(),
+          name: selectedMenu.name,
+          price: selectedMenu.price,
+        },
+      ]);
+      onSelectMenu(menuId);
+    }
   };
 
   if (loading) return <div>Loading...</div>;
   if (error) return <div>Error: {error.message}</div>;
 
-  if (menuItems.length === 0) {
-    return <div>No menus available for this user.</div>;
-  }
+  const filteredMenuItems = menuItems.filter((menu) => {
+    if (activeTab === "all") return true;
+    // クーポンテーブルを追加した際に置き換える
+    // if (activeTab === "firstVisit") return menu.isFirstVisitCoupon;
+    // if (activeTab === "repeater") return menu.isRepeaterCoupon;
+    // return !menu.isFirstVisitCoupon && !menu.isRepeaterCoupon;
+  });
+
+  const renderMenuItem = (menu: MenuItem) => (
+    <Card key={menu.id} className="mb-4">
+      <CardContent className="p-4">
+        <div className="flex items-start justify-between">
+          <div>
+            <h3 className="text-lg font-semibold">{menu.name}</h3>
+            <p className="text-sm text-gray-500">{menu.description}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-lg font-bold mb-2">
+              ¥{menu.price.toLocaleString()}
+            </p>
+            <Button
+              onClick={() => handleMenuSelect(menu.id.toString())}
+              className="bg-orange-500 hover:bg-orange-600 text-white"
+            >
+              選択する
+            </Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
 
   return (
     <div className="space-y-6">
       <h2 className="text-2xl font-bold">
         クーポン・メニューを選択してください
       </h2>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {menuItems.map((menu) => (
-          <Card key={menu.id}>
-            <CardHeader>
-              <CardTitle>{menu.name}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-gray-500">{menu.description}</p>
-              <p className="text-lg font-bold mt-2">
-                ¥{menu.price.toLocaleString()}
-              </p>
-              <div className="flex items-center space-x-2 mt-2">
-                <Checkbox
-                  id={menu.id}
-                  checked={selectedMenus.includes(menu.id)}
-                  onCheckedChange={() => handleMenuSelect(menu.id)}
-                />
-                <label htmlFor={menu.id}>選択</label>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-      <Button onClick={onNext} disabled={selectedMenus.length === 0}>
-        次へ
-      </Button>
+      <Tabs defaultValue="all" onValueChange={setActiveTab}>
+        <TabsList>
+          <TabsTrigger value="all">すべて</TabsTrigger>
+          <TabsTrigger value="firstVisit">初来店時クーポン</TabsTrigger>
+          <TabsTrigger value="repeater">2回目以降クーポン</TabsTrigger>
+          <TabsTrigger value="menu">メニュー</TabsTrigger>
+        </TabsList>
+        <TabsContent value="all">
+          {filteredMenuItems.map(renderMenuItem)}
+        </TabsContent>
+        <TabsContent value="firstVisit">
+          {filteredMenuItems.map(renderMenuItem)}
+        </TabsContent>
+        <TabsContent value="repeater">
+          {filteredMenuItems.map(renderMenuItem)}
+        </TabsContent>
+        <TabsContent value="menu">
+          {filteredMenuItems.map(renderMenuItem)}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };

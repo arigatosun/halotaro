@@ -18,22 +18,12 @@ const ReservationConfirmation: React.FC<ReservationConfirmationProps> = ({
     selectedTime,
     selectedStaff,
     customerInfo,
+    calculateTotalAmount,
   } = useReservation();
-
-  // この部分は実際のメニューデータと連携する必要があります
-  const menuItems = [
-    { id: "1", name: "カット", price: 5000 },
-    { id: "2", name: "カラー", price: 8000 },
-    // ...
-  ];
-
-  const selectedMenuItems = menuItems.filter((item) =>
-    selectedMenus.includes(item.id)
-  );
-  const totalPrice = selectedMenuItems.reduce(
-    (sum, item) => sum + item.price,
-    0
-  );
+  console.log("selectedMenus:", selectedMenus);
+  // selectedMenus はすでに必要な情報を含んでいるため、
+  // 追加のフィルタリングは不要です
+  const totalPrice = calculateTotalAmount(selectedMenus);
 
   return (
     <div className="space-y-6">
@@ -47,8 +37,10 @@ const ReservationConfirmation: React.FC<ReservationConfirmationProps> = ({
             <div>
               <dt className="font-semibold">選択したメニュー:</dt>
               <dd>
-                {selectedMenuItems
-                  .map((item) => `${item.name} (¥${item.price})`)
+                {selectedMenus
+                  .map(
+                    (item) => `${item.name} (¥${item.price.toLocaleString()})`
+                  )
                   .join(", ")}
               </dd>
             </div>

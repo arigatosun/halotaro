@@ -175,6 +175,7 @@ const SubHeader: React.FC<{ pathname: string }> = ({ pathname }) => {
       { href: "/dashboard/listing/salon", label: "サロン" },
       { href: "/dashboard/listing/staff", label: "スタッフ" },
       { href: "/dashboard/listing/menu", label: "メニュー" },
+      { href: "/dashboard/listing/coupon", label: "クーポン" },
     ],
     "/dashboard/customer": [
       { href: "/dashboard/customer", label: "お客様一覧" },

@@ -54,18 +54,6 @@ const DateTimeStaffSelection: React.FC<DateTimeStaffSelectionProps> = ({
             {/* 他の時間枠も追加 */}
           </SelectContent>
         </Select>
-        <Select value={selectedStaff} onValueChange={setSelectedStaff}>
-          <SelectTrigger>
-            <SelectValue placeholder="スタッフを選択" />
-          </SelectTrigger>
-          <SelectContent>
-            {staffList.map((staff) => (
-              <SelectItem key={staff.id} value={staff.id}>
-                {staff.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
       </div>
       <div className="space-x-4">
         <Button onClick={onBack} variant="outline">

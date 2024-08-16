@@ -72,13 +72,19 @@ function generateRandomReservation() {
     "フリー スタッフ",
   ];
 
+  const amount = Math.floor(Math.random() * 20000) + 5000;
+  const technicalAmount = Math.floor(amount * 0.8);
+  const productAmount = amount - technicalAmount;
+
   return {
     date: randomDate(new Date(2023, 0, 1), new Date()).toLocaleDateString(),
     staff: staffs[Math.floor(Math.random() * staffs.length)],
     status: statuses[Math.floor(Math.random() * statuses.length)],
     menu: menus[Math.floor(Math.random() * menus.length)],
     route: routes[Math.floor(Math.random() * routes.length)],
-    amount: Math.floor(Math.random() * 20000) + 5000,
+    amount: amount,
+    technicalAmount: technicalAmount,
+    productAmount: productAmount,
   };
 }
 
@@ -336,90 +342,84 @@ const CustomerDetailPage: React.FC<CustomerDetailPageProps> = ({ id }) => {
               <TabsTrigger value="notes">メモ</TabsTrigger>
             </TabsList>
             <TabsContent value="reservations">
-              <div className="flex items-center space-x-4 mb-4 px-4">
-                <Input
-                  type="date"
-                  value={dateFilter.startDate}
-                  onChange={(e) =>
-                    setDateFilter({ ...dateFilter, startDate: e.target.value })
-                  }
-                  placeholder="開始日"
-                  className="w-40"
-                />
-                <Input
-                  type="date"
-                  value={dateFilter.endDate}
-                  onChange={(e) =>
-                    setDateFilter({ ...dateFilter, endDate: e.target.value })
-                  }
-                  placeholder="終了日"
-                  className="w-40"
-                />
-                <Button
-                  onClick={() => setDateFilter({ startDate: "", endDate: "" })}
-                  className="whitespace-nowrap"
-                >
-                  フィルターをクリア
-                </Button>
+              {/* フィルター部分 */}
+              <div className="overflow-x-auto">
+                <div style={{ height: "500px", overflow: "auto" }}>
+                  <table className="w-full border-collapse">
+                    <thead className="sticky top-0 bg-white z-10">
+                      <tr className="border-b">
+                        <th className="p-3 text-center font-semibold text-sm w-1/7">
+                          来店日
+                        </th>
+                        <th className="p-3 text-center font-semibold text-sm w-1/7">
+                          メニュー
+                        </th>
+                        <th className="p-3 text-center font-semibold text-sm w-/7">
+                          技術売上
+                        </th>
+                        <th className="p-3 text-center font-semibold text-sm w-1/7">
+                          商品売上
+                        </th>
+                        <th className="p-3 text-center font-semibold text-sm w-1/7">
+                          支払金額
+                        </th>
+                        <th className="p-3 text-center font-semibold text-sm w-1/7">
+                          スタッフ
+                        </th>
+                        <th className="p-3 text-center font-semibold text-sm w-1/7">
+                          ステータス
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredReservations.map(
+                        (reservation: any, index: number) => (
+                          <tr key={index} className="border-b hover:bg-gray-50">
+                            <td className="p-3 text-sm">{reservation.date}</td>
+                            <td className="p-3 text-sm">
+                              {truncateText(reservation.menu, 10)}
+                            </td>
+                            <td className="p-3 text-sm text-center">
+                              ¥{reservation.technicalAmount.toLocaleString()}
+                            </td>
+                            <td className="p-3 text-sm text-center">
+                              ¥{reservation.productAmount.toLocaleString()}
+                            </td>
+                            <td className="p-3 text-sm text-center">
+                              ¥{reservation.amount.toLocaleString()}
+                            </td>
+                            <td className="p-3 text-sm text-center">
+                              {reservation.staff}
+                            </td>
+                            <td className="p-3 text-sm text-center">
+                              {renderStatusBadge(reservation.status)}
+                            </td>
+                          </tr>
+                        )
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-              <div
-                className="overflow-auto px-4"
-                style={{ maxHeight: "500px" }}
-              >
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="py-2">来店日</TableHead>
-                      <TableHead className="py-2">メニュー</TableHead>
-                      <TableHead className="py-2">支払金額</TableHead>
-                      <TableHead className="py-2">スタッフ</TableHead>
-                      <TableHead className="py-2">ステータス</TableHead>
-                      <TableHead className="py-2">予約経路</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredReservations.map(
-                      (reservation: any, index: number) => (
-                        <TableRow key={index}>
-                          <TableCell className="py-3">
-                            {reservation.date}
-                          </TableCell>
-                          <TableCell className="py-3">
-                            {truncateText(reservation.menu, 7)}
-                          </TableCell>
-                          <TableCell className="py-3">
-                            ¥{reservation.amount.toLocaleString()}
-                          </TableCell>
-                          <TableCell className="py-3">
-                            {reservation.staff}
-                          </TableCell>
-                          <TableCell className="py-3">
-                            {renderStatusBadge(reservation.status)}
-                          </TableCell>
-                          <TableCell className="py-3">
-                            {reservation.route}
-                          </TableCell>
-                        </TableRow>
-                      )
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-            </TabsContent>
-            <TabsContent value="notes">
-              <div className="p-4">
-                <textarea
-                  value={customerNote}
-                  onChange={(e) => setCustomerNote(e.target.value)}
-                  className="w-full h-40 p-2 border rounded"
-                  placeholder="お客様に関するメモを入力してください"
-                />
-                <Button
-                  onClick={() => console.log("メモを保存")}
-                  className="mt-2"
-                >
-                  メモを保存
-                </Button>
+              <div className="bg-white border-t border-gray-200 p-5 flex justify-end items-center space-x-4">
+                <span className="font-semibold whitespace-nowrap">
+                  合計技術売上: ¥
+                  {filteredReservations
+                    .reduce((sum: number, r: any) => sum + r.technicalAmount, 0)
+                    .toLocaleString()}
+                </span>
+                <span className="font-semibold whitespace-nowrap">
+                  合計商品売上: ¥
+                  {filteredReservations
+                    .reduce((sum: number, r: any) => sum + r.productAmount, 0)
+                    .toLocaleString()}
+                </span>
+                <span className="font-semibold whitespace-nowrap">
+                  合計支払金額: ¥
+                  {filteredReservations
+                    .reduce((sum: number, r: any) => sum + r.amount, 0)
+                    .toLocaleString()}
+                </span>
               </div>
             </TabsContent>
           </Tabs>
