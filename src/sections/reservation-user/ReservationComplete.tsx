@@ -77,7 +77,7 @@ const ReservationComplete: React.FC = () => {
       <Typography variant="body1">担当スタッフ: {selectedStaff}</Typography>
       <Typography variant="body1">お客様名: {customerInfo.name}</Typography>
       <Typography variant="body1" paragraph>
-        選択したメニュー: {selectedMenus.join(", ")}
+        選択したメニュー: {selectedMenus.map((menu) => menu.name).join(", ")}
       </Typography>
       <Typography variant="body1" paragraph>
         予約の詳細は、ご登録いただいたメールアドレス ({customerInfo.email})

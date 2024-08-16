@@ -58,7 +58,7 @@ const BasicInfoSettingsView: React.FC = () => {
 
   useEffect(() => {
     if (user) {
-      setReservationUrl(`https://halotaro.com/reservation-user/${user.id}`);
+      setReservationUrl(`https://harotalo.com/reservation-user/${user.id}`);
     }
   }, [user]);
 
