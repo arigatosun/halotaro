@@ -7,16 +7,12 @@ import {
   Checkbox,
   Select,
   Table,
-  Modal,
-  Radio,
-  Space,
-  Form,
-  Input,
   message,
 } from "antd";
 import { QuestionCircleOutlined } from "@ant-design/icons";
 import moment from "moment";
 import { createClient } from '@supabase/supabase-js';
+import BusinessHoursBulkInputModal from '@/components/ui/BusinessHoursBulkInputModal';
 
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
 
@@ -27,6 +23,7 @@ interface DaySettings {
   isHoliday: boolean;
   openTime: string;
   closeTime: string;
+  capacity: number | null; // null を許可
 }
 
 interface MonthlyReceptionSettingsDetailProps {
@@ -67,8 +64,9 @@ const MonthlyReceptionSettingsDetail: React.FC<MonthlyReceptionSettingsDetailPro
         const day = parseInt(moment(item.date).format('D'));
         fetchedSettings[day] = {
           isHoliday: item.is_holiday,
-          openTime: item.open_time || "開始時間",
-          closeTime: item.close_time || "終了時間",
+          openTime: item.open_time || "",
+          closeTime: item.close_time || "",
+          capacity: item.capacity || 0,
         };
       });
 
@@ -93,8 +91,45 @@ const MonthlyReceptionSettingsDetail: React.FC<MonthlyReceptionSettingsDetailPro
     setIsBulkInputModalVisible(false);
   };
 
-  const handleBulkInputSubmit = (values: any) => {
-    console.log("Bulk input values:", values);
+  const handleBusinessHoursBulkInputSubmit = (values: any) => {
+    const updatedSettings = { ...daySettings };
+    const daysInMonth = currentDate.daysInMonth();
+  
+    const applySettings = (day: number) => {
+      updatedSettings[day] = {
+        isHoliday: values.isHoliday,
+        openTime: values.isHoliday ? "" : values.businessHours?.start || "",
+        closeTime: values.isHoliday ? "" : values.businessHours?.end || "",
+        capacity: values.isHoliday ? undefined : values.capacity,
+      };
+    };
+  
+    if (values.dateType === 'specific') {
+      values.specificDates.forEach((day: number) => applySettings(day));
+    } else if (values.dateType === 'range') {
+      for (let day = values.range.start; day <= values.range.end; day++) {
+        applySettings(day);
+      }
+    } else if (values.dateType === 'weekday') {
+      type WeekdayKey = '日曜' | '月曜' | '火曜' | '水曜' | '木曜' | '金曜' | '土曜';
+      const weekdayMap: { [key in WeekdayKey]: number } = {
+        '日曜': 0, '月曜': 1, '火曜': 2, '水曜': 3, '木曜': 4, '金曜': 5, '土曜': 6
+      };
+      const selectedWeekdays = values.weekdays.map((day: string) => weekdayMap[day as WeekdayKey]);
+      
+      for (let day = 1; day <= daysInMonth; day++) {
+        const date = moment(`${year}-${month}-${day}`);
+        if (selectedWeekdays.includes(date.day())) {
+          applySettings(day);
+        }
+      }
+    } else if (values.dateType === 'everyday') {
+      for (let day = 1; day <= daysInMonth; day++) {
+        applySettings(day);
+      }
+    }
+  
+    setDaySettings(updatedSettings);
     setIsBulkInputModalVisible(false);
   };
 
@@ -129,13 +164,6 @@ const MonthlyReceptionSettingsDetail: React.FC<MonthlyReceptionSettingsDetailPro
     return data;
   };
 
-  const handleHolidayChange = (day: number, checked: boolean) => {
-    setDaySettings((prev) => ({
-      ...prev,
-      [day]: { ...prev[day], isHoliday: Boolean(checked) },
-    }));
-  };
-
   const handleTimeChange = (
     day: number,
     type: "openTime" | "closeTime",
@@ -147,44 +175,97 @@ const MonthlyReceptionSettingsDetail: React.FC<MonthlyReceptionSettingsDetailPro
     }));
   };
 
+  const handleCapacityChange = (day: number, value: number | null) => {
+    setDaySettings((prev) => ({
+      ...prev,
+      [day]: { ...prev[day], capacity: value },
+    }));
+  };
+
   const renderDaySettings = (day: moment.Moment | null) => {
     if (!day) return <div className="empty-day"></div>;
 
     const dayNumber = day.date();
     const settings = daySettings[dayNumber] || {
       isHoliday: false,
-      openTime: "開始時間",
-      closeTime: "終了時間",
+      openTime: "",
+      closeTime: "",
+      capacity: 0,
     };
     const isWeekend = day.day() === 0 || day.day() === 6;
+    const isSunday = day.day() === 0;
+
+    const formatTime = (time: string | null): string => {
+      if (!time) return "";
+      return moment(time, "HH:mm:ss").format("HH:mm");
+    };
 
     return (
-      <div className={`day-settings ${isWeekend ? "weekend" : ""}`}>
-        <div className="day-number">{dayNumber}</div>
+      <div className={`day-settings ${isWeekend ? "weekend" : ""}`} style={{ 
+        border: '1px solid #d9d9d9', 
+        padding: '8px',
+        backgroundColor: settings.isHoliday ? '#f0f0f0' : (isWeekend ? '#f5f5f5' : 'white'),
+        height: '100%'
+      }}>
+        <div className="day-number" style={{ 
+          fontWeight: 'bold', 
+          marginBottom: '4px',
+          color: isSunday ? 'red' : 'inherit'
+        }}>{dayNumber}</div>
         <Checkbox
           checked={settings.isHoliday}
           onChange={(e) => handleHolidayChange(dayNumber, e.target.checked)}
         >
           休業日
         </Checkbox>
+        <Text style={{ color: '#8c8c8c', fontSize: '12px', display: 'block', marginTop: '4px' }}>開始時間</Text>
         <Select
-          style={{ width: "100%", marginTop: "5px" }}
-          value={settings.openTime}
-          onChange={(value) => handleTimeChange(dayNumber, "openTime", value)}
-          disabled={settings.isHoliday}
-        >
-          {generateTimeOptions()}
-        </Select>
+  style={{ width: "100%", marginTop: "2px" }}
+  value={formatTime(settings.openTime)}
+  onChange={(value) => handleTimeChange(dayNumber, "openTime", value)}
+  disabled={settings.isHoliday}
+  placeholder="選択"
+>
+  {generateTimeOptions()}
+</Select>
+        <Text style={{ color: '#8c8c8c', fontSize: '12px', display: 'block', marginTop: '4px' }}>終了時間</Text>
         <Select
-          style={{ width: "100%", marginTop: "5px" }}
-          value={settings.closeTime}
-          onChange={(value) => handleTimeChange(dayNumber, "closeTime", value)}
-          disabled={settings.isHoliday}
-        >
-          {generateTimeOptions()}
-        </Select>
+  style={{ width: "100%", marginTop: "2px" }}
+  value={formatTime(settings.closeTime)}
+  onChange={(value) => handleTimeChange(dayNumber, "closeTime", value)}
+  disabled={settings.isHoliday}
+  placeholder="選択"
+>
+  {generateTimeOptions()}
+</Select>
+        <Text style={{ color: '#8c8c8c', fontSize: '12px', display: 'block', marginTop: '4px' }}>受付可能数（任意）</Text>
+<Select
+  style={{ width: "100%", marginTop: "2px" }}
+  value={settings.capacity}
+  onChange={(value) => handleCapacityChange(dayNumber, value)}
+  disabled={settings.isHoliday}
+  placeholder="選択"
+  allowClear // クリアボタンを追加
+>
+  {[...Array(20)].map((_, i) => (
+    <Option key={i + 1} value={i + 1}>{i + 1}</Option>
+  ))}
+</Select>
       </div>
     );
+  };
+
+  const handleHolidayChange = (day: number, checked: boolean) => {
+    setDaySettings((prev) => ({
+      ...prev,
+      [day]: { 
+        ...prev[day], 
+        isHoliday: checked,
+        openTime: checked ? "" : prev[day]?.openTime || "",
+        closeTime: checked ? "" : prev[day]?.closeTime || "",
+        capacity: checked ? 0 : prev[day]?.capacity || 0,
+      },
+    }));
   };
 
   const generateTimeOptions = () => {
@@ -204,133 +285,6 @@ const MonthlyReceptionSettingsDetail: React.FC<MonthlyReceptionSettingsDetailPro
 
   const calendarData = generateCalendarData();
 
-  const BulkInputModal = () => {
-    const [form] = Form.useForm();
-
-    return (
-      <Modal
-        title="一括入力"
-        open={isBulkInputModalVisible}
-        onCancel={handleBulkInputModalCancel}
-        footer={[
-          <Button key="cancel" onClick={handleBulkInputModalCancel}>
-            閉じる
-          </Button>,
-          <Button key="submit" type="primary" onClick={() => form.submit()}>
-            一括入力
-          </Button>,
-        ]}
-        width={800}
-      >
-        <Form form={form} onFinish={handleBulkInputSubmit}>
-        <Form.Item name="dateType" label="日を指定">
-            <Radio.Group>
-              <Space direction="vertical">
-                <Radio value="specific">
-                  日付：
-                  <Select style={{ width: 80 }} defaultValue="1">
-                    {[...Array(31)].map((_, i) => (
-                      <Option key={i + 1} value={i + 1}>
-                        {i + 1}
-                      </Option>
-                    ))}
-                  </Select>
-                  日と
-                  <Select style={{ width: 80 }} defaultValue="1">
-                    {[...Array(31)].map((_, i) => (
-                      <Option key={i + 1} value={i + 1}>
-                        {i + 1}
-                      </Option>
-                    ))}
-                  </Select>
-                  日と
-                  <Select style={{ width: 80 }} defaultValue="1">
-                    {[...Array(31)].map((_, i) => (
-                      <Option key={i + 1} value={i + 1}>
-                        {i + 1}
-                      </Option>
-                    ))}
-                  </Select>
-                  日と
-                  <Select style={{ width: 80 }} defaultValue="1">
-                    {[...Array(31)].map((_, i) => (
-                      <Option key={i + 1} value={i + 1}>
-                        {i + 1}
-                      </Option>
-                    ))}
-                  </Select>
-                  日と
-                  <Select style={{ width: 80 }} defaultValue="1">
-                    {[...Array(31)].map((_, i) => (
-                      <Option key={i + 1} value={i + 1}>
-                        {i + 1}
-                      </Option>
-                    ))}
-                  </Select>
-                  日
-                </Radio>
-                <Radio value="range">
-                  期間：
-                  <Select style={{ width: 80 }} defaultValue="1">
-                    {[...Array(31)].map((_, i) => (
-                      <Option key={i + 1} value={i + 1}>
-                        {i + 1}
-                      </Option>
-                    ))}
-                  </Select>
-                  日から
-                  <Select style={{ width: 80 }} defaultValue="1">
-                    {[...Array(31)].map((_, i) => (
-                      <Option key={i + 1} value={i + 1}>
-                        {i + 1}
-                      </Option>
-                    ))}
-                  </Select>
-                  日
-                </Radio>
-                <Radio value="weekday">
-                  曜日：
-                  <Checkbox.Group
-                    options={[
-                      "日曜",
-                      "月曜",
-                      "火曜",
-                      "水曜",
-                      "木曜",
-                      "金曜",
-                      "土曜",
-                    ]}
-                  />
-                </Radio>
-                <Radio value="everyday">毎日</Radio>
-              </Space>
-            </Radio.Group>
-          </Form.Item>
-          <Form.Item name="capacity" label="受付可能数を指定">
-            <Select style={{ width: 120 }}>
-              <Option value="select">選択</Option>
-              {/* 他のオプションをここに追加 */}
-            </Select>
-          </Form.Item>
-          <Form.Item name="businessHours" label="営業時間を指定">
-            <Input.Group compact>
-              <Select style={{ width: 120 }}>
-                <Option value="select">選択</Option>
-                {/* 時間オプションをここに追加 */}
-              </Select>
-              <span style={{ padding: "0 8px" }}>から</span>
-              <Select style={{ width: 120 }}>
-                <Option value="select">選択</Option>
-                {/* 時間オプションをここに追加 */}
-              </Select>
-              <span style={{ padding: "0 8px" }}>まで</span>
-            </Input.Group>
-          </Form.Item>
-        </Form>
-      </Modal>
-    );
-  };
-
   const handleSubmit = async () => {
     console.log('daySettings:', daySettings);
     const { data: { user }, error: userError } = await supabase.auth.getUser();
@@ -345,13 +299,13 @@ const MonthlyReceptionSettingsDetail: React.FC<MonthlyReceptionSettingsDetailPro
 
     for (let day = 1; day <= daysInMonth; day++) {
       const settings = daySettings[day];
-      if (!settings || (!settings.isHoliday && (settings.openTime === "開始時間" || settings.closeTime === "終了時間"))) {
+      if (!settings || (!settings.isHoliday && (settings.openTime === "" || settings.closeTime === "" || settings.capacity === 0))) {
         incompleteDays.push(day);
       }
     }
 
     if (incompleteDays.length > 0) {
-      message.error(`以下の日付の設定が不完全です: ${incompleteDays.join(', ')}。すべての日付に対して休業日か営業時間を設定してください。`);
+      message.error(`以下の日付の設定が不完全です: ${incompleteDays.join(', ')}。すべての日付に対して休業日か営業時間と受付可能数を設定してください。`);
       return;
     }
 
@@ -363,8 +317,9 @@ const MonthlyReceptionSettingsDetail: React.FC<MonthlyReceptionSettingsDetailPro
         salon_id: user.id,
         date: `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`,
         is_holiday: isHoliday,
-        open_time: isHoliday ? null : (settings.openTime === "開始時間" ? null : settings.openTime),
-        close_time: isHoliday ? null : (settings.closeTime === "終了時間" ? null : settings.closeTime),
+        open_time: isHoliday ? null : settings.openTime,
+        close_time: isHoliday ? null : settings.closeTime,
+        capacity: isHoliday ? null : (settings.capacity || null), // null if not set
       };
     });
 
@@ -372,9 +327,9 @@ const MonthlyReceptionSettingsDetail: React.FC<MonthlyReceptionSettingsDetailPro
       const { data, error } = await supabase
         .from('salon_business_hours')
         .upsert(businessHours, { onConflict: 'salon_id,date' });
-
+  
       if (error) throw error;
-
+  
       message.success('営業時間が正常に保存されました');
     } catch (error) {
       console.error('Error saving business hours:', error);
@@ -395,8 +350,9 @@ const MonthlyReceptionSettingsDetail: React.FC<MonthlyReceptionSettingsDetailPro
             marginBottom: "20px",
           }}
         >
+          {/* 変更点1: タイトルから年月を削除 */}
           <Title level={3}>
-            サロンの営業時間・受付可能数設定（{year}年{month}月）
+            サロンの営業時間・受付可能数設定
           </Title>
           <QuestionCircleOutlined style={{ fontSize: "24px" }} />
         </div>
@@ -404,12 +360,27 @@ const MonthlyReceptionSettingsDetail: React.FC<MonthlyReceptionSettingsDetailPro
           1か月の営業時間と、サロン全体で受付可能な予約数を日別に設定します。
         </Text>
         <div style={{ margin: "20px 0" }}>
-          <Button type="primary" onClick={showBulkInputModal}>
+        <Button 
+    type="primary" 
+    size="large"  // ボタンを大きくするために size を large に設定
+    style={{ padding: "10px 20px", fontSize: "18px" }}  // フォントサイズを18pxに設定
+    onClick={showBulkInputModal}
+  >
             一括入力
           </Button>
           <Text style={{ marginLeft: "10px" }}>
             日・期間・曜日を指定して営業時間・受付可能数の一括入力ができます。
           </Text>
+        </div>
+        {/* 変更点2: 年月表示を追加 */}
+        <div style={{ 
+          textAlign: 'right', 
+          marginBottom: '10px', 
+          fontSize: '24px', 
+          fontWeight: 'bold',
+          color: '000000'  // Antデザインのプライマリカラー
+        }}>
+          {`${year}年${month}月`}
         </div>
         <Table
           loading={isLoading}
@@ -418,18 +389,111 @@ const MonthlyReceptionSettingsDetail: React.FC<MonthlyReceptionSettingsDetailPro
           components={{
             body: {
               cell: ({ children }: { children: React.ReactNode }) => (
-                <td style={{ padding: 0 }}>{children}</td>
+                <td style={{ padding: 0, border: '1px solid #d9d9d9' }}>{children}</td>
               ),
             },
           }}
           columns={[
-            { title: "日", dataIndex: "sun", key: "sun", align: "center" },
-            { title: "月", dataIndex: "mon", key: "mon", align: "center" },
-            { title: "火", dataIndex: "tue", key: "tue", align: "center" },
-            { title: "水", dataIndex: "wed", key: "wed", align: "center" },
-            { title: "木", dataIndex: "thu", key: "thu", align: "center" },
-            { title: "金", dataIndex: "fri", key: "fri", align: "center" },
-            { title: "土", dataIndex: "sat", key: "sat", align: "center" },
+            // 変更点3: 曜日ヘッダーのスタイルを変更
+            { 
+              title: "日", 
+              dataIndex: "sun", 
+              key: "sun", 
+              align: "center", 
+              onHeaderCell: () => ({ 
+                style: { 
+                  color: 'red',
+                  backgroundColor: '#637381',
+                  borderRight: '1px solid #d9d9d9',
+                  borderBottom: '1px solid #d9d9d9'
+                } 
+              }) 
+            },
+            { 
+              title: "月", 
+              dataIndex: "mon", 
+              key: "mon", 
+              align: "center",
+              onHeaderCell: () => ({ 
+                style: { 
+                  backgroundColor: '#637381',
+                  color: 'white',
+                  borderRight: '1px solid #d9d9d9',
+                  borderBottom: '1px solid #d9d9d9'
+                } 
+              })
+            },
+            { 
+              title: "火", 
+              dataIndex: "tue", 
+              key: "tue", 
+              align: "center", 
+              onHeaderCell: () => ({ 
+                style: { 
+                  color: 'white',
+                  backgroundColor: '#637381',
+                  borderRight: '1px solid #d9d9d9',
+                  borderBottom: '1px solid #d9d9d9'
+                } 
+              }) 
+            },
+            { 
+              title: "水", 
+              dataIndex: "wed", 
+              key: "wed", 
+              align: "center", 
+              onHeaderCell: () => ({ 
+                style: { 
+                  color: 'white',
+                  backgroundColor: '#637381',
+                  borderRight: '1px solid #d9d9d9',
+                  borderBottom: '1px solid #d9d9d9'
+                } 
+              }) 
+            },
+            { 
+              title: "木", 
+              dataIndex: "thu", 
+              key: "thu", 
+              align: "center", 
+              onHeaderCell: () => ({ 
+                style: { 
+                  color: 'white',
+                  backgroundColor: '#637381',
+                  borderRight: '1px solid #d9d9d9',
+                  borderBottom: '1px solid #d9d9d9'
+                } 
+              }) 
+            },
+            { 
+              title: "金", 
+              dataIndex: "fri", 
+              key: "fri", 
+              align: "center", 
+              onHeaderCell: () => ({ 
+                style: { 
+                  color: 'white',
+                  backgroundColor: '#637381',
+                  borderRight: '1px solid #d9d9d9',
+                  borderBottom: '1px solid #d9d9d9'
+                } 
+              }) 
+            },
+            // ... 火、水、木、金も同様に設定
+            { 
+              title: "土", 
+              dataIndex: "sat", 
+              key: "sat", 
+              align: "center",
+              onHeaderCell: () => ({ 
+                style: { 
+                  color: 'blue',
+                  backgroundColor: '#637381',
+                  borderRight: '1px solid #d9d9d9',
+                  borderBottom: '1px solid #d9d9d9'
+                } 
+              })
+            },
           ]}
           dataSource={calendarData.map((week, index) => ({
             key: index,
@@ -442,6 +506,8 @@ const MonthlyReceptionSettingsDetail: React.FC<MonthlyReceptionSettingsDetailPro
             sat: renderDaySettings(week[6]),
           }))}
         />
+        
+        
         <div style={{ marginTop: "20px", textAlign: "center" }}>
           <Button 
             type="primary" 
@@ -452,7 +518,12 @@ const MonthlyReceptionSettingsDetail: React.FC<MonthlyReceptionSettingsDetailPro
             設定する
           </Button>
         </div>
-        <BulkInputModal />
+        <BusinessHoursBulkInputModal
+          visible={isBulkInputModalVisible}
+          onCancel={handleBulkInputModalCancel}
+          onSubmit={handleBusinessHoursBulkInputSubmit}
+          currentDate={currentDate}
+        />
       </Card>
     </div>
   );
