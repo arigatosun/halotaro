@@ -20,6 +20,13 @@ export interface ShiftData {
   memo?: string | null;
 }
 
+const convertDBShiftToShiftData = (dbShift: DBStaffShift): ShiftData => ({
+  type: dbShift.shift_status === '出勤' ? '出' : '休',
+  startTime: dbShift.start_time,
+  endTime: dbShift.end_time,
+  memo: dbShift.memo,
+});
+
 export interface Staff {
   id: number;
   name: string;

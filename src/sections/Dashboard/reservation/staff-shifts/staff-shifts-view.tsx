@@ -25,8 +25,6 @@ import {
   InputLabel,
   TextField,
   Modal,
-  Checkbox,
-  FormGroup,
   CircularProgress,
 } from "@mui/material";
 import HelpOutlineIcon from "@mui/icons-material/HelpOutline";
@@ -46,6 +44,16 @@ interface ShiftPopoverData {
   staffName: string;
   currentShift: ShiftData | null;
 }
+
+const formatTimeForDisplay = (time: string | null): string => {
+  if (!time) return "";
+  return time.substring(0, 5);
+};
+
+const formatTimeForDatabase = (time: string | null | undefined): string | null => {
+  if (!time) return null;
+  return time + ":00";
+};
 
 const StaffShiftSettings: React.FC = () => {
   const popoverRef = useRef<HTMLDivElement>(null);
@@ -76,11 +84,12 @@ const StaffShiftSettings: React.FC = () => {
     setIsLoading(true);
     try {
       const staffs = await getStaffs();
+      const daysInMonth = moment(`${year}-${month}-01`).daysInMonth();
       const shifts = await Promise.all(staffs.map(async (staff) => {
         const dbShifts = await getStaffShifts(staff.id.toString(), parseInt(year as string), parseInt(month as string));
         return {
           ...staff,
-          shifts: Array.from({ length: 31 }, (_, i) => {
+          shifts: Array.from({ length: daysInMonth }, (_, i) => {
             const dbShift = dbShifts.find(s => s.date === `${year}-${month.toString().padStart(2, '0')}-${(i + 1).toString().padStart(2, '0')}`);
             return dbShift ? convertDBShiftToShiftData(dbShift) : { type: '' };
           })
@@ -110,9 +119,10 @@ const StaffShiftSettings: React.FC = () => {
     const clickedDate = moment(currentDate).date(date);
     const formattedDate = clickedDate.format('YYYY-MM-DD');
     if (salonBusinessHours[formattedDate]) return;
-
-    const currentShift = staffShifts.find(staff => staff.name === staffName)?.shifts[date - 1] || null;
-
+  
+    const staff = staffShifts.find(s => s.name === staffName);
+    const currentShift = staff?.shifts[date - 1] || null;
+  
     setShiftPopover({
       visible: true,
       anchorEl: event.currentTarget,
@@ -131,14 +141,14 @@ const StaffShiftSettings: React.FC = () => {
       staff_id: staff.id.toString(),
       date: shiftPopover.date.format('YYYY-MM-DD'),
       shift_status: values.type === '出' ? '出勤' : '休日',
-      start_time: values.type === '出' ? values.startTime || null : null,
-      end_time: values.type === '出' ? values.endTime || null : null,
-      memo: values.memo || null,  // メモを追加
+      start_time: values.type === '出' ? formatTimeForDatabase(values.startTime) : null,
+      end_time: values.type === '出' ? formatTimeForDatabase(values.endTime) : null,
+      memo: values.memo || null,
     };
   
     try {
       const result = await upsertStaffShift(dbShift);
-      console.log("Upsert result:", result); // デバッグ用
+      console.log("Upsert result:", result);
   
       setStaffShifts(prevStaffs =>
         prevStaffs.map(s =>
@@ -175,7 +185,7 @@ const StaffShiftSettings: React.FC = () => {
                 shift_status: shift.type === '出' ? '出勤' : '休日',
                 start_time: shift.type === '出' ? shift.startTime || null : null,
                 end_time: shift.type === '出' ? shift.endTime || null : null,
-                memo: shift.memo || null,  // メモを追加
+                memo: shift.memo || null,
               });
             }
           }
@@ -191,18 +201,20 @@ const StaffShiftSettings: React.FC = () => {
             if (salonBusinessHours[date]) {
               return { type: '店休' };
             }
-            return newShifts[staff.id] ? newShifts[staff.id][index] : shift;
+            return newShifts[staff.id] && newShifts[staff.id][index] 
+              ? newShifts[staff.id][index] 
+              : { type: '' };
           })
         }))
       );
     } catch (error) {
-        console.error("Failed to bulk update shifts:", error);
-      }
-      setIsLoading(false);
-      setIsBulkInputModalOpen(false);
-    };
+      console.error("Failed to bulk update shifts:", error);
+    }
+    setIsLoading(false);
+    setIsBulkInputModalOpen(false);
+  };
 
-  const renderShiftButton = (shift: ShiftData, staffName: string, date: number) => {
+  const renderShiftButton = (shift: ShiftData | null, staffName: string, date: number) => {
     const formattedDate = moment(currentDate).date(date).format('YYYY-MM-DD');
     const isHoliday = salonBusinessHours[formattedDate];
 
@@ -210,7 +222,11 @@ const StaffShiftSettings: React.FC = () => {
     let buttonColor = isHoliday ? "#f44336" : "#e0e0e0";
     let textColor = isHoliday ? "#ffffff" : "#000000";
 
-    if (!isHoliday) {
+    if (!shift) {
+      buttonText = "未設定";
+      buttonColor = "#e0e0e0";
+      textColor = "#000000";
+    } else if (!isHoliday) {
       if (shift.type === "休") {
         buttonText = "休";
         buttonColor = "#ff9800";
@@ -228,8 +244,8 @@ const StaffShiftSettings: React.FC = () => {
         size="small"
         onClick={(event) => handleShiftClick(event, staffName, date)}
         style={{ 
-          minWidth: '40px', 
-          maxWidth: '40px',
+          minWidth: '45px', 
+          maxWidth: '45px',
           minHeight: '30px',
           maxHeight: '30px',
           padding: '2px 4px', 
@@ -258,13 +274,27 @@ const StaffShiftSettings: React.FC = () => {
     currentShift: ShiftData | null;
   }) => {
     const [shiftType, setShiftType] = useState(currentShift?.type || "");
-    const [startTime, setStartTime] = useState(currentShift?.startTime || "");
-    const [endTime, setEndTime] = useState(currentShift?.endTime || "");
+    const [startTime, setStartTime] = useState(formatTimeForDisplay(currentShift?.startTime || null));
+    const [endTime, setEndTime] = useState(formatTimeForDisplay(currentShift?.endTime || null));
     const [memo, setMemo] = useState(currentShift?.memo || "");
+  
+    useEffect(() => {
+      if (currentShift) {
+        setShiftType(currentShift.type);
+        setStartTime(formatTimeForDisplay(currentShift.startTime || null));
+        setEndTime(formatTimeForDisplay(currentShift.endTime || null));
+        setMemo(currentShift.memo || "");
+      }
+    }, [currentShift]);
   
     const handleSubmit = (e: React.FormEvent) => {
       e.preventDefault();
-      handleShiftSubmit({ type: shiftType, startTime, endTime, memo });
+      handleShiftSubmit({
+        type: shiftType,
+        startTime: startTime,
+        endTime: endTime,
+        memo
+      });
     };
   
     return (
@@ -405,58 +435,69 @@ const StaffShiftSettings: React.FC = () => {
         </Typography>
         <Legend />
         <TableContainer component={Paper} style={{ marginBottom: '20px' }}>
-        <Table size="small">
-          <TableHead>
-            <TableRow style={{ 
-              backgroundColor: 'rgb(245, 245, 245)',
-              borderBottom: '0px solid rgb(231, 229, 228)',
-              boxSizing: 'border-box',
-              color: 'rgba(0, 0, 0, 0.87)',
-              fontFamily: '__Noto_Sans_JP_11f406, __Noto_Sans_JP_Fallback_11f406',
-              fontSize: '16px',
-              fontWeight: 400,
-              lineHeight: '24px',
-              height: '140.5px',
-              verticalAlign: 'middle',
-              width: '1762px'
-            }}>
-              <TableCell style={{ fontWeight: 'bold', padding: '10px' }}>スタッフ名</TableCell>
-              <TableCell style={{ fontWeight: 'bold', padding: '10px' }}>設定状況</TableCell>
-              <TableCell style={{ fontWeight: 'bold', padding: '10px' }}>設定</TableCell>
-              {Array.from({ length: daysInMonth }, (_, i) => (
-                <TableCell key={i} align="center" style={{ fontWeight: 'bold', padding: '10px' }}>
-                  {i + 1}
-                  <br />
-                  <span style={{ 
-                    color: moment(currentDate).date(i + 1).day() === 0 ? 'red' : 
-                           moment(currentDate).date(i + 1).day() === 6 ? 'blue' : 'inherit'
-                  }}>
-                    ({moment(currentDate).date(i + 1).format("ddd")})
-                  </span>
-                </TableCell>
-              ))}
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {staffShifts.map((staff) => (
-              <TableRow key={staff.id}>
-                <TableCell style={{ padding: '10px' }}>{staff.name}</TableCell>
-                <TableCell style={{ padding: '10px' }}>
-                  <Button variant="contained" size="small" style={{ backgroundColor: '#1976d2', boxShadow: 'none' }}>設定済</Button>
-                </TableCell>
-                <TableCell style={{ padding: '10px' }}>
-                  <Button variant="contained" size="small" style={{ backgroundColor: '#1976d2', boxShadow: 'none' }}>設定</Button>
-                </TableCell>
-                {staff.shifts.map((shift, index) => (
-                  <TableCell key={index} align="center" style={{ padding: '4px' }}>
-                    {renderShiftButton(shift, staff.name, index + 1)}
+          <Table size="small">
+            <TableHead>
+              <TableRow style={{ 
+                backgroundColor: 'rgb(245, 245, 245)',
+                borderBottom: '0px solid rgb(231, 229, 228)',
+                boxSizing: 'border-box',
+                color: 'rgba(0, 0, 0, 0.87)',
+                fontFamily: '__Noto_Sans_JP_11f406, __Noto_Sans_JP_Fallback_11f406',
+                fontSize: '16px',
+                fontWeight: 400,
+                lineHeight: '24px',
+                height: '140.5px',
+                verticalAlign: 'middle',
+                width: '1762px'
+              }}>
+                <TableCell style={{ 
+                  fontWeight: 'bold', 
+                  padding: '10px',
+                  width: '150px',
+                  whiteSpace: 'nowrap'
+                }}>スタッフ名</TableCell>
+                <TableCell style={{ fontWeight: 'bold', padding: '10px', width: '100px' }}>設定状況</TableCell>
+                <TableCell style={{ fontWeight: 'bold', padding: '10px', width: '80px' }}>設定</TableCell>
+                {Array.from({ length: daysInMonth }, (_, i) => (
+                  <TableCell key={i} align="center" style={{ fontWeight: 'bold', padding: '10px' }}>
+                    {i + 1}
+                    <br />
+                    <span style={{ 
+                      color: moment(currentDate).date(i + 1).day() === 0 ? 'red' : 
+                             moment(currentDate).date(i + 1).day() === 6 ? 'blue' : 'inherit'
+                    }}>
+                      ({moment(currentDate).date(i + 1).format("ddd")})
+                    </span>
                   </TableCell>
                 ))}
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
+            </TableHead>
+            <TableBody>
+              {staffShifts.map((staff) => (
+                <TableRow key={staff.id}>
+                  <TableCell style={{ 
+                    padding: '10px',
+                    width: '150px',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis'
+                  }}>{staff.name}</TableCell>
+                  <TableCell style={{ padding: '10px' }}>
+                    <Button variant="contained" size="small" style={{ backgroundColor: '#1976d2', boxShadow: 'none' }}>設定済</Button>
+                  </TableCell>
+                  <TableCell style={{ padding: '10px' }}>
+                    <Button variant="contained" size="small" style={{ backgroundColor: '#1976d2', boxShadow: 'none' }}>設定</Button>
+                  </TableCell>
+                  {staff.shifts.map((shift, index) => (
+                    <TableCell key={index} align="center" style={{ padding: '4px' }}>
+                      {renderShiftButton(shift, staff.name, index + 1)}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
         <Box sx={{ display: 'flex', justifyContent: 'center' }}>
           <Link href="/dashboard/reservations/monthly-settings" passHref>
             <Button 
@@ -473,36 +514,34 @@ const StaffShiftSettings: React.FC = () => {
         </Box>
       </Card>
       <Popover
-  open={shiftPopover.visible}
-  anchorEl={shiftPopover.anchorEl}
-  onClose={() => setShiftPopover({ ...shiftPopover, visible: false, anchorEl: null })}
-  anchorOrigin={{
-    vertical: 'bottom',
-    horizontal: 'left',
-  }}
-  transformOrigin={{
-    vertical: 'top',
-    horizontal: 'left',
-  }}
-  PaperProps={{
-    style: { 
-      width: '350px', // 幅を固定
-      maxHeight: '80vh', 
-      overflowY: 'auto'
-    },
-  }}
->
-  <div style={{ padding: '20px' }}>
-    {shiftPopover.date && (
-      <ShiftPopoverContent
-        staffName={shiftPopover.staffName}
-        date={shiftPopover.date}
-        currentShift={shiftPopover.currentShift}
-      />
-    )}
-  </div>
-</Popover>
-
+        open={shiftPopover.visible}
+        anchorEl={shiftPopover.anchorEl}
+        onClose={() => setShiftPopover({ ...shiftPopover, visible: false, anchorEl: null })}
+        anchorOrigin={{
+          vertical: 'center',
+          horizontal: 'center',
+        }}
+        transformOrigin={{
+          vertical: 'center',
+          horizontal: 'center',
+        }}
+        PaperProps={{
+          style: { 
+            width: '350px',
+            padding: '20px',
+            maxHeight: '80vh', 
+            overflowY: 'auto'
+          },
+        }}
+      >
+        {shiftPopover.date && (
+          <ShiftPopoverContent
+            staffName={shiftPopover.staffName}
+            date={shiftPopover.date}
+            currentShift={shiftPopover.currentShift}
+          />
+        )}
+      </Popover>
       <Modal
         open={isBulkInputModalOpen}
         onClose={() => setIsBulkInputModalOpen(false)}

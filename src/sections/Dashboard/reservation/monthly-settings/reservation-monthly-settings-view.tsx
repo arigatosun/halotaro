@@ -13,13 +13,13 @@ interface MonthSetting {
   month: string;
   year: number;
   isSet: boolean;
+  isStaffSet: boolean;
 }
 
 const MonthlyReceptionSettings: React.FC = () => {
   const [monthlyData, setMonthlyData] = useState<MonthSetting[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // 現在の年月を取得
   const currentDate = new Date();
   const currentYear = currentDate.getFullYear();
   const currentMonth = currentDate.getMonth();
@@ -47,17 +47,99 @@ const MonthlyReceptionSettings: React.FC = () => {
     return data?.length === daysInMonth;
   };
 
-  // 直近4ヶ月分のデータを生成
+  const checkStaffShiftSettings = async (year: number, month: number) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      console.error('User not authenticated');
+      return false;
+    }
+  
+    const startDate = `${year}-${month.toString().padStart(2, '0')}-01`;
+    const endDate = `${year}-${(month + 1).toString().padStart(2, '0')}-01`;
+    const daysInMonth = new Date(year, month, 0).getDate();
+  
+    // サロンの営業日情報を取得
+    const { data: salonBusinessHours, error: salonError } = await supabase
+      .from('salon_business_hours')
+      .select('date, is_holiday')
+      .eq('salon_id', user.id)
+      .gte('date', startDate)
+      .lt('date', endDate);
+  
+    if (salonError) {
+      console.error('Error fetching salon business hours:', salonError);
+      return false;
+    }
+  
+    // サロンが全休の場合は設定済とみなす
+    if (salonBusinessHours.length === daysInMonth && salonBusinessHours.every(day => day.is_holiday)) {
+      return true;
+    }
+  
+  
+    // 営業日（非店休日）を取得
+  const businessDays = salonBusinessHours
+  .filter(day => !day.is_holiday)
+  .map(day => day.date);
+
+// スタッフのシフト情報を取得
+const { data: allStaffShifts, error: staffError } = await supabase
+  .from('staff_shifts')
+  .select('staff_id, date, shift_status')
+  .gte('date', startDate)
+  .lt('date', endDate);
+
+if (staffError) {
+  console.error('Error fetching staff shifts:', staffError);
+  return false;
+}
+
+// スタッフごとのシフト設定状況をチェック
+const { data: staffs, error: staffsError } = await supabase
+  .from('staffs')
+  .select('id')
+  .eq('user_id', user.id);
+
+if (staffsError) {
+  console.error('Error fetching staffs:', staffsError);
+  return false;
+}
+
+for (const staff of staffs) {
+  const staffShifts = allStaffShifts.filter((shift: { staff_id: string | number, date: string, shift_status: string }) => 
+    shift.staff_id === staff.id
+  );
+  
+  // すべての営業日にシフトが設定されているかチェック
+  const isAllBusinessDaysSet = businessDays.every((date: string) => 
+    staffShifts.some((shift: { date: string }) => shift.date === date)
+  );
+
+  // すべてのシフトが有効な値（出勤、休日）を持っているかチェック
+  const isAllShiftsValid = staffShifts.every((shift: { shift_status: string }) => 
+    ['出勤', '休日'].includes(shift.shift_status)
+  );
+
+  if (!isAllBusinessDaysSet || !isAllShiftsValid) {
+    return false;
+  }
+}
+
+return true; // すべての条件を満たしていれば設定済み
+};
+  
   const generateMonthlyData = async (): Promise<MonthSetting[]> => {
     const data = await Promise.all(
       Array.from({ length: 4 }, async (_, index) => {
         const month = (currentMonth + index) % 12;
         const year = currentYear + Math.floor((currentMonth + index) / 12);
         const isSet = await checkMonthSettings(year, month + 1);
+        const isStaffSet = await checkStaffShiftSettings(year, month + 1);
         return {
           month: `${year}年${month + 1}月`,
           year: year,
           isSet: isSet,
+          isStaffSet: isStaffSet,
         };
       })
     );
@@ -92,8 +174,8 @@ const MonthlyReceptionSettings: React.FC = () => {
           }
           passHref
         >
-          <Button type={setting.isSet ? "default" : "primary"} block>
-            {setting.isSet ? "設定済" : "未設定"}
+          <Button type={isStaffSetting ? (setting.isStaffSet ? "default" : "primary") : (setting.isSet ? "default" : "primary")} block>
+            {isStaffSetting ? (setting.isStaffSet ? "設定済" : "未設定") : (setting.isSet ? "設定済" : "未設定")}
           </Button>
         </Link>
       </Card>

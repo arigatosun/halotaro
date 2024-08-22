@@ -39,17 +39,37 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
     try {
-      const shift: Omit<DBStaffShift, 'id'> = await request.json();
+      const shift: Omit<DBStaffShift, 'id'> & { id?: string } = await request.json();
   
       // start_time と end_time が空文字列の場合、null に変換
       if (shift.start_time === '') shift.start_time = null;
       if (shift.end_time === '') shift.end_time = null;
   
-      const { data, error } = await supabase
-        .from('staff_shifts')
-        .upsert(shift)
-        .select()
-        .single();
+      let query;
+      if (shift.id) {
+        // 更新操作
+        query = supabase
+          .from('staff_shifts')
+          .update({
+            shift_status: shift.shift_status,
+            start_time: shift.start_time,
+            end_time: shift.end_time,
+            memo: shift.memo
+          })
+          .eq('id', shift.id)
+          .select();
+      } else {
+        // 挿入操作
+        query = supabase
+          .from('staff_shifts')
+          .upsert(shift, { 
+            onConflict: 'staff_id,date',
+            ignoreDuplicates: false
+          })
+          .select();
+      }
+  
+      const { data, error } = await query.single();
   
       if (error) throw error;
   
