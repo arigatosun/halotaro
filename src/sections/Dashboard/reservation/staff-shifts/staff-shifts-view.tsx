@@ -24,11 +24,15 @@ import {
   MenuItem,
   InputLabel,
   TextField,
+  Modal,
+  Checkbox,
+  FormGroup,
 } from "@mui/material";
 import HelpOutlineIcon from "@mui/icons-material/HelpOutline";
 import moment from "moment";
 import 'moment/locale/ja';
-import Link from "next/link";
+import Link from "next/link"
+import BulkInputModal from "@/components/ui/BulkInputModal"; // BulkInputModalをインポート
 
 moment.locale('ja');
 
@@ -40,11 +44,17 @@ interface ShiftPopoverData {
   currentShift: string | null;
 }
 
+interface Staff {
+  id: number;
+  name: string;
+  shifts: (string | null)[];
+}
+
 const StaffShiftSettings: React.FC = () => {
   const params = useParams();
   const { year, month } = params;
   const [currentDate, setCurrentDate] = useState(moment());
-  const [staffShifts, setStaffShifts] = useState([
+  const [staffShifts, setStaffShifts] = useState<Staff[]>([
     { id: 1, name: "斎藤 憲司", shifts: Array(31).fill(null) },
     { id: 2, name: "谷 美加", shifts: Array(31).fill(null) },
     { id: 3, name: "鳥山 洋花", shifts: Array(31).fill(null) },
@@ -57,6 +67,7 @@ const StaffShiftSettings: React.FC = () => {
     staffName: "",
     currentShift: null,
   });
+  const [isBulkInputModalOpen, setIsBulkInputModalOpen] = useState(false);
 
   useEffect(() => {
     if (year && month) {
@@ -78,7 +89,7 @@ const StaffShiftSettings: React.FC = () => {
 
   const handleShiftSubmit = (values: any) => {
     const { shiftType, startTime, endTime, memo } = values;
-    let newShiftValue = shiftType === "休日" ? "休" : "出";
+    let newShiftValue = shiftType === "休日" ? "休" : shiftType === "店休" ? "店休" : "出";
 
     setStaffShifts((prevShifts) =>
       prevShifts.map((staff) =>
@@ -98,6 +109,18 @@ const StaffShiftSettings: React.FC = () => {
     setShiftPopover({ ...shiftPopover, visible: false, anchorEl: null });
   };
 
+  const handleBulkInputSubmit = (newShifts: Record<number, string[]>) => {
+    setStaffShifts(prevStaffs => 
+      prevStaffs.map(staff => ({
+        ...staff,
+        shifts: staff.shifts.map((_, index) => 
+          newShifts[staff.id] ? newShifts[staff.id][index] : null
+        )
+      }))
+    );
+    setIsBulkInputModalOpen(false);
+  };
+
   const renderShiftButton = (shift: string | null, staffName: string, date: number) => {
     let buttonText = "未設定";
     let buttonColor = "#e0e0e0";
@@ -110,6 +133,10 @@ const StaffShiftSettings: React.FC = () => {
     } else if (shift === "出") {
       buttonText = "出";
       buttonColor = "#2196f3";
+      textColor = "#ffffff";
+    } else if (shift === "店休") {
+      buttonText = "店休";
+      buttonColor = "#f44336";
       textColor = "#ffffff";
     }
 
@@ -149,7 +176,7 @@ const StaffShiftSettings: React.FC = () => {
     date: moment.Moment;
     currentShift: string | null;
   }) => {
-    const [shiftType, setShiftType] = useState(currentShift === "休" ? "休日" : "出勤");
+    const [shiftType, setShiftType] = useState(currentShift === "休" ? "休日" : currentShift === "店休" ? "店休" : "出勤");
     const [startTime, setStartTime] = useState("");
     const [endTime, setEndTime] = useState("");
     const [memo, setMemo] = useState("");
@@ -171,6 +198,7 @@ const StaffShiftSettings: React.FC = () => {
         >
           <FormControlLabel value="出勤" control={<Radio />} label="出勤" />
           <FormControlLabel value="休日" control={<Radio />} label="休日" />
+          <FormControlLabel value="店休" control={<Radio />} label="店休" />
         </RadioGroup>
         {shiftType === "出勤" && (
           <>
@@ -241,8 +269,175 @@ const StaffShiftSettings: React.FC = () => {
         <Box sx={{ width: 20, height: 20, backgroundColor: '#ff9800', marginRight: 1 }}></Box>
         <Typography variant="body2">休み</Typography>
       </Box>
+      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+        <Box sx={{ width: 20, height: 20, backgroundColor: '#f44336', marginRight: 1 }}></Box>
+        <Typography variant="body2">店休</Typography>
+      </Box>
     </Box>
   );
+
+  const BulkInputModal = () => {
+    const [selectedStaffs, setSelectedStaffs] = useState<number[]>([]);
+    const [dateType, setDateType] = useState<string>('specific');
+    const [specificDates, setSpecificDates] = useState<number[]>([]);
+    const [dateRange, setDateRange] = useState<[number, number]>([1, 1]);
+    const [weekdays, setWeekdays] = useState<number[]>([]);
+    const [shiftType, setShiftType] = useState<string>('出勤');
+
+    const handleSubmit = () => {
+      const newShifts: Record<number, string[]> = {};
+      const daysInMonth = currentDate.daysInMonth();
+
+      selectedStaffs.forEach(staffId => {
+        newShifts[staffId] = Array(daysInMonth).fill(null);
+
+        if (dateType === 'specific') {
+          specificDates.forEach(date => {
+            newShifts[staffId][date - 1] = shiftType === '出勤' ? '出' : shiftType === '休日' ? '休' : '店休';
+          });
+        } else if (dateType === 'range') {
+          for (let i = dateRange[0] - 1; i < dateRange[1]; i++) {
+            newShifts[staffId][i] = shiftType === '出勤' ? '出' : shiftType === '休日' ? '休' : '店休';
+          }
+        } else if (dateType === 'weekday') {
+          for (let i = 0; i < daysInMonth; i++) {
+            const day = moment(currentDate).date(i + 1).day();
+            if (weekdays.includes(day)) {
+              newShifts[staffId][i] = shiftType === '出勤' ? '出' : shiftType === '休日' ? '休' : '店休';
+            }
+          }
+        } else if (dateType === 'everyday') {
+          newShifts[staffId].fill(shiftType === '出勤' ? '出' : shiftType === '休日' ? '休' : '店休');
+        }
+      });
+
+      handleBulkInputSubmit(newShifts);
+    };
+
+    return (
+      <Box sx={{
+        position: 'absolute',
+        top: '50%',
+        left: '50%',
+        transform: 'translate(-50%, -50%)',
+        width: 400,
+        bgcolor: 'background.paper',
+        boxShadow: 24,
+        p: 4,
+      }}>
+        <Typography variant="h6" component="h2">
+          一括入力
+        </Typography>
+        <FormControl fullWidth margin="normal">
+          <InputLabel>スタッフを指定</InputLabel>
+          <Select
+            multiple
+            value={selectedStaffs}
+            onChange={(e) => setSelectedStaffs(e.target.value as number[])}
+            renderValue={(selected) => selected.map(id => staffShifts.find(s => s.id === id)?.name).join(', ')}
+          >
+            {staffShifts.map((staff) => (
+              <MenuItem key={staff.id} value={staff.id}>
+                {staff.name}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+        <FormControl component="fieldset" margin="normal">
+          <RadioGroup value={dateType} onChange={(e) => setDateType(e.target.value)}>
+            <FormControlLabel value="specific" control={<Radio />} label="日付：" />
+            <FormControlLabel value="range" control={<Radio />} label="期間：" />
+            <FormControlLabel value="weekday" control={<Radio />} label="曜日：" />
+            <FormControlLabel value="everyday" control={<Radio />} label="毎日" />
+          </RadioGroup>
+        </FormControl>
+        {dateType === 'specific' && (
+          <FormControl fullWidth margin="normal">
+            <InputLabel>日付を選択</InputLabel>
+            <Select
+              multiple
+              value={specificDates}
+              onChange={(e) => setSpecificDates(e.target.value as number[])}
+              renderValue={(selected) => selected.join(', ')}
+            >
+              {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((day) => (
+                <MenuItem key={day} value={day}>
+                  {day}日
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        )}
+        {dateType === 'range' && (
+          <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+            <FormControl margin="normal" sx={{ width: '45%' }}>
+              <InputLabel>開始日</InputLabel>
+              <Select
+                value={dateRange[0]}
+                onChange={(e) => setDateRange([e.target.value as number, dateRange[1]])}
+              >
+                {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((day) => (
+                  <MenuItem key={day} value={day}>
+                    {day}日
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl margin="normal" sx={{ width: '45%' }}>
+              <InputLabel>終了日</InputLabel>
+              <Select
+                value={dateRange[1]}
+                onChange={(e) => setDateRange([dateRange[0], e.target.value as number])}
+              >
+                {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((day) => (
+                  <MenuItem key={day} value={day}>
+                    {day}日
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Box>
+        )}
+        {dateType === 'weekday' && (
+          <FormControl component="fieldset" margin="normal">
+            <FormGroup>
+              {['日', '月', '火', '水', '木', '金', '土'].map((day, index) => (
+                <FormControlLabel
+                  key={day}
+                  control={
+                    <Checkbox
+                      checked={weekdays.includes(index)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setWeekdays([...weekdays, index]);
+                        } else {
+                          setWeekdays(weekdays.filter(d => d !== index));
+                        }
+                      }}
+                    />
+                  }
+                  label={day}
+                />
+              ))}
+            </FormGroup>
+          </FormControl>
+        )}
+        <FormControl component="fieldset" margin="normal">
+          <RadioGroup value={shiftType} onChange={(e) => setShiftType(e.target.value)}>
+            <FormControlLabel value="出勤" control={<Radio />} label="出勤" />
+            <FormControlLabel value="休日" control={<Radio />} label="休日" />
+            <FormControlLabel value="店休" control={<Radio />} label="店休" />
+          </RadioGroup>
+        </FormControl>
+        <Button onClick={handleSubmit} variant="contained" color="primary" style={{ marginTop: '20px' }}>
+          設定する
+        </Button>
+        <Button onClick={() => setIsBulkInputModalOpen(false)} variant="outlined" style={{ marginTop: '20px', marginLeft: '10px' }}>
+          閉じる
+        </Button>
+      </Box>
+    );
+  };
 
   return (
     <div style={{ padding: '20px' }}>
@@ -267,6 +462,7 @@ const StaffShiftSettings: React.FC = () => {
             boxShadow: 'none',
             borderRadius: '4px',
           }}
+          onClick={() => setIsBulkInputModalOpen(true)}
         >
           一括入力
         </Button>
@@ -275,45 +471,58 @@ const StaffShiftSettings: React.FC = () => {
         </Typography>
         <Legend />
         <TableContainer component={Paper} style={{ marginBottom: '20px' }}>
-          <Table size="small">
-            <TableHead>
-              <TableRow style={{ backgroundColor: '#f5f5f5' }}>
-                <TableCell style={{ fontWeight: 'bold', padding: '10px' }}>スタッフ名</TableCell>
-                <TableCell style={{ fontWeight: 'bold', padding: '10px' }}>設定状況</TableCell>
-                <TableCell style={{ fontWeight: 'bold', padding: '10px' }}>設定</TableCell>
-                {Array.from({ length: daysInMonth }, (_, i) => (
-                  <TableCell key={i} align="center" style={{ fontWeight: 'bold', padding: '10px' }}>
-                    {i + 1}<br/>
-                    <span style={{ 
-                      color: moment(currentDate).date(i + 1).day() === 0 ? 'red' : 
-                             moment(currentDate).date(i + 1).day() === 6 ? 'blue' : 'inherit' 
-                    }}>
-                      ({moment(currentDate).date(i + 1).format("ddd")})
-                    </span>
+        <Table size="small">
+          <TableHead>
+            <TableRow style={{ 
+              backgroundColor: 'rgb(245, 245, 245)',
+              borderBottom: '0px solid rgb(231, 229, 228)',
+              boxSizing: 'border-box',
+              color: 'rgba(0, 0, 0, 0.87)',
+              fontFamily: '__Noto_Sans_JP_11f406, __Noto_Sans_JP_Fallback_11f406',
+              fontSize: '16px',
+              fontWeight: 400,
+              lineHeight: '24px',
+              height: '140.5px',
+              verticalAlign: 'middle',
+              width: '1762px'
+            }}>
+              <TableCell style={{ fontWeight: 'bold', padding: '10px' }}>スタッフ名</TableCell>
+              <TableCell style={{ fontWeight: 'bold', padding: '10px' }}>設定状況</TableCell>
+              <TableCell style={{ fontWeight: 'bold', padding: '10px' }}>設定</TableCell>
+              {Array.from({ length: daysInMonth }, (_, i) => (
+                <TableCell key={i} align="center" style={{ fontWeight: 'bold', padding: '10px' }}>
+                  {i + 1}
+                  <br />
+                  <span style={{ 
+                    color: moment(currentDate).date(i + 1).day() === 0 ? 'red' : 
+                           moment(currentDate).date(i + 1).day() === 6 ? 'blue' : 'inherit'
+                  }}>
+                    ({moment(currentDate).date(i + 1).format("ddd")})
+                  </span>
+                </TableCell>
+              ))}
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {staffShifts.map((staff) => (
+              <TableRow key={staff.id}>
+                <TableCell style={{ padding: '10px' }}>{staff.name}</TableCell>
+                <TableCell style={{ padding: '10px' }}>
+                  <Button variant="contained" size="small" style={{ backgroundColor: '#1976d2', boxShadow: 'none' }}>設定済</Button>
+                </TableCell>
+                <TableCell style={{ padding: '10px' }}>
+                  <Button variant="contained" size="small" style={{ backgroundColor: '#1976d2', boxShadow: 'none' }}>設定</Button>
+                </TableCell>
+                {Array.from({ length: daysInMonth }, (_, index) => (
+                  <TableCell key={index} align="center" style={{ padding: '4px' }}>
+                    {renderShiftButton(staff.shifts[index], staff.name, index + 1)}
                   </TableCell>
                 ))}
               </TableRow>
-            </TableHead>
-            <TableBody>
-              {staffShifts.map((staff) => (
-                <TableRow key={staff.id}>
-                  <TableCell style={{ padding: '10px' }}>{staff.name}</TableCell>
-                  <TableCell style={{ padding: '10px' }}>
-                    <Button variant="contained" size="small" style={{ backgroundColor: '#1976d2', boxShadow: 'none' }}>設定済</Button>
-                  </TableCell>
-                  <TableCell style={{ padding: '10px' }}>
-                    <Button variant="contained" size="small" style={{ backgroundColor: '#1976d2', boxShadow: 'none' }}>設定</Button>
-                  </TableCell>
-                  {Array.from({ length: daysInMonth }, (_, index) => (
-                    <TableCell key={index} align="center" style={{ padding: '4px' }}>
-                      {renderShiftButton(staff.shifts[index], staff.name, index + 1)}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
+            ))}
+          </TableBody>
+        </Table>
+      </TableContainer>
         <Box sx={{ display: 'flex', justifyContent: 'center' }}>
           <Link href="/dashboard/reservations/monthly-settings" passHref>
             <Button 
@@ -350,6 +559,12 @@ const StaffShiftSettings: React.FC = () => {
           />
         )}
       </Popover>
+      <Modal
+        open={isBulkInputModalOpen}
+        onClose={() => setIsBulkInputModalOpen(false)}
+      >
+        <BulkInputModal />
+      </Modal>
     </div>
   );
 };
