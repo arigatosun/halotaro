@@ -8,6 +8,34 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const year = searchParams.get('year');
+  const month = searchParams.get('month');
+
+  if (!year || !month) {
+    return NextResponse.json({ error: 'Missing required parameters' }, { status: 400 });
+  }
+
+  const startDate = `${year}-${month.padStart(2, '0')}-01`;
+  const endDate = `${year}-${month.padStart(2, '0')}-${new Date(parseInt(year), parseInt(month), 0).getDate()}`;
+
+  try {
+    const { data, error } = await supabase
+      .from('salon_business_hours')
+      .select('date, is_holiday')
+      .gte('date', startDate)
+      .lte('date', endDate);
+
+    if (error) throw error;
+
+    return NextResponse.json({ success: true, data });
+  } catch (error) {
+    console.error('Error fetching salon business hours:', error);
+    return NextResponse.json({ success: false, error: 'Failed to fetch salon business hours' }, { status: 500 });
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const businessHours = await request.json();
@@ -28,7 +56,6 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error('Error in salon-business-hours API:', error);
     
-    // エラーオブジェクトの型をチェックして適切に処理
     if (error instanceof Error) {
       return NextResponse.json({ success: false, error: error.message }, { status: 500 });
     } else {

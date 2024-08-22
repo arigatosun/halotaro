@@ -2,11 +2,23 @@ import { Moment } from 'moment';
 
 export type ShiftType = '出' | '休' | '店休' | '';
 
+export interface DBStaffShift {
+  id: string;
+  staff_id: string;
+  date: string;
+  shift_status: '出勤' | '休日';
+  start_time: string | null;
+  end_time: string | null;
+  memo: string | null;  // null を許可
+}
+
+
 export interface ShiftData {
-    type: string;
-    startTime?: string;
-    endTime?: string;
-  }
+  type: string;
+  startTime?: string | null;
+  endTime?: string | null;
+  memo?: string | null;
+}
 
 export interface Staff {
   id: number;
