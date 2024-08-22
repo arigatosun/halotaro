@@ -1,8 +1,11 @@
 "use client";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Table, Button, Card, Typography, Row, Col } from "antd";
 import { SettingOutlined } from "@ant-design/icons";
 import Link from "next/link";
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
 
 const { Title, Paragraph } = Typography;
 
@@ -13,27 +16,63 @@ interface MonthSetting {
 }
 
 const MonthlyReceptionSettings: React.FC = () => {
-  const [autoRenewal, setAutoRenewal] = useState(true);
+  const [monthlyData, setMonthlyData] = useState<MonthSetting[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   // 現在の年月を取得
   const currentDate = new Date();
   const currentYear = currentDate.getFullYear();
   const currentMonth = currentDate.getMonth();
 
-  // 直近4ヶ月分のデータを生成
-  const generateMonthlyData = (): MonthSetting[] => {
-    return Array.from({ length: 4 }, (_, index) => {
-      const month = (currentMonth + index) % 12;
-      const year = currentYear + Math.floor((currentMonth + index) / 12);
-      return {
-        month: `${year}年${month + 1}月`,
-        year: year,
-        isSet: index < 2, // 例として最初の2ヶ月を設定済みとする
-      };
-    });
+  const checkMonthSettings = async (year: number, month: number) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      console.error('User not authenticated');
+      return false;
+    }
+
+    const { data, error } = await supabase
+      .from('salon_business_hours')
+      .select('date')
+      .eq('salon_id', user.id)
+      .gte('date', `${year}-${month.toString().padStart(2, '0')}-01`)
+      .lt('date', `${year}-${(month + 1).toString().padStart(2, '0')}-01`);
+
+    if (error) {
+      console.error('Error fetching settings:', error);
+      return false;
+    }
+
+    const daysInMonth = new Date(year, month, 0).getDate();
+    return data?.length === daysInMonth;
   };
 
-  const monthlyData = generateMonthlyData();
+  // 直近4ヶ月分のデータを生成
+  const generateMonthlyData = async (): Promise<MonthSetting[]> => {
+    const data = await Promise.all(
+      Array.from({ length: 4 }, async (_, index) => {
+        const month = (currentMonth + index) % 12;
+        const year = currentYear + Math.floor((currentMonth + index) / 12);
+        const isSet = await checkMonthSettings(year, month + 1);
+        return {
+          month: `${year}年${month + 1}月`,
+          year: year,
+          isSet: isSet,
+        };
+      })
+    );
+    return data;
+  };
+
+  useEffect(() => {
+    const fetchData = async () => {
+      setIsLoading(true);
+      const data = await generateMonthlyData();
+      setMonthlyData(data);
+      setIsLoading(false);
+    };
+    fetchData();
+  }, []);
 
   const renderMonthSetting = (
     setting: MonthSetting,
@@ -60,6 +99,10 @@ const MonthlyReceptionSettings: React.FC = () => {
       </Card>
     </Col>
   );
+
+  if (isLoading) {
+    return <div>Loading...</div>;
+  }
 
   return (
     <div className="p-4">

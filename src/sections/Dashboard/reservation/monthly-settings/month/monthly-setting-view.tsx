@@ -6,17 +6,19 @@ import {
   Button,
   Checkbox,
   Select,
-  Row,
-  Col,
   Table,
   Modal,
   Radio,
   Space,
   Form,
   Input,
+  message,
 } from "antd";
 import { QuestionCircleOutlined } from "@ant-design/icons";
 import moment from "moment";
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -32,19 +34,55 @@ interface MonthlyReceptionSettingsDetailProps {
   month: string;
 }
 
-const MonthlyReceptionSettingsDetail: React.FC<
-  MonthlyReceptionSettingsDetailProps
-> = ({ year, month }) => {
-  const [daySettings, setDaySettings] = useState<{
-    [key: number]: DaySettings;
-  }>({});
+const MonthlyReceptionSettingsDetail: React.FC<MonthlyReceptionSettingsDetailProps> = ({ year, month }) => {
+  const [daySettings, setDaySettings] = useState<Record<number, DaySettings>>({});
   const [isBulkInputModalVisible, setIsBulkInputModalVisible] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   const currentDate = moment(`${year}-${month}-01`);
 
+  const fetchBusinessHours = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      message.error('ユーザーが認証されていません');
+      return;
+    }
+
+    const startDate = `${year}-${month.padStart(2, '0')}-01`;
+    const endDate = moment(startDate).endOf('month').format('YYYY-MM-DD');
+
+    try {
+      const { data, error } = await supabase
+        .from('salon_business_hours')
+        .select('*')
+        .eq('salon_id', user.id)
+        .gte('date', startDate)
+        .lte('date', endDate);
+
+      if (error) throw error;
+
+      const fetchedSettings: Record<number, DaySettings> = {};
+      data.forEach((item) => {
+        const day = parseInt(moment(item.date).format('D'));
+        fetchedSettings[day] = {
+          isHoliday: item.is_holiday,
+          openTime: item.open_time || "開始時間",
+          closeTime: item.close_time || "終了時間",
+        };
+      });
+
+      setDaySettings(fetchedSettings);
+    } catch (error) {
+      console.error('Error fetching business hours:', error);
+      message.error('営業時間の取得中にエラーが発生しました');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   useEffect(() => {
-    // 月が変更されたときに設定をリセット
-    setDaySettings({});
+    fetchBusinessHours();
   }, [year, month]);
 
   const showBulkInputModal = () => {
@@ -57,7 +95,6 @@ const MonthlyReceptionSettingsDetail: React.FC<
 
   const handleBulkInputSubmit = (values: any) => {
     console.log("Bulk input values:", values);
-    // ここで一括入力の処理を実装
     setIsBulkInputModalVisible(false);
   };
 
@@ -95,7 +132,7 @@ const MonthlyReceptionSettingsDetail: React.FC<
   const handleHolidayChange = (day: number, checked: boolean) => {
     setDaySettings((prev) => ({
       ...prev,
-      [day]: { ...prev[day], isHoliday: checked },
+      [day]: { ...prev[day], isHoliday: Boolean(checked) },
     }));
   };
 
@@ -116,8 +153,8 @@ const MonthlyReceptionSettingsDetail: React.FC<
     const dayNumber = day.date();
     const settings = daySettings[dayNumber] || {
       isHoliday: false,
-      openTime: "10:00",
-      closeTime: "21:30",
+      openTime: "開始時間",
+      closeTime: "終了時間",
     };
     const isWeekend = day.day() === 0 || day.day() === 6;
 
@@ -154,9 +191,7 @@ const MonthlyReceptionSettingsDetail: React.FC<
     const options = [];
     for (let hour = 0; hour < 24; hour++) {
       for (let minute = 0; minute < 60; minute += 30) {
-        const time = `${hour.toString().padStart(2, "0")}:${minute
-          .toString()
-          .padStart(2, "0")}`;
+        const time = `${hour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}`;
         options.push(
           <Option key={time} value={time}>
             {time}
@@ -175,7 +210,7 @@ const MonthlyReceptionSettingsDetail: React.FC<
     return (
       <Modal
         title="一括入力"
-        visible={isBulkInputModalVisible}
+        open={isBulkInputModalVisible}
         onCancel={handleBulkInputModalCancel}
         footer={[
           <Button key="cancel" onClick={handleBulkInputModalCancel}>
@@ -188,7 +223,7 @@ const MonthlyReceptionSettingsDetail: React.FC<
         width={800}
       >
         <Form form={form} onFinish={handleBulkInputSubmit}>
-          <Form.Item name="dateType" label="日を指定">
+        <Form.Item name="dateType" label="日を指定">
             <Radio.Group>
               <Space direction="vertical">
                 <Radio value="specific">
@@ -296,6 +331,59 @@ const MonthlyReceptionSettingsDetail: React.FC<
     );
   };
 
+  const handleSubmit = async () => {
+    console.log('daySettings:', daySettings);
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) {
+      message.error('ユーザーが認証されていません');
+      return;
+    }
+
+    // 入力が不完全な日付をチェック
+    const daysInMonth = moment(`${year}-${month}-01`).daysInMonth();
+    const incompleteDays = [];
+
+    for (let day = 1; day <= daysInMonth; day++) {
+      const settings = daySettings[day];
+      if (!settings || (!settings.isHoliday && (settings.openTime === "開始時間" || settings.closeTime === "終了時間"))) {
+        incompleteDays.push(day);
+      }
+    }
+
+    if (incompleteDays.length > 0) {
+      message.error(`以下の日付の設定が不完全です: ${incompleteDays.join(', ')}。すべての日付に対して休業日か営業時間を設定してください。`);
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    const businessHours = Object.entries(daySettings).map(([day, settings]) => {
+      const isHoliday = settings.isHoliday === true;
+      return {
+        salon_id: user.id,
+        date: `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`,
+        is_holiday: isHoliday,
+        open_time: isHoliday ? null : (settings.openTime === "開始時間" ? null : settings.openTime),
+        close_time: isHoliday ? null : (settings.closeTime === "終了時間" ? null : settings.closeTime),
+      };
+    });
+
+    try {
+      const { data, error } = await supabase
+        .from('salon_business_hours')
+        .upsert(businessHours, { onConflict: 'salon_id,date' });
+
+      if (error) throw error;
+
+      message.success('営業時間が正常に保存されました');
+    } catch (error) {
+      console.error('Error saving business hours:', error);
+      message.error('営業時間の保存中にエラーが発生しました');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
     <div style={{ padding: "20px" }}>
       <Card>
@@ -324,6 +412,7 @@ const MonthlyReceptionSettingsDetail: React.FC<
           </Text>
         </div>
         <Table
+          loading={isLoading}
           bordered
           pagination={false}
           components={{
@@ -354,7 +443,12 @@ const MonthlyReceptionSettingsDetail: React.FC<
           }))}
         />
         <div style={{ marginTop: "20px", textAlign: "center" }}>
-          <Button type="primary" size="large">
+          <Button 
+            type="primary" 
+            size="large" 
+            onClick={handleSubmit}
+            loading={isSubmitting}
+          >
             設定する
           </Button>
         </div>
