@@ -8,11 +8,21 @@ import Footer from "@/components/layout/footer";
 import ScrollToTopButton from "@/components/layout/scroll-to-top";
 import PrivateRoute from "@/components/Auth/PrivateRoute";
 import { AuthProvider } from "@/contexts/authcontext";
+import { ThemeProvider, createTheme } from '@mui/material/styles';
+import CssBaseline from '@mui/material/CssBaseline';
 
 const notoSansJP = Noto_Sans_JP({
   subsets: ["latin"],
   weight: ["400", "700"],
   preload: false,
+});
+
+// カスタムテーマを作成
+const theme = createTheme({
+  typography: {
+    fontFamily: notoSansJP.style.fontFamily,
+  },
+  // 必要に応じて他のテーマ設定をここに追加
 });
 
 export default function DashboardLayout({
@@ -24,23 +34,26 @@ export default function DashboardLayout({
   const isReservationPage = pathname === "/dashboard/reservations";
 
   return (
-    <AuthProvider>
-      <PrivateRoute>
-        <div className={`flex flex-col min-h-screen ${notoSansJP.className}`}>
-          <Header />
-          <main className="flex-grow pt-[calc(var(--main-header-height)+var(--sub-header-height)+1rem)] p-0 overflow-auto">
-            <div
-              className={
-                isReservationPage ? "w-full h-full" : "max-w-7xl mx-auto"
-              }
-            >
-              {children}
-            </div>
-          </main>
-          <ScrollToTopButton />
-          <Footer />
-        </div>
-      </PrivateRoute>
-    </AuthProvider>
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <AuthProvider>
+        <PrivateRoute>
+          <div className={`flex flex-col min-h-screen ${notoSansJP.className}`}>
+            <Header />
+            <main className="flex-grow pt-[calc(var(--main-header-height)+var(--sub-header-height)+1rem)] p-0 overflow-auto">
+              <div
+                className={
+                  isReservationPage ? "w-full h-full" : "max-w-7xl mx-auto"
+                }
+              >
+                {children}
+              </div>
+            </main>
+            <ScrollToTopButton />
+            <Footer />
+          </div>
+        </PrivateRoute>
+      </AuthProvider>
+    </ThemeProvider>
   );
 }
