@@ -19,8 +19,9 @@ import {
   ThemeProvider,
   createTheme,
   Typography,
-  IconButton,
-  Box
+  Box,
+  useMediaQuery,
+  TableCellProps
 } from '@mui/material';
 import { ChevronLeft, ChevronRight } from '@mui/icons-material';
 import moment from 'moment';
@@ -30,6 +31,7 @@ moment.locale('ja');
 
 interface DateSelectionProps {
   onDateTimeSelect: (dateTime: Date) => void;
+  onBack: () => void;
 }
 
 const theme = createTheme({
@@ -54,37 +56,56 @@ const theme = createTheme({
   },
 });
 
-const StyledTableCell = styled(TableCell)(({ theme }) => ({
+interface StyledTableCellProps extends TableCellProps {
+  isHourBorder?: boolean;
+}
+
+const StyledTableCell = styled(TableCell, {
+  shouldForwardProp: (prop) => prop !== 'isHourBorder',
+})<StyledTableCellProps>(({ theme, isHourBorder }) => ({
   padding: '4px',
   textAlign: 'center',
   borderRight: `1px solid ${theme.palette.divider}`,
-  borderBottom: `1px solid ${theme.palette.divider}`,
+  borderBottom: isHourBorder ? `2px solid ${theme.palette.divider}` : `1px solid ${theme.palette.divider}`,
+  width: '80px',
+  minWidth: '80px',
+  height: '40px',
   '&.header': {
-    backgroundColor: theme.palette.primary.main,
-    color: theme.palette.common.white,
-    position: 'sticky',
-    top: 0,
-    zIndex: 1,
-  },
-  '&.year-month': {
-    backgroundColor: theme.palette.primary.main,
-    color: theme.palette.common.white,
-    fontWeight: 'bold',
-    position: 'sticky',
-    top: 0,
+    backgroundColor: theme.palette.background.paper,
     zIndex: 2,
   },
-  '&.time': {
+  '&.year-month': {
     position: 'sticky',
-    left: 0,
+    top: 0,
+    zIndex: 3,
     backgroundColor: theme.palette.background.paper,
-    zIndex: 1,
+  },
+  '&.day-date': {
+    position: 'sticky',
+    top: '40px',
+    zIndex: 3,
+    backgroundColor: theme.palette.background.paper,
+  },
+  '&.time': {
+    left: 0,
+    zIndex: 4,
+    position: 'sticky',
+    backgroundColor: theme.palette.background.paper,
   },
   '&.time-right': {
-    position: 'sticky',
     right: 0,
+    zIndex: 4,
+    position: 'sticky',
     backgroundColor: theme.palette.background.paper,
-    zIndex: 1,
+  },
+  '&.nav-button': {
+    zIndex: 5,
+  },
+  '&.date': {
+    position: 'sticky',
+    top: '96px',
+    zIndex: 2,
+    backgroundColor: theme.palette.background.paper,
   },
   '&.saturday': {
     color: theme.palette.primary.main,
@@ -92,55 +113,68 @@ const StyledTableCell = styled(TableCell)(({ theme }) => ({
   '&.sunday': {
     color: theme.palette.secondary.main,
   },
-  '&.hour-separator': {
-    borderBottom: '2px solid #000',
+  '&.holiday': {
+    backgroundColor: theme.palette.action.disabledBackground,
   },
 }));
 
 const TimeSlotButton = styled(Button)(({ theme }) => ({
-  minWidth: '30px',
+  minWidth: '100%',
   width: '100%',
-  height: '30px',
+  height: '100%',
   padding: '2px',
-  fontSize: '0.8rem',
+  fontSize: '0.9rem',
   borderRadius: '4px',
   '&.available': {
-    backgroundColor: theme.palette.primary.light,
-    color: theme.palette.primary.contrastText,
-    '&:hover': {
-      backgroundColor: theme.palette.primary.main,
-    },
+    color: theme.palette.primary.main,
   },
   '&.unavailable': {
-    backgroundColor: 'transparent',
     color: theme.palette.text.disabled,
   },
 }));
 
-const ScrollableTableContainer = styled(TableContainer)({
-  maxHeight: '600px',
+const ScrollableTableContainer = styled(TableContainer)<{ component?: React.ElementType }>(({ theme }) => ({
+  maxHeight: 'calc(100vh - 280px)',
   overflow: 'auto',
-  border: '2px solid #000',
-}) as typeof TableContainer;
+  width: '100%',
+  '&::-webkit-scrollbar': {
+    width: '10px',
+  },
+  '&::-webkit-scrollbar-track': {
+    background: 'transparent',
+  },
+  '&::-webkit-scrollbar-thumb': {
+    backgroundColor: theme.palette.grey[300],
+    borderRadius: '5px',
+  },
+  paddingRight: '10px',
+}));
 
-const DateSelection: React.FC<DateSelectionProps> = ({ onDateTimeSelect }) => {
+const DateSelection: React.FC<DateSelectionProps> = ({ onDateTimeSelect, onBack }) => {
   const [startDate, setStartDate] = useState(moment().startOf('day'));
   const [availableSlots, setAvailableSlots] = useState<Record<string, string[]>>({});
   const [selectedDateTime, setSelectedDateTime] = useState<Date | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const displayDays = isMobile ? 7 : 14;
+
   useEffect(() => {
     fetchAvailableSlots();
-  }, [startDate]);
+  }, [startDate, displayDays]);
 
   const fetchAvailableSlots = () => {
     const mockData: Record<string, string[]> = {};
-    for (let i = 0; i < 14; i++) {
+    for (let i = 0; i < displayDays; i++) {
       const date = moment(startDate).add(i, 'days');
-      mockData[date.format('YYYY-MM-DD')] = Array.from({ length: 28 }, (_, i) => 
-        moment('09:00', 'HH:mm').add(i * 30, 'minutes').format('HH:mm')
-      );
+      if (!isHoliday(date)) {
+        mockData[date.format('YYYY-MM-DD')] = Array.from({ length: 28 }, (_, i) => 
+          moment('09:00', 'HH:mm').add(i * 30, 'minutes').format('HH:mm')
+        );
+      } else {
+        mockData[date.format('YYYY-MM-DD')] = [];
+      }
     }
     setAvailableSlots(mockData);
   };
@@ -163,15 +197,19 @@ const DateSelection: React.FC<DateSelectionProps> = ({ onDateTimeSelect }) => {
     setSelectedDateTime(null);
   };
 
-  const handlePreviousTwoWeeks = () => {
-    const newStartDate = moment(startDate).subtract(14, 'days');
+  const handlePreviousPeriod = () => {
+    const newStartDate = moment(startDate).subtract(7, 'days');
     if (newStartDate.isSameOrAfter(moment(), 'day')) {
       setStartDate(newStartDate);
     }
   };
 
-  const handleNextTwoWeeks = () => {
-    setStartDate(moment(startDate).add(14, 'days'));
+  const handleNextPeriod = () => {
+    setStartDate(moment(startDate).add(7, 'days'));
+  };
+
+  const isHoliday = (date: moment.Moment) => {
+    return date.date() === 25; // 例: 25日を休業日とする
   };
 
   const renderTimeSlots = (date: moment.Moment, time: string) => {
@@ -184,7 +222,7 @@ const DateSelection: React.FC<DateSelectionProps> = ({ onDateTimeSelect }) => {
         disabled={!isAvailable}
         className={isAvailable ? 'available' : 'unavailable'}
       >
-        {isAvailable ? '●' : ''}
+        {isAvailable ? '〇' : '×'}
       </TimeSlotButton>
     );
   };
@@ -195,7 +233,7 @@ const DateSelection: React.FC<DateSelectionProps> = ({ onDateTimeSelect }) => {
 
   const renderYearMonthRow = () => {
     const months: { [key: string]: number } = {};
-    Array.from({ length: 14 }, (_, i) => {
+    Array.from({ length: displayDays }, (_, i) => {
       const date = moment(startDate).add(i, 'days');
       const key = `${date.year()}年${date.month() + 1}月`;
       if (!months[key]) {
@@ -206,24 +244,24 @@ const DateSelection: React.FC<DateSelectionProps> = ({ onDateTimeSelect }) => {
   
     return (
       <TableRow>
-        <StyledTableCell className="year-month navigation" rowSpan={2}>
-          <IconButton onClick={handlePreviousTwoWeeks} color="inherit" disabled={startDate.isSame(moment(), 'day')}>
-            <ChevronLeft />
-          </IconButton>
+        <StyledTableCell className="header year-month nav-button time" style={{ left: 0 }}>
+          <Button onClick={handlePreviousPeriod} disabled={startDate.isSame(moment(), 'day')} fullWidth>
+            ◀前の{isMobile ? '一週間' : '二週間'}
+          </Button>
         </StyledTableCell>
         {Object.entries(months).map(([key, count], index) => (
           <StyledTableCell
             key={key}
-            className="year-month"
+            className="header year-month"
             colSpan={count}
           >
             <Typography variant="h6">{key}</Typography>
           </StyledTableCell>
         ))}
-        <StyledTableCell className="year-month navigation" rowSpan={2}>
-          <IconButton onClick={handleNextTwoWeeks} color="inherit">
-            <ChevronRight />
-          </IconButton>
+        <StyledTableCell className="header year-month nav-button time-right" style={{ right: 0 }}>
+          <Button onClick={handleNextPeriod} fullWidth>
+            次の{isMobile ? '一週間' : '二週間'}▶
+          </Button>
         </StyledTableCell>
       </TableRow>
     );
@@ -232,54 +270,76 @@ const DateSelection: React.FC<DateSelectionProps> = ({ onDateTimeSelect }) => {
   const renderDayRow = () => {
     return (
       <TableRow>
-        {Array.from({ length: 14 }, (_, i) => {
+        <StyledTableCell className="header day-date time">時間</StyledTableCell>
+        {Array.from({ length: displayDays }, (_, i) => {
           const date = moment(startDate).add(i, 'days');
           const isSaturday = date.day() === 6;
           const isSunday = date.day() === 0;
           return (
             <StyledTableCell 
               key={i} 
-              className={`header ${isSaturday ? 'saturday' : ''} ${isSunday ? 'sunday' : ''}`}
+              className={`header day-date ${isSaturday ? 'saturday' : ''} ${isSunday ? 'sunday' : ''}`}
             >
               <Typography variant="body2">{date.format('(ddd)')}</Typography>
               <Typography variant="h6">{date.format('D')}</Typography>
             </StyledTableCell>
           );
         })}
+        <StyledTableCell className="header day-date time-right">時間</StyledTableCell>
       </TableRow>
     );
   };
   
   return (
     <ThemeProvider theme={theme}>
-      <div style={{ marginTop: '20px' }}>
-        <ScrollableTableContainer component={Paper}>
-          <Table stickyHeader style={{ borderCollapse: 'collapse' }}>
+      <Box sx={{ marginTop: '20px', width: '100%', overflowX: 'hidden' }}>
+        <Button onClick={onBack} startIcon={<ChevronLeft />} style={{ marginBottom: '10px' }}>
+          戻る
+        </Button>
+        <Box sx={{ position: 'relative', overflow: 'hidden', border: '2px solid #000' }}>
+          <Table style={{ borderCollapse: 'separate', borderSpacing: 0 }}>
             <TableHead>
               {renderYearMonthRow()}
               {renderDayRow()}
             </TableHead>
-            <TableBody>
-              {timeSlots.map((time, index) => (
-                <TableRow key={index} className={index % 2 === 0 ? 'hour-separator' : ''}>
-                  <StyledTableCell className={`time ${index % 2 === 0 ? 'hour-separator' : ''}`}>{time}</StyledTableCell>
-                  {Array.from({ length: 14 }, (_, i) => {
-                    const date = moment(startDate).add(i, 'days');
-                    return (
-                      <StyledTableCell 
-                        key={i}
-                        className={index % 2 === 0 ? 'hour-separator' : ''}
-                      >
-                        {renderTimeSlots(date, time)}
-                      </StyledTableCell>
-                    );
-                  })}
-                  <StyledTableCell className={`time-right ${index % 2 === 0 ? 'hour-separator' : ''}`}>{time}</StyledTableCell>
-                </TableRow>
-              ))}
-            </TableBody>
           </Table>
-        </ScrollableTableContainer>
+          <ScrollableTableContainer>
+            <Table style={{ borderCollapse: 'separate', borderSpacing: 0 }}>
+              <TableBody>
+                {timeSlots.map((time, index) => (
+                  <TableRow key={index}>
+                    <StyledTableCell className="time" isHourBorder={time.endsWith(':00')}>
+                      {time}
+                    </StyledTableCell>
+                    {Array.from({ length: displayDays }, (_, i) => {
+                      const date = moment(startDate).add(i, 'days');
+                      if (isHoliday(date)) {
+                        return index === 0 ? (
+                          <StyledTableCell
+                            key={i}
+                            className="holiday"
+                            rowSpan={28}
+                            isHourBorder={time.endsWith(':00')}
+                          >
+                            <Typography variant="h6">休業日</Typography>
+                          </StyledTableCell>
+                        ) : null;
+                      }
+                      return (
+                        <StyledTableCell key={i} isHourBorder={time.endsWith(':00')}>
+                          {renderTimeSlots(date, time)}
+                        </StyledTableCell>
+                      );
+                    })}
+                    <StyledTableCell className="time-right" isHourBorder={time.endsWith(':00')}>
+                      {time}
+                    </StyledTableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </ScrollableTableContainer>
+        </Box>
         <Dialog open={isDialogOpen} onClose={handleCancel}>
           <DialogTitle style={{ backgroundColor: theme.palette.primary.light, color: theme.palette.primary.contrastText }}>
             予約確認
@@ -303,7 +363,7 @@ const DateSelection: React.FC<DateSelectionProps> = ({ onDateTimeSelect }) => {
             {error}
           </Alert>
         </Snackbar>
-      </div>
+      </Box>
     </ThemeProvider>
   );
 };

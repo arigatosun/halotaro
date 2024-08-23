@@ -1,5 +1,5 @@
-// ReservationRoot.tsx
 import React, { useState } from "react";
+import { Box } from "@mui/material";  // Boxをインポート
 import MenuSelection from "@/sections/reservation-user/menu-selection";
 import StaffSelection from "@/sections/reservation-user/staff-selection";
 import CustomerInfo from "@/sections/reservation-user/CustomerInfo";
@@ -24,6 +24,11 @@ const steps = [
 
 interface ReservationRootProps {
   userId: string;
+}
+
+interface DateSelectionProps {
+  onDateTimeSelect: (dateTime: Date) => void;
+  onBack: () => void;
 }
 
 function ReservationContent({ userId }: ReservationRootProps) {
@@ -80,10 +85,12 @@ function ReservationContent({ userId }: ReservationRootProps) {
         );
       case 1:
         return (
-          <DateSelection
-            onDateTimeSelect={handleDateTimeSelect}
-            onBack={handleBack}
-          />
+          <Box sx={{ width: '100%', overflowX: 'auto', margin: '0 -16px' }}>
+            <DateSelection
+              onDateTimeSelect={handleDateTimeSelect}
+              onBack={handleBack}
+            />
+          </Box>
         );
       case 2:
         return <CustomerInfo onNext={handleNext} onBack={handleBack} />;
@@ -106,9 +113,11 @@ function ReservationContent({ userId }: ReservationRootProps) {
 
   return (
     <Layout>
-      <ReservationHeader currentStep={activeStep} />
-      <h1>{steps[activeStep]}</h1>
-      {getStepContent(activeStep)}
+      <Box sx={{ padding: '0 16px' }}>
+        <ReservationHeader currentStep={activeStep} />
+        <h1>{steps[activeStep]}</h1>
+        {getStepContent(activeStep)}
+      </Box>
     </Layout>
   );
 }
