@@ -1,4 +1,3 @@
-// src/components/MenuSelection.tsx
 import React, { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,7 +7,7 @@ import { useMenuItems } from "@/hooks/useMenuItems";
 import { MenuItem } from "@/types/menuItem";
 
 interface MenuSelectionProps {
-  onSelectMenu: (menuId: string) => void;
+  onSelectMenu: (menuId: string, name: string, price: number) => void;
   userId: string;
 }
 
@@ -30,7 +29,7 @@ const MenuSelection: React.FC<MenuSelectionProps> = ({
           price: selectedMenu.price,
         },
       ]);
-      onSelectMenu(menuId);
+      onSelectMenu(selectedMenu.id.toString(), selectedMenu.name, selectedMenu.price);
     }
   };
 
