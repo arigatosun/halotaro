@@ -47,7 +47,8 @@ const ReservationComplete: React.FC<ReservationCompleteProps> = ({
           userId,
           menuId: selectedMenus[0].id,
           staffId: selectedStaff?.id,
-          reservationDateTime: selectedDateTime?.toISOString(),
+          startTime: selectedDateTime?.start.toISOString(),
+          endTime: selectedDateTime?.end.toISOString(),
           totalPrice: selectedMenus.reduce(
             (total, menu) => total + menu.price,
             0
@@ -112,6 +113,17 @@ const ReservationComplete: React.FC<ReservationCompleteProps> = ({
     return <Skeleton className="w-[100px] h-[20px] rounded-full" />;
   }
 
+  const formatDateTime = (date: Date) => {
+    return date.toLocaleString("ja-JP", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      weekday: "long",
+    });
+  };
+
   return (
     <Card className="w-[350px] mx-auto">
       <CardHeader>
@@ -125,7 +137,7 @@ const ReservationComplete: React.FC<ReservationCompleteProps> = ({
           <p className="text-sm">
             予約日時:{" "}
             {selectedDateTime
-              ? selectedDateTime.toLocaleString()
+              ? `${formatDateTime(selectedDateTime.start)} - ${selectedDateTime.end.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" })}`
               : "Not selected"}
           </p>
           <p className="text-sm">
