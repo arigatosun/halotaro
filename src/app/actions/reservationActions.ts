@@ -14,6 +14,9 @@ export interface Reservation {
   updated_at: string
   start_time: string
   end_time: string
+  customer_name: string
+  staff_name: string | null
+  menu_name: string
 }
 
 export async function getReservations(
@@ -28,7 +31,12 @@ export async function getReservations(
   
   let query = supabase
     .from('reservations')
-    .select('id, user_id, menu_id, staff_id, status, total_price, created_at, updated_at, start_time, end_time', { count: 'exact' })
+    .select(`
+      *,
+      reservation_customers (name),
+      staff (name),
+      menu_items (name)
+    `, { count: 'exact' })
 
   if (date) {
     query = query.gte('start_time', `${date}T00:00:00`)
@@ -50,8 +58,17 @@ export async function getReservations(
     throw new Error('予約の取得に失敗しました');
   }
 
+  const formattedData = data?.map(reservation => ({
+    ...reservation,
+    customer_name: reservation.reservation_customers?.[0]?.name || 'Unknown',
+    staff_name: reservation.staff?.name || null,
+    menu_name: reservation.menu_items?.name || 'Unknown'
+  }));
+
+  console.log("Formatted data:", formattedData);
+
   return { 
-    data: data as Reservation[],
+    data: formattedData as Reservation[],
     count: count || 0
   }
 }

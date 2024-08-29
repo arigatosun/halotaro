@@ -1,9 +1,6 @@
-// src/hooks/useReservations.ts
-
 import { useState, useEffect } from 'react';
-import { getReservations } from '@/app/actions/reservationActions';
+import { getReservations, Reservation } from '@/app/actions/reservationActions';
 import { DateRange } from "react-day-picker";
-import { Reservation } from "@/types/reservation";
 
 interface FilterOptions {
   dateRange: DateRange | undefined;
@@ -31,6 +28,8 @@ export const useReservations = (filterOptions: FilterOptions, page: number, limi
         const filteredData = filterOptions.statuses.length > 0
           ? data.filter(reservation => filterOptions.statuses.includes(reservation.status))
           : data;
+
+        console.log("Filtered reservations:", filteredData);
 
         setReservations(filteredData);
         setTotalCount(count);
