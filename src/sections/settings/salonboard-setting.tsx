@@ -19,18 +19,37 @@ const SalonBoardIntegrationView: React.FC = () => {
   const [isIntegrationEnabled, setIsIntegrationEnabled] = useState(false);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [result, setResult] = useState<string | null>(null);
 
   const handleIntegrationToggle = () => {
     setIsIntegrationEnabled(!isIntegrationEnabled);
   };
 
-  const handleSave = () => {
-    console.log("Integration settings saved:", {
-      isIntegrationEnabled,
-      username,
-      password,
-    });
-    // ここで設定を保存するAPIを呼び出す
+  const handleSave = async () => {
+    setIsLoading(true);
+    setResult(null);
+
+    try {
+      const response = await fetch("/api/salonboard-integration", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ username, password }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Integration failed");
+      }
+
+      const data = await response.json();
+      setResult(data.message);
+    } catch (error) {
+      setResult("エラーが発生しました。もう一度お試しください。");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -78,9 +97,19 @@ const SalonBoardIntegrationView: React.FC = () => {
             </>
           )}
 
-          <Button onClick={handleSave} disabled={!isIntegrationEnabled}>
-            設定を保存
+          <Button
+            onClick={handleSave}
+            disabled={!isIntegrationEnabled || isLoading}
+          >
+            {isLoading ? "処理中..." : "設定を保存して連携を実行"}
           </Button>
+
+          {result && (
+            <Alert className="mt-4">
+              <AlertTitle>実行結果</AlertTitle>
+              <AlertDescription>{result}</AlertDescription>
+            </Alert>
+          )}
         </CardContent>
       </Card>
 
