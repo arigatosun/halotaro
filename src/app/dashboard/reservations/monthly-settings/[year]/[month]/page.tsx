@@ -1,11 +1,12 @@
+'use client'
+
+import { useParams } from 'next/navigation';
 import MonthlyReceptionSettingsDetail from "@/sections/Dashboard/reservation/monthly-settings/month/monthly-setting-view";
 
-export default function monthlysettings() {
-  const currentDate = new Date();
-  const currentYear = currentDate.getFullYear().toString();
-  const currentMonth = (currentDate.getMonth() + 1).toString().padStart(2, "0");
+export default function MonthlySettings() {
+  const params = useParams();
+  const year = params.year as string;
+  const month = params.month as string;
 
-  return (
-    <MonthlyReceptionSettingsDetail year={currentYear} month={currentMonth} />
-  );
+  return <MonthlyReceptionSettingsDetail year={year} month={month} />;
 }

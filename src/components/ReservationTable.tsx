@@ -1,126 +1,97 @@
-"use client";
-import React, { useState, useEffect } from "react";
-import Link from "next/link";
+import React from 'react';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import generateRandomReservations from "@/utils/generateRandomReservations";
-import { DateRange } from "react-day-picker";
+import { Reservation } from "@/app/actions/reservationActions";
+import Link from 'next/link';
+import { format } from 'date-fns';
 
-// FilterOptions インターフェースを直接定義
-interface FilterOptions {
-  dateRange: DateRange | undefined;
-  statuses: string[];
-  customerName: string;
-  reservationNumber: string;
-  staff: string;
-  reservationRoute: string;
-}
+// ステータスの型を定義
+type ReservationStatus = 'confirmed' | 'canceled' | 'completed' | 'in_progress' | 'no_show';
 
-interface Reservation {
-  key: string;
-  date: string;
-  time: string;
-  status: string;
-  customerName: string;
-  staff: string;
-  service: string;
-  price: number;
-}
+// ステータスのマッピングを定義
+const statusMapping: Record<ReservationStatus, string> = {
+  confirmed: '予約確定',
+  canceled: 'キャンセル',
+  completed: '完了',
+  in_progress: '進行中',
+  no_show: '無断キャンセル',
+};
 
 interface ReservationTableProps {
-  filterOptions: FilterOptions;
+  reservations: Reservation[];
+  loading: boolean;
+  error: Error | null;
+  page: number;
+  limit: number;
+  totalCount: number;
+  onPageChange: (page: number) => void;
 }
 
 const ReservationTable: React.FC<ReservationTableProps> = ({
-  filterOptions,
+  reservations,
+  loading,
+  error,
+  page,
+  limit,
+  totalCount,
+  onPageChange,
 }) => {
-  const [allReservations] = useState<Reservation[]>(
-    generateRandomReservations(50)
-  );
-  const [filteredReservations, setFilteredReservations] =
-    useState<Reservation[]>(allReservations);
+  console.log("Reservations in ReservationTable:", reservations);
 
-  useEffect(() => {
-    const filtered = allReservations.filter((reservation) => {
-      const dateInRange =
-        !filterOptions.dateRange ||
-        (filterOptions.dateRange.from &&
-          filterOptions.dateRange.to &&
-          new Date(reservation.date) >= filterOptions.dateRange.from &&
-          new Date(reservation.date) <= filterOptions.dateRange.to);
+  if (loading) {
+    return <div>Loading...</div>;
+  }
 
-      const statusMatch =
-        filterOptions.statuses.length === 0 ||
-        filterOptions.statuses.includes(reservation.status);
+  if (error) {
+    return <div>Error: {error.message}</div>;
+  }
 
-      const customerNameMatch =
-        filterOptions.customerName === "" ||
-        reservation.customerName
-          .toLowerCase()
-          .includes(filterOptions.customerName.toLowerCase());
-
-      const reservationNumberMatch =
-        filterOptions.reservationNumber === "" ||
-        reservation.key.includes(filterOptions.reservationNumber);
-
-      const staffMatch =
-        filterOptions.staff === "all" ||
-        reservation.staff === filterOptions.staff;
-
-      // 予約経路のフィルタリングはこの例では省略しています
-
-      return (
-        dateInRange &&
-        statusMatch &&
-        customerNameMatch &&
-        reservationNumberMatch &&
-        staffMatch
-      );
-    });
-
-    setFilteredReservations(filtered);
-  }, [filterOptions, allReservations]);
+  const totalPages = Math.ceil(totalCount / limit);
 
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>来店日時</TableHead>
-          <TableHead>ステータス</TableHead>
-          <TableHead>お客様名</TableHead>
-          <TableHead>スタッフ</TableHead>
-          <TableHead>メニュー</TableHead>
-          <TableHead>操作</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {filteredReservations.map((reservation) => (
-          <TableRow key={reservation.key}>
-            <TableCell>
-              {reservation.date} {reservation.time}
-            </TableCell>
-            <TableCell>{reservation.status}</TableCell>
-            <TableCell>{reservation.customerName}</TableCell>
-            <TableCell>{reservation.staff}</TableCell>
-            <TableCell>{reservation.service}</TableCell>
-            <TableCell>
-              <Link
-                href={`/dashboard/reservations/${reservation.key}/accounting`}
-              >
-                <Button variant="outline">会計</Button>
-              </Link>
-            </TableCell>
+    <>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>日時</TableHead>
+            <TableHead>ステータス</TableHead>
+            <TableHead>お客様名</TableHead>
+            <TableHead>メニュー</TableHead>
+            <TableHead>担当スタッフ</TableHead>
+            <TableHead>合計金額</TableHead>
+            <TableHead>操作</TableHead>
           </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+        </TableHeader>
+        <TableBody>
+          {reservations.map((reservation) => (
+            <TableRow key={reservation.id}>
+              <TableCell>{format(new Date(reservation.start_time), 'yyyy-MM-dd HH:mm:ss')}</TableCell>
+              <TableCell>{statusMapping[reservation.status as ReservationStatus] || reservation.status}</TableCell>
+              <TableCell>{reservation.customer_name}</TableCell>
+              <TableCell>{reservation.menu_name}</TableCell>
+              <TableCell>{reservation.staff_name}</TableCell>
+              <TableCell>¥{reservation.total_price.toLocaleString()}</TableCell>
+              <TableCell>
+                <Link href={`/reservations/${reservation.id}`}>
+                  <Button variant="outline">詳細</Button>
+                </Link>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+      <div className="mt-4 flex justify-between items-center">
+        <Button onClick={() => onPageChange(page - 1)} disabled={page === 1}>
+          Previous
+        </Button>
+        <span>
+          Page {page} of {totalPages}
+        </span>
+        <Button onClick={() => onPageChange(page + 1)} disabled={page >= totalPages}>
+          Next
+        </Button>
+      </div>
+    </>
   );
 };
 

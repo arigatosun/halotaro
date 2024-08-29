@@ -1,4 +1,3 @@
-//api/create-reservation/route.ts
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
@@ -8,27 +7,34 @@ const supabase = createClient(
 );
 
 export async function POST(request: Request) {
-  const {
-    userId,
-    menuId,
-    staffId,
-    reservationDateTime,
-    totalPrice,
-    customerInfo,
-    paymentInfo,
-  } = await request.json();
-
-  console.log("Received reservation data:", {
-    userId,
-    menuId,
-    staffId,
-    reservationDateTime,
-    totalPrice,
-    customerInfo,
-    paymentInfo,
-  });
-
   try {
+    const {
+      userId,
+      menuId,
+      staffId,
+      startTime,
+      endTime,
+      totalPrice,
+      customerInfo,
+      paymentInfo,
+    } = await request.json();
+
+    console.log("Received reservation data:", {
+      userId,
+      menuId,
+      staffId,
+      startTime,
+      endTime,
+      totalPrice,
+      customerInfo,
+      paymentInfo,
+    });
+
+    // 必須フィールドの検証
+    if (!userId || !menuId || !staffId || !startTime || !endTime || !totalPrice || !customerInfo) {
+      throw new Error("必須フィールドが不足しています");
+    }
+
     // 予約データの保存
     const { data: reservation, error: reservationError } = await supabase
       .from("reservations")
@@ -36,7 +42,8 @@ export async function POST(request: Request) {
         user_id: userId,
         menu_id: menuId,
         staff_id: staffId,
-        reservation_datetime: reservationDateTime,
+        start_time: startTime,
+        end_time: endTime,
         status: "confirmed",
         total_price: totalPrice,
       })
@@ -44,6 +51,7 @@ export async function POST(request: Request) {
       .single();
 
     if (reservationError) {
+      console.error("Reservation insert error:", reservationError);
       throw reservationError;
     }
 
@@ -58,6 +66,7 @@ export async function POST(request: Request) {
       });
 
     if (customerError) {
+      console.error("Customer info insert error:", customerError);
       throw customerError;
     }
 
@@ -74,6 +83,7 @@ export async function POST(request: Request) {
         });
 
       if (paymentError) {
+        console.error("Payment info insert error:", paymentError);
         throw paymentError;
       }
     }
