@@ -1,15 +1,15 @@
 "use client";
-import React, { useState } from "react";
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DatePickerWithRange } from "@/components/ui/date-picker-with-range";
-import ReservationTable from "@/components/ReservationTable";
+import ReservationTable from './ReservationTable';
+import { useReservations } from "@/hooks/useReservations";
 import { DateRange } from "react-day-picker";
 import { Search, X } from "lucide-react";
-import { useReservations } from "@/hooks/useReservations";
 
 interface FilterOptions {
   dateRange: DateRange | undefined;
@@ -58,7 +58,7 @@ const ReservationListView: React.FC = () => {
 
   const handleSearch = () => {
     // 検索ボタンが押されたときの処理（必要に応じて）
-    setPage(1); // 検索時にページを1にリセット
+    setPage(1); // 検索時にページをリセット
   };
 
   const handleClear = () => {
