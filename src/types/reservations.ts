@@ -22,4 +22,6 @@ export interface ProcessedReservation {
   end_time: string;
   created_at: string;
   updated_at: string;
+  scraped_customer: string;
+  scraped_menu: string;
 }
