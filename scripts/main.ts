@@ -2,52 +2,79 @@
 import { chromium, Browser, Page, BrowserContext } from "playwright";
 import fs from "fs";
 import path from "path";
-import { scrapeReservations } from "./scrapeReservation";
+
 import { saveReservations } from "./save-reservations";
+
 import { logger } from "./logger";
+import { createClient } from "@supabase/supabase-js";
+import { saveMenus } from "./menu/save-menu";
+import { scrapeMenus } from "./menu/scrapeMenus";
+import { scrapeReservations } from "./scrapeReservation";
+import { scrapeStaff } from "./staff/scrapeStaff";
+import { processStaffData } from "./staff/processStaffData";
+import { syncStaff } from "./staff/syncStaff";
+import { scrapeCoupons } from "./coupon/scrapeCoupons";
+import { processCouponData } from "./coupon/processCouponData";
+import { saveCoupons } from "./coupon/save-coupons";
+import { decrypt, encrypt } from "@/utils/encryption";
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
+
+interface SessionData {
+  cookies: any[];
+}
 
 const SESSION_FILE = path.join(process.cwd(), "session.json");
 
-async function saveSession(context: BrowserContext) {
+export async function saveSession(userId: string, context: BrowserContext) {
   const cookies = await context.cookies();
-  const validCookies = cookies.filter(
-    (cookie) =>
-      cookie &&
-      typeof cookie.name === "string" &&
-      typeof cookie.value === "string"
-  );
-  fs.writeFileSync(SESSION_FILE, JSON.stringify(validCookies, null, 2));
+  const sessionData: SessionData = { cookies };
+
+  const encryptedSession = encrypt(JSON.stringify(sessionData));
+
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24時間後
+
+  const { error } = await supabase.from("salonboard_sessions").upsert({
+    user_id: userId,
+    session_data: encryptedSession,
+    expires_at: expiresAt.toISOString(),
+    updated_at: new Date().toISOString(),
+  });
+
+  if (error) throw error;
 }
 
-async function loadSession(context: BrowserContext): Promise<boolean> {
-  if (fs.existsSync(SESSION_FILE)) {
-    const cookiesData = JSON.parse(fs.readFileSync(SESSION_FILE, "utf8"));
-
-    const validCookies = cookiesData.filter(
-      (cookie: any) =>
-        cookie &&
-        typeof cookie.name === "string" &&
-        typeof cookie.value === "string"
-    );
-
-    if (validCookies.length > 0) {
-      await context.addCookies(validCookies);
-      return true;
-    } else {
-      console.log("No valid cookies found");
-      return false;
-    }
-  }
-  return false;
-}
-
-export async function runSalonboardIntegration(
+export async function loadSession(
   userId: string,
-  password: string
-) {
-  logger.setup();
-  console.log("Starting Salonboard integration at", new Date().toISOString());
+  context: BrowserContext
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("salonboard_sessions")
+    .select("session_data, expires_at")
+    .eq("user_id", userId)
+    .single();
 
+  if (error || !data) return false;
+
+  if (new Date(data.expires_at) < new Date()) {
+    // セッションの有効期限切れ
+    await supabase.from("salonboard_sessions").delete().eq("user_id", userId);
+    return false;
+  }
+
+  const sessionData: SessionData = JSON.parse(decrypt(data.session_data));
+
+  await context.addCookies(sessionData.cookies);
+  return true;
+}
+
+async function setupBrowser(): Promise<{
+  browser: Browser;
+  context: BrowserContext;
+}> {
   const browser = await chromium.launch({
     headless: false,
     args: [
@@ -73,58 +100,238 @@ export async function runSalonboardIntegration(
     permissions: ["geolocation"],
   });
 
+  return { browser, context };
+}
+
+async function loginAndNavigate(
+  page: Page,
+  context: BrowserContext,
+  salonboardUserId: string,
+  password: string,
+  url: string
+) {
+  const sessionLoaded = await loadSession(context);
+  if (sessionLoaded) {
+    console.log("保存された認証情報を使用してブラウザを開きました。");
+
+    if (await page.isVisible('input[name="userId"]')) {
+      console.log("セッションが無効になっています。再ログインが必要です。");
+      await loginWithManualCaptcha(page, salonboardUserId, password);
+      await saveSession(context);
+    }
+  } else {
+    console.log("新規ログインを行います。");
+    await loginWithManualCaptcha(page, salonboardUserId, password);
+    await saveSession(context);
+  }
+
+  await page.goto(url, { waitUntil: "networkidle" });
+  await checkAndRelogin(page, salonboardUserId, password, context);
+}
+
+export async function syncReservations(
+  haloTaroUserId: string,
+  salonboardUserId: string,
+  password: string
+) {
+  logger.setup();
+  console.log(
+    "Starting Salonboard reservation sync at",
+    new Date().toISOString()
+  );
+
+  const { browser, context } = await setupBrowser();
   const page = await context.newPage();
 
   try {
-    const sessionLoaded = await loadSession(context);
-    if (sessionLoaded) {
-      console.log("保存された認証情報を使用してブラウザを開きました。");
-
-      if (await page.isVisible('input[name="userId"]')) {
-        console.log("セッションが無効になっています。再ログインが必要です。");
-        await loginWithManualCaptcha(page, userId, password);
-        await saveSession(context);
-      }
-    } else {
-      console.log("新規ログインを行います。");
-      await loginWithManualCaptcha(page, userId, password);
-      await saveSession(context);
-    }
-
-    await page.goto("https://salonboard.com/KLP/reserve/reserveList/init", {
-      waitUntil: "networkidle",
-    });
-    await checkAndRelogin(page, userId, password, context);
+    await loginAndNavigate(
+      page,
+      context,
+      salonboardUserId,
+      password,
+      "https://salonboard.com/KLP/reserve/reserveList/init"
+    );
     await page.waitForSelector("#reserveList", { timeout: 10000 });
+
+    const { data: lastSyncLog } = await supabase
+      .from("salonboard_sync_logs")
+      .select("last_sync_time, last_reservation_id")
+      .eq("user_id", haloTaroUserId)
+      .order("last_sync_time", { ascending: false })
+      .limit(1)
+      .single();
+
+    const lastSyncTime = lastSyncLog
+      ? new Date(lastSyncLog.last_sync_time)
+      : new Date(0); // Unix epoch
+
+    console.log(`Last sync time: ${lastSyncTime}`);
+    const lastReservationId = lastSyncLog
+      ? lastSyncLog.last_reservation_id
+      : null;
 
     const startDate = new Date();
     const endDate = new Date();
     endDate.setDate(endDate.getDate() + 61);
 
     console.log("予約を取得中...");
-    const reservations = await scrapeReservations(page, startDate, endDate);
-    console.log("予約情報:", reservations);
-    console.log(`${reservations.length}件の予約を取得しました`);
+    const {
+      reservations,
+      dataHash,
+      lastReservationId: newLastReservationId,
+    } = await scrapeReservations(
+      page,
+      startDate,
+      endDate,
+      lastSyncTime,
+      lastReservationId
+    );
+    console.log("予約を取得しました");
+    console.log("予約:", reservations);
+    console.log("dataHash:", dataHash);
+    console.log("newLastReservationId:", newLastReservationId);
 
     console.log("予約情報を保存中...");
     await saveReservations(
       reservations,
-      "1a76c711-1e53-4b36-a844-542bb11500ae"
+      haloTaroUserId,
+      salonboardUserId,
+      startDate,
+      endDate,
+      dataHash,
+      newLastReservationId
     );
     console.log("予約情報の保存が完了しました");
 
-    const summary = `Integration completed. Processed ${reservations.length} reservations.`;
-    console.log(summary);
-    return summary;
+    return `Successfully processed ${reservations.length} reservations`;
   } catch (error) {
-    console.error("An error occurred:", error);
+    console.error("An error occurred during reservation sync:", error);
     throw error;
   } finally {
     await browser.close();
-    console.log(
-      "Browser closed. Integration process completed at",
-      new Date().toISOString()
+  }
+}
+
+export async function syncMenus(
+  haloTaroUserId: string,
+  salonboardUserId: string,
+  password: string
+) {
+  logger.setup();
+  console.log("Starting Salonboard menu sync at", new Date().toISOString());
+
+  const { browser, context } = await setupBrowser();
+  const page = await context.newPage();
+
+  try {
+    await loginAndNavigate(
+      page,
+      context,
+      salonboardUserId,
+      password,
+      "https://salonboard.com/CNK/draft/menuEdit/"
     );
+    await page.waitForSelector("#menuEditForm", { timeout: 5000 });
+
+    console.log("メニューを取得中...");
+    const { menus, dataHash } = await scrapeMenus(page);
+    console.log("メニューを取得しました");
+    console.log("メニュー:", menus);
+    console.log("dataHash:", dataHash);
+
+    console.log("メニュー情報を保存中...");
+    await saveMenus(menus, haloTaroUserId, dataHash);
+    console.log("メニュー情報の保存が完了しました");
+
+    return `Successfully processed ${menus.length} menu items`;
+  } catch (error) {
+    console.error("An error occurred during menu sync:", error);
+    throw error;
+  } finally {
+    await browser.close();
+  }
+}
+
+export async function syncStaffData(
+  haloTaroUserId: string,
+  salonboardUserId: string,
+  password: string
+) {
+  logger.setup();
+  console.log("Starting Salonboard staff sync at", new Date().toISOString());
+
+  const { browser, context } = await setupBrowser();
+  const page = await context.newPage();
+
+  try {
+    await loginAndNavigate(
+      page,
+      context,
+      salonboardUserId,
+      password,
+      "https://salonboard.com/CNK/draft/staffList/"
+    );
+    await page.waitForSelector('table tbody tr[name="staff_info"]', {
+      timeout: 10000,
+    });
+
+    console.log("スタッフ情報を取得中...");
+    const rawStaffData = await scrapeStaff(page);
+    console.log("スタッフ情報を取得しました");
+
+    const processedStaffData = processStaffData(rawStaffData, haloTaroUserId);
+
+    console.log("スタッフ情報を同期中...");
+    const result = await syncStaff(processedStaffData, haloTaroUserId);
+    console.log("スタッフ情報の同期が完了しました");
+
+    return `Successfully processed staff data. Updated: ${result.updated}, Inserted: ${result.inserted}, Deactivated: ${result.deactivated}`;
+  } catch (error) {
+    console.error("An error occurred during staff sync:", error);
+    throw error;
+  } finally {
+    await browser.close();
+  }
+}
+
+export async function syncCoupons(
+  haloTaroUserId: string,
+  salonboardUserId: string,
+  password: string
+) {
+  const { browser, context } = await setupBrowser();
+  const page = await context.newPage();
+
+  try {
+    await loginAndNavigate(
+      page,
+      context,
+      salonboardUserId,
+      password,
+      "https://salonboard.com/CNK/draft/couponList/"
+    );
+
+    console.log("クーポン情報を取得中...");
+    const { coupons, dataHash } = await scrapeCoupons(page);
+    console.log("クーポン情報を取得しました");
+    console.log("クーポン:", coupons);
+    console.log("dataHash:", dataHash);
+
+    console.log("クーポン情報を保存中...");
+    const processedCoupons = processCouponData(coupons, haloTaroUserId);
+    console.log("クーポン情報を処理中...");
+    const result = await saveCoupons(
+      processedCoupons,
+      haloTaroUserId,
+      dataHash
+    );
+    console.log("クーポン情報の保存が完了しました");
+    return result;
+  } catch (error) {
+    console.error("Error syncing coupons:", error);
+    throw error;
+  } finally {
+    await browser.close();
   }
 }
 
@@ -163,10 +370,8 @@ async function checkAndRelogin(
     await loginWithManualCaptcha(page, userId, password);
     await saveSession(context);
 
-    // 予約一覧ページに再度アクセス
-    await page.goto("https://salonboard.com/KLP/reserve/reserveList/init", {
-      waitUntil: "networkidle",
-    });
+    // 現在のURLに再度アクセス
+    await page.reload({ waitUntil: "networkidle" });
 
     // 再ログイン後もエラーが表示される場合
     if (await page.isVisible(errorSelector)) {

@@ -16,13 +16,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Coupon } from "@/hooks/useCouponManagement";
+import { Switch } from "@/components/ui/switch";
+import { Coupon } from "@/types/coupon";
 
 interface CouponFormModalProps {
   isOpen: boolean;
   onClose: () => void;
   coupon: Coupon | null;
-  onSubmit: (coupon: Omit<Coupon, "id">, imageFile: File | null) => void;
+  onSubmit: (
+    coupon: Omit<Coupon, "id" | "created_at" | "updated_at">,
+    imageFile: File | null
+  ) => void;
   userId: string;
 }
 
@@ -34,37 +38,27 @@ const CouponFormModal: React.FC<CouponFormModalProps> = ({
   userId,
 }) => {
   const [name, setName] = useState(coupon?.name || "");
-  const [type, setType] = useState(coupon?.type || "service");
+  const [category, setCategory] = useState(coupon?.category || "");
   const [description, setDescription] = useState(coupon?.description || "");
-  const [searchCategory, setSearchCategory] = useState(
-    coupon?.searchCategory || ""
-  );
   const [price, setPrice] = useState(coupon?.price?.toString() || "");
   const [duration, setDuration] = useState(coupon?.duration?.toString() || "");
-  const [discountType, setDiscountType] = useState(
-    coupon?.discountType || "amount"
-  );
-  const [discountValue, setDiscountValue] = useState(
-    coupon?.discountValue?.toString() || ""
+  const [isReservable, setIsReservable] = useState(
+    coupon?.is_reservable || false
   );
   const [imageFile, setImageFile] = useState<File | null>(null);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const couponData: Omit<Coupon, "id"> = {
-      name,
-      type,
-      description,
-      searchCategory,
-      price: price ? parseInt(price) : 0,
-      duration: duration ? parseInt(duration) : 0,
-      discountType,
-      discountValue: discountValue ? parseInt(discountValue) : 0,
-      image: coupon?.image || null,
-      isPublished: coupon?.isPublished || false,
-      isValid: true,
+    const couponData: Omit<Coupon, "id" | "created_at" | "updated_at"> = {
       user_id: userId,
-      applicableMenu: coupon?.applicableMenu || "",
+      coupon_id: coupon?.coupon_id || "",
+      name,
+      category,
+      description,
+      price: price ? parseInt(price) : null,
+      duration: duration ? parseInt(duration) : null,
+      is_reservable: isReservable,
+      image_url: coupon?.image_url || null,
     };
     onSubmit(couponData, imageFile);
   };
@@ -96,14 +90,15 @@ const CouponFormModal: React.FC<CouponFormModalProps> = ({
         </p>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <RequiredLabel htmlFor="type">種別</RequiredLabel>
-            <Select value={type} onValueChange={setType}>
+            <RequiredLabel htmlFor="category">カテゴリ</RequiredLabel>
+            <Select value={category} onValueChange={setCategory}>
               <SelectTrigger>
                 <SelectValue placeholder="選択してください" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="discount">割引</SelectItem>
                 <SelectItem value="service">サービス</SelectItem>
+                {/* 必要に応じて他のカテゴリを追加 */}
               </SelectContent>
             </Select>
           </div>
@@ -134,18 +129,6 @@ const CouponFormModal: React.FC<CouponFormModalProps> = ({
             </span>
           </div>
 
-          <div>
-            <RequiredLabel htmlFor="searchCategory">
-              検索用カテゴリ
-            </RequiredLabel>
-            <Select value={searchCategory} onValueChange={setSearchCategory}>
-              <SelectTrigger>
-                <SelectValue placeholder="選択してください" />
-              </SelectTrigger>
-              <SelectContent>{/* カテゴリオプションを追加 */}</SelectContent>
-            </Select>
-          </div>
-
           <div className="grid grid-cols-2 gap-4">
             <div>
               <RequiredLabel htmlFor="price">価格（税込）</RequiredLabel>
@@ -173,34 +156,11 @@ const CouponFormModal: React.FC<CouponFormModalProps> = ({
           </div>
 
           <div>
-            <RequiredLabel htmlFor="discountType">割引方法</RequiredLabel>
-            <div className="flex space-x-4 mb-2">
-              <label className="flex items-center">
-                <input
-                  type="radio"
-                  value="amount"
-                  checked={discountType === "amount"}
-                  onChange={() => setDiscountType("amount")}
-                  required
-                />
-                <span className="ml-2">円引き（総額）</span>
-              </label>
-              <label className="flex items-center">
-                <input
-                  type="radio"
-                  value="percentage"
-                  checked={discountType === "percentage"}
-                  onChange={() => setDiscountType("percentage")}
-                  required
-                />
-                <span className="ml-2">%オフ（総額）</span>
-              </label>
-            </div>
-            <Input
-              type="number"
-              value={discountValue}
-              onChange={(e) => setDiscountValue(e.target.value)}
-              required
+            <Label htmlFor="isReservable">予約可能</Label>
+            <Switch
+              id="isReservable"
+              checked={isReservable}
+              onCheckedChange={setIsReservable}
             />
           </div>
 

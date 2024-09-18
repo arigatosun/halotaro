@@ -34,11 +34,13 @@ export async function processReservation(
   // 金額の処理を修正
   const total_price = extractPrice(raw.amount);
 
+  const cleanStatus = raw.status.replace(/\(未読\)$/, "").trim();
+
   return {
     user_id: userId,
     menu_id: finalMenuId,
     staff_id: staffId,
-    status: mapStatus(raw.status),
+    status: mapStatus(cleanStatus),
     total_price: total_price,
     start_time: format(startTime, "yyyy-MM-dd'T'HH:mm:ssXXX"),
     end_time: format(endTime, "yyyy-MM-dd'T'HH:mm:ssXXX"),
@@ -115,9 +117,10 @@ function mapStatus(status: string): string {
     済み: "completed",
     お断り: "rejected",
     お客様キャンセル: "cancelled",
-    サロンキャンセル: "cancelled_by_salon",
+    サロンキャンセル: "cancelled",
     無断キャンセル: "no_show",
     自動キャンセル: "auto_cancelled",
+    会計済み: "completed",
   };
 
   return statusMap[status] || "unknown";

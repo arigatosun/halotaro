@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Card,
   CardContent,
@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Info, Lock, Shield } from "lucide-react";
+import { useAuth } from "@/contexts/authcontext";
 
 const SalonBoardIntegrationView: React.FC = () => {
   const [isIntegrationEnabled, setIsIntegrationEnabled] = useState(false);
@@ -21,12 +22,87 @@ const SalonBoardIntegrationView: React.FC = () => {
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<string | null>(null);
+  const { user, loading: authLoading, refreshAuthState } = useAuth();
+  const [retryCount, setRetryCount] = useState(0);
+  const [savedCredentials, setSavedCredentials] = useState<{
+    username: string;
+    lastUpdated: string;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!authLoading && !user && retryCount < 3) {
+      refreshAuthState();
+      setRetryCount((prev) => prev + 1);
+    }
+  }, [user, authLoading, refreshAuthState, retryCount]);
+
+  useEffect(() => {
+    if (user) {
+      fetchSavedCredentials();
+    }
+  }, [user]);
+
+  const fetchSavedCredentials = async () => {
+    try {
+      const response = await fetch(
+        `/api/salonboard-get-credentials?userId=${user!.id}`
+      );
+      if (response.ok) {
+        const data = await response.json();
+        setSavedCredentials(data);
+        setUsername(data.username || "");
+        setIsIntegrationEnabled(!!data.username);
+      }
+    } catch (error) {
+      console.error("Failed to fetch saved credentials:", error);
+    }
+  };
+
+  if (authLoading) {
+    return <div>認証状態を確認中...</div>;
+  }
+
+  if (!user) {
+    return <div>認証に失敗しました。ページをリロードしてください。</div>;
+  }
 
   const handleIntegrationToggle = () => {
     setIsIntegrationEnabled(!isIntegrationEnabled);
   };
 
-  const handleSave = async () => {
+  const handleSaveCredentials = async () => {
+    setIsLoading(true);
+    setResult(null);
+
+    try {
+      const response = await fetch("/api/salonboard-save-credentials", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ username, password, userId: user.id }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to save credentials");
+      }
+
+      const data = await response.json();
+      setResult(data.message);
+      fetchSavedCredentials(); // 保存後に最新の情報を取得
+    } catch (error) {
+      setResult(
+        "ログイン情報の保存中にエラーが発生しました。もう一度お試しください。"
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // handleSync 関数を更新して、スタッフ同期にも対応
+  const handleSync = async (
+    type: "reservations" | "menus" | "staff" | "coupons"
+  ) => {
     setIsLoading(true);
     setResult(null);
 
@@ -36,21 +112,28 @@ const SalonBoardIntegrationView: React.FC = () => {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ haloTaroUserId: user.id, syncType: type }),
       });
 
       if (!response.ok) {
-        throw new Error("Integration failed");
+        throw new Error(`${type} sync failed`);
       }
 
       const data = await response.json();
-      setResult(data.message);
+      setResult(JSON.stringify(data.message));
     } catch (error) {
-      setResult("エラーが発生しました。もう一度お試しください。");
+      setResult(
+        `${type}の連携中にエラーが発生しました。もう一度お試しください。`
+      );
     } finally {
       setIsLoading(false);
     }
   };
+
+  const handleSyncReservations = () => handleSync("reservations");
+  const handleSyncMenus = () => handleSync("menus");
+  const handleSyncStaff = () => handleSync("staff");
+  const handleSyncCoupons = () => handleSync("coupons"); // 新しい関数を追加
 
   return (
     <div className="p-8 max-w-4xl mx-auto">
@@ -70,8 +153,20 @@ const SalonBoardIntegrationView: React.FC = () => {
               onCheckedChange={handleIntegrationToggle}
               id="integration-toggle"
             />
-            <Label htmlFor="integration-toggle">連携を有効にする</Label>
+            <Label htmlFor="integration-toggle">連携する</Label>
           </div>
+
+          {savedCredentials && (
+            <Alert>
+              <AlertTitle>保存済みのログイン情報</AlertTitle>
+              <AlertDescription>
+                ユーザー名: {savedCredentials.username}
+                <br />
+                最終更新日時:{" "}
+                {new Date(savedCredentials.lastUpdated).toLocaleString()}
+              </AlertDescription>
+            </Alert>
+          )}
 
           {isIntegrationEnabled && (
             <>
@@ -94,15 +189,47 @@ const SalonBoardIntegrationView: React.FC = () => {
                   placeholder="パスワードを入力"
                 />
               </div>
+              <div className="flex space-x-4">
+                <Button
+                  onClick={handleSaveCredentials}
+                  disabled={isLoading}
+                  className="flex-1 bg-blue-500 hover:bg-blue-600"
+                >
+                  {isLoading ? "保存中..." : "ログイン情報を保存"}
+                </Button>
+                <div className="flex space-x-4">
+                  <Button
+                    onClick={handleSyncReservations}
+                    disabled={isLoading || !savedCredentials}
+                    className="flex-1 bg-orange-500 hover:bg-orange-600"
+                  >
+                    {isLoading ? "実行中..." : "予約を同期"}
+                  </Button>
+                  <Button
+                    onClick={handleSyncMenus}
+                    disabled={isLoading || !savedCredentials}
+                    className="flex-1 bg-green-500 hover:bg-green-600"
+                  >
+                    {isLoading ? "実行中..." : "メニューを同期"}
+                  </Button>
+                  <Button
+                    onClick={handleSyncStaff}
+                    disabled={isLoading || !savedCredentials}
+                    className="flex-1 bg-purple-500 hover:bg-purple-600"
+                  >
+                    {isLoading ? "実行中..." : "スタッフを同期"}
+                  </Button>
+                  <Button
+                    onClick={handleSyncCoupons}
+                    disabled={isLoading || !savedCredentials}
+                    className="flex-1 bg-pink-500 hover:bg-pink-600"
+                  >
+                    {isLoading ? "実行中..." : "クーポンを同期"}
+                  </Button>
+                </div>
+              </div>
             </>
           )}
-
-          <Button
-            onClick={handleSave}
-            disabled={!isIntegrationEnabled || isLoading}
-          >
-            {isLoading ? "処理中..." : "設定を保存して連携を実行"}
-          </Button>
 
           {result && (
             <Alert className="mt-4">
