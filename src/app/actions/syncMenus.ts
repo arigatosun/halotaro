@@ -28,7 +28,7 @@ export async function syncMenus(page: Page, userId: string) {
 
   try {
     const rawMenuItems = await scrapeMenusWithRetry(page);
-    const processedMenuItems = processMenuData(rawMenuItems, userId);
+    const processedMenuItems = processMenuData(rawMenuItems.menus, userId);
 
     syncLog.items_processed = processedMenuItems.length;
 
