@@ -106,27 +106,34 @@ async function setupBrowser(): Promise<{
 async function loginAndNavigate(
   page: Page,
   context: BrowserContext,
+  haloTaroUserId: string,
   salonboardUserId: string,
   password: string,
   url: string
 ) {
-  const sessionLoaded = await loadSession(context);
+  const sessionLoaded = await loadSession(haloTaroUserId, context);
   if (sessionLoaded) {
     console.log("保存された認証情報を使用してブラウザを開きました。");
 
     if (await page.isVisible('input[name="userId"]')) {
       console.log("セッションが無効になっています。再ログインが必要です。");
       await loginWithManualCaptcha(page, salonboardUserId, password);
-      await saveSession(context);
+      await saveSession(haloTaroUserId, context);
     }
   } else {
     console.log("新規ログインを行います。");
     await loginWithManualCaptcha(page, salonboardUserId, password);
-    await saveSession(context);
+    await saveSession(haloTaroUserId, context);
   }
 
   await page.goto(url, { waitUntil: "networkidle" });
-  await checkAndRelogin(page, salonboardUserId, password, context);
+  await checkAndRelogin(
+    page,
+    salonboardUserId,
+    password,
+    context,
+    haloTaroUserId
+  );
 }
 
 export async function syncReservations(
@@ -147,6 +154,7 @@ export async function syncReservations(
     await loginAndNavigate(
       page,
       context,
+      haloTaroUserId,
       salonboardUserId,
       password,
       "https://salonboard.com/KLP/reserve/reserveList/init"
@@ -227,6 +235,7 @@ export async function syncMenus(
     await loginAndNavigate(
       page,
       context,
+      haloTaroUserId,
       salonboardUserId,
       password,
       "https://salonboard.com/CNK/draft/menuEdit/"
@@ -267,6 +276,7 @@ export async function syncStaffData(
     await loginAndNavigate(
       page,
       context,
+      haloTaroUserId,
       salonboardUserId,
       password,
       "https://salonboard.com/CNK/draft/staffList/"
@@ -306,6 +316,7 @@ export async function syncCoupons(
     await loginAndNavigate(
       page,
       context,
+      haloTaroUserId,
       salonboardUserId,
       password,
       "https://salonboard.com/CNK/draft/couponList/"
@@ -360,7 +371,8 @@ async function checkAndRelogin(
   page: Page,
   userId: string,
   password: string,
-  context: BrowserContext
+  context: BrowserContext,
+  haloTaroUserId: string
 ) {
   const errorSelector = ".mod_color_e50000.mod_font01.mod_align_center";
   const isErrorPresent = await page.isVisible(errorSelector);
@@ -368,7 +380,7 @@ async function checkAndRelogin(
   if (isErrorPresent) {
     console.log("セッションの期限切れを検出しました。再ログインを試みます。");
     await loginWithManualCaptcha(page, userId, password);
-    await saveSession(context);
+    await saveSession(haloTaroUserId, context);
 
     // 現在のURLに再度アクセス
     await page.reload({ waitUntil: "networkidle" });
