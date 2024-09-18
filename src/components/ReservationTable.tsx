@@ -1,23 +1,43 @@
-import React from 'react';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import React from "react";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Reservation } from "@/app/actions/reservationActions";
-import Link from 'next/link';
-import { format } from 'date-fns';
+import Link from "next/link";
+import { format } from "date-fns";
 
 // ステータスの型を定義
-type ReservationStatus = 'confirmed' | 'canceled' | 'completed' | 'in_progress' | 'no_show';
+type ReservationStatus =
+  | "confirmed"
+  | "canceled"
+  | "completed"
+  | "in_progress"
+  | "no_show";
 
 // ステータスのマッピングを定義
 const statusMapping: Record<ReservationStatus, string> = {
-  confirmed: '予約確定',
-  canceled: 'キャンセル',
-  completed: '完了',
-  in_progress: '進行中',
-  no_show: '無断キャンセル',
+  confirmed: "予約確定",
+  canceled: "キャンセル",
+  completed: "完了",
+  in_progress: "進行中",
+  no_show: "無断キャンセル",
 };
 
 interface ReservationTableProps {
+  filterOptions?: {
+    dateRange: undefined | [Date, Date];
+    statuses: string[];
+    customerName: string;
+    reservationNumber: string;
+    staff: string;
+    reservationRoute: string;
+  };
   reservations: Reservation[];
   loading: boolean;
   error: Error | null;
@@ -65,8 +85,16 @@ const ReservationTable: React.FC<ReservationTableProps> = ({
         <TableBody>
           {reservations.map((reservation) => (
             <TableRow key={reservation.id}>
-              <TableCell>{format(new Date(reservation.start_time), 'yyyy-MM-dd HH:mm:ss')}</TableCell>
-              <TableCell>{statusMapping[reservation.status as ReservationStatus] || reservation.status}</TableCell>
+              <TableCell>
+                {format(
+                  new Date(reservation.start_time),
+                  "yyyy-MM-dd HH:mm:ss"
+                )}
+              </TableCell>
+              <TableCell>
+                {statusMapping[reservation.status as ReservationStatus] ||
+                  reservation.status}
+              </TableCell>
               <TableCell>{reservation.customer_name}</TableCell>
               <TableCell>{reservation.menu_name}</TableCell>
               <TableCell>{reservation.staff_name}</TableCell>
@@ -87,7 +115,10 @@ const ReservationTable: React.FC<ReservationTableProps> = ({
         <span>
           Page {page} of {totalPages}
         </span>
-        <Button onClick={() => onPageChange(page + 1)} disabled={page >= totalPages}>
+        <Button
+          onClick={() => onPageChange(page + 1)}
+          disabled={page >= totalPages}
+        >
           Next
         </Button>
       </div>
