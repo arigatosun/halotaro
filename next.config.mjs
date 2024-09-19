@@ -3,9 +3,13 @@ import {withSentryConfig} from '@sentry/nextjs';
 const nextConfig = {
   reactStrictMode: true,
   images: {
+    formats: ['image/avif', 'image/webp'],
     domains: [
       'imgbp.salonboard.com',
-      'zhfvgezhjpkrfvecpskg.supabase.co'
+      'zhfvgezhjpkrfvecpskg.supabase.co',
+      'localhost', // この行を追加
+      
+      
     ],
   },
 }
