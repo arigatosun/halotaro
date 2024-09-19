@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Table, 
   TableBody, 
@@ -26,12 +26,15 @@ import {
 import { ChevronLeft, ChevronRight } from '@mui/icons-material';
 import moment from 'moment';
 import 'moment/locale/ja';
+import { useReservation } from '@/contexts/reservationcontext';
 
 moment.locale('ja');
 
 interface DateSelectionProps {
-  onDateTimeSelect: (dateTime: Date) => void;
+  onDateTimeSelect: (startTime: Date, endTime: Date) => void;
   onBack: () => void;
+  selectedStaffId: string | null;
+  selectedMenuId: string;
 }
 
 const theme = createTheme({
@@ -150,51 +153,86 @@ const ScrollableTableContainer = styled(TableContainer)<{ component?: React.Elem
   paddingRight: '10px',
 }));
 
-const DateSelection: React.FC<DateSelectionProps> = ({ onDateTimeSelect, onBack }) => {
+const DateSelection: React.FC<DateSelectionProps> = ({ onDateTimeSelect, onBack, selectedStaffId, selectedMenuId }) => {
   const [startDate, setStartDate] = useState(moment().startOf('day'));
   const [availableSlots, setAvailableSlots] = useState<Record<string, string[]>>({});
-  const [selectedDateTime, setSelectedDateTime] = useState<Date | null>(null);
+  const [selectedStartTime, setSelectedStartTime] = useState<Date | null>(null);
+  const [selectedEndTime, setSelectedEndTime] = useState<Date | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [menuDuration, setMenuDuration] = useState<number>(0);
 
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const displayDays = isMobile ? 7 : 14;
 
   useEffect(() => {
-    fetchAvailableSlots();
-  }, [startDate, displayDays]);
-
-  const fetchAvailableSlots = () => {
-    const mockData: Record<string, string[]> = {};
-    for (let i = 0; i < displayDays; i++) {
-      const date = moment(startDate).add(i, 'days');
-      if (!isHoliday(date)) {
-        mockData[date.format('YYYY-MM-DD')] = Array.from({ length: 28 }, (_, i) => 
-          moment('09:00', 'HH:mm').add(i * 30, 'minutes').format('HH:mm')
-        );
-      } else {
-        mockData[date.format('YYYY-MM-DD')] = [];
-      }
+    if (selectedStaffId && selectedMenuId) {
+      fetchStaffShifts();
+      fetchMenuDuration();
     }
-    setAvailableSlots(mockData);
+  }, [startDate, displayDays, selectedStaffId, selectedMenuId]);
+
+  const fetchStaffShifts = async () => {
+    try {
+      const endDate = startDate.clone().add(displayDays - 1, 'days').format('YYYY-MM-DD');
+      const response = await fetch(`/api/get-staff-shifts?staffId=${selectedStaffId}&startDate=${startDate.format('YYYY-MM-DD')}&endDate=${endDate}`);
+      if (!response.ok) throw new Error('Failed to fetch staff shifts');
+      const shifts = await response.json();
+      processShiftsData(shifts);
+    } catch (err) {
+      console.error('Error fetching staff shifts:', err);
+      setError('スタッフのシフト情報の取得に失敗しました');
+    }
+  };
+
+  const fetchMenuDuration = async () => {
+    try {
+      const response = await fetch(`/api/get-menu-duration?menuId=${selectedMenuId}`);
+      if (!response.ok) throw new Error('Failed to fetch menu duration');
+      const { duration } = await response.json();
+      setMenuDuration(duration);
+    } catch (err) {
+      console.error('Error fetching menu duration:', err);
+      setError('メニュー情報の取得に失敗しました');
+    }
+  };
+
+  const processShiftsData = (shifts: any[]) => {
+    const slots: Record<string, string[]> = {};
+    shifts.forEach(shift => {
+      if (shift.shift_status === '出勤') {
+        const date = moment(shift.date).format('YYYY-MM-DD');
+        const startTime = moment(shift.start_time, 'HH:mm:ss');
+        const endTime = moment(shift.end_time, 'HH:mm:ss');
+        slots[date] = [];
+        while (startTime.isBefore(endTime)) {
+          slots[date].push(startTime.format('HH:mm'));
+          startTime.add(30, 'minutes');
+        }
+      }
+    });
+    setAvailableSlots(slots);
   };
 
   const handleTimeSlotClick = (date: moment.Moment, time: string) => {
-    const selectedDate = date.format('YYYY-MM-DD');
-    setSelectedDateTime(moment(`${selectedDate} ${time}`).toDate());
+    const startTime = moment(`${date.format('YYYY-MM-DD')} ${time}`);
+    const endTime = startTime.clone().add(menuDuration, 'minutes');
+    setSelectedStartTime(startTime.toDate());
+    setSelectedEndTime(endTime.toDate());
     setIsDialogOpen(true);
   };
 
   const handleConfirm = () => {
-    if (selectedDateTime) {
-      onDateTimeSelect(selectedDateTime);
+    if (selectedStartTime && selectedEndTime) {
+      onDateTimeSelect(selectedStartTime, selectedEndTime);
     }
     setIsDialogOpen(false);
   };
 
   const handleCancel = () => {
     setIsDialogOpen(false);
-    setSelectedDateTime(null);
+    setSelectedStartTime(null);
+    setSelectedEndTime(null);
   };
 
   const handlePreviousPeriod = () => {
@@ -346,7 +384,7 @@ const DateSelection: React.FC<DateSelectionProps> = ({ onDateTimeSelect, onBack 
           </DialogTitle>
           <DialogContent>
             <DialogContentText style={{ marginTop: '16px' }}>
-              {selectedDateTime && `${moment(selectedDateTime).format('YYYY年M月D日(ddd) HH:mm')}に予約しますか？`}
+              {selectedStartTime && selectedEndTime && `${moment(selectedStartTime).format('YYYY年M月D日(ddd) HH:mm')} - ${moment(selectedEndTime).format('HH:mm')}に予約しますか？`}
             </DialogContentText>
           </DialogContent>
           <DialogActions>

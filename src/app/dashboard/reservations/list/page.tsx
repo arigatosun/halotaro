@@ -2,15 +2,15 @@ import dynamic from "next/dynamic";
 import { Suspense } from "react";
 
 // クライアントサイドでのみレンダリングされるようにダイナミックインポートを使用
-const ReservationListPage = dynamic(
+const ReservationListView = dynamic(
   () => import("@/sections/Dashboard/reservation/list/reservation-list-view"),
   { ssr: false }
 );
 
-export default function ReservationList() {
+export default function ReservationsPage() {
   return (
     <Suspense fallback={<div>Loading...</div>}>
-      <ReservationListPage />
+      <ReservationListView />
     </Suspense>
   );
 }
