@@ -101,7 +101,7 @@ const LoginPage = () => {
           </div>
           <button
             type="submit"
-            className="w-full bg-orange-500 text-white py-2 px-4 rounded-md hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-opacity-50 transition duration-300"
+            className="w-full bg-orange-500  text-white py-2 px-4 rounded-md hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-opacity-50 transition duration-300"
           >
             ログイン
           </button>
