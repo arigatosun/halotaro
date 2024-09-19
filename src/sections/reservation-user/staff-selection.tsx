@@ -35,19 +35,7 @@ const StaffSelection: React.FC<StaffSelectionProps> = ({
   return (
     <div className="space-y-6">
       <h2 className="text-2xl font-bold">スタッフの選択</h2>
-      <Card className="mb-4">
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between">
-            <span>指定しない</span>
-            <Button
-              onClick={() => handleStaffSelect(null)}
-              className="bg-orange-500 hover:bg-orange-600 text-white"
-            >
-              選択する
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+     
       {staffList
         .filter((staff) => staff.is_published)
         .map((staff) => (
