@@ -41,13 +41,14 @@ interface DateSelectionProps {
   onBack: () => void
 }
 
+// テーマの色を修正
 const theme = createTheme({
   palette: {
     primary: {
       main: '#f97316', // オレンジ色
     },
     secondary: {
-      main: '#ff006e',
+      main: '#3b82f6', // ブルー色（土曜日用）
     },
     background: {
       default: '#f8f9fa',
@@ -56,6 +57,9 @@ const theme = createTheme({
     text: {
       primary: '#333333',
       secondary: '#666666',
+    },
+    error: {
+      main: '#ef4444', // 赤色
     },
   },
   typography: {
@@ -91,8 +95,9 @@ const StyledTableCell = styled(TableCell, {
   textAlign: 'center',
   borderRight: `1px solid ${theme.palette.divider}`,
   borderBottom: isHourBorder ? `2px solid ${theme.palette.divider}` : `1px solid ${theme.palette.divider}`,
-  width: '80px',
+  width: '80px', // 固定幅を設定
   minWidth: '80px',
+  maxWidth: '80px', // 最大幅も設定して一定に保つ
   height: '40px',
   '&.header': {
     backgroundColor: theme.palette.background.paper,
@@ -132,13 +137,13 @@ const StyledTableCell = styled(TableCell, {
     backgroundColor: theme.palette.background.paper,
   },
   '&.saturday': {
-    color: theme.palette.primary.main,
+    color: theme.palette.secondary.main, // 土曜日の色をブルーに変更
   },
   '&.sunday': {
-    color: theme.palette.secondary.main,
+    color: theme.palette.error.main,
   },
   '&.holiday': {
-    backgroundColor: theme.palette.action.disabledBackground,
+    backgroundColor: '#f0f4f8', // 休業日の背景色をナチュラルな色に変更
   },
 }))
 
@@ -160,8 +165,9 @@ const TimeSlotButton = styled(Button)(({ theme }) => ({
   '&.unavailable': {
     color: theme.palette.text.disabled,
   },
+  // 予約済みのスロットを灰色の×に変更
   '&.reserved': {
-    color: theme.palette.error.main,
+    color: theme.palette.text.disabled,
   },
 }))
 
@@ -343,7 +349,7 @@ const DateSelection: React.FC<DateSelectionProps> = ({ onDateTimeSelect, onBack 
     const dateStr = date.format('YYYY-MM-DD')
     if (isHoliday(date)) {
       return (
-        <Typography variant="body2" color="error">
+        <Typography variant="body2" color="text.secondary">
           休業日
         </Typography>
       )
@@ -360,7 +366,7 @@ const DateSelection: React.FC<DateSelectionProps> = ({ onDateTimeSelect, onBack 
           disabled={!isAvailable || isReserved}
           className={isReserved ? 'reserved' : (isAvailable ? 'available' : 'unavailable')}
         >
-          {isReserved ? '×' : (isAvailable ? '〇' : '×')}
+          {isAvailable ? '〇' : '×'}
         </TimeSlotButton>
       </Tooltip>
     )
@@ -412,18 +418,18 @@ const DateSelection: React.FC<DateSelectionProps> = ({ onDateTimeSelect, onBack 
           const isSunday = date.day() === 0;
           return (
             <StyledTableCell 
-            key={i} 
-            className={`header day-date ${isSaturday ? 'saturday' : ''} ${isSunday ? 'sunday' : ''}`}
-          >
-            <Typography variant="body2">{date.format('(ddd)')}</Typography>
-            <Typography variant="h6">{date.format('D')}</Typography>
-          </StyledTableCell>
-        );
-      })}
-      <StyledTableCell className="header day-date time-right">時間</StyledTableCell>
-    </TableRow>
-  );
-};
+              key={i} 
+              className={`header day-date ${isSaturday ? 'saturday' : ''} ${isSunday ? 'sunday' : ''}`}
+            >
+              <Typography variant="body2">{date.format('(ddd)')}</Typography>
+              <Typography variant="h6">{date.format('D')}</Typography>
+            </StyledTableCell>
+          );
+        })}
+        <StyledTableCell className="header day-date time-right">時間</StyledTableCell>
+      </TableRow>
+    );
+  };
 
   const timeSlots: string[] = Array.from({ length: 28 }, (_, i) => 
     moment('09:00', 'HH:mm').add(i * 30, 'minutes').format('HH:mm')
@@ -439,11 +445,11 @@ const DateSelection: React.FC<DateSelectionProps> = ({ onDateTimeSelect, onBack 
           <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
             スタッフ選択: {selectedStaff ? selectedStaff.name : '未選択'}
           </Typography>
-          <Tooltip title="予約方法について" arrow>
+          
             <IconButton>
-              <Info />
+             
             </IconButton>
-          </Tooltip>
+       
         </Box>
         <Paper elevation={3} sx={{ position: 'relative', overflow: 'hidden', borderRadius: '12px' }}>
           <Table style={{ borderCollapse: 'separate', borderSpacing: 0 }}>
@@ -477,13 +483,21 @@ const DateSelection: React.FC<DateSelectionProps> = ({ onDateTimeSelect, onBack 
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 height: '100%',
-                                backgroundColor: 'rgba(255, 0, 0, 0.1)',
                                 borderRadius: '8px',
                                 padding: '8px',
                               }}
                             >
-                              <Event sx={{ fontSize: 40, color: 'error.main' }} />
-                              <Typography variant="h6" color="error.main" sx={{ mt: 1 }}>
+                              <Event sx={{ fontSize: 40, color: 'text.secondary' }} />
+                              <Typography
+                                variant="h6"
+                                color="text.secondary"
+                                sx={{
+                                  mt: 1,
+                                  writingMode: 'vertical-rl',
+                                  textOrientation: 'upright',
+                                  letterSpacing: '0.5em',
+                                }}
+                              >
                                 休業日
                               </Typography>
                             </Box>
