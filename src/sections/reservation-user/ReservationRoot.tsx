@@ -87,17 +87,17 @@ function ReservationContent({ userId }: ReservationRootProps) {
             userId={userId}
           />
         );
-      case 2:
-        return (
-          <Box sx={{ width: '100%', overflowX: 'auto', margin: '0 -16px' }}>
-            <DateSelection
-              onDateTimeSelect={handleDateTimeSelect}
-              onBack={handleBack}
-              selectedStaffId={selectedStaff?.id || null}
-              selectedMenuId={selectedMenus[0]?.id || ""}
-            />
-          </Box>
-        );
+        case 2:
+          return (
+            <Box sx={{ width: '100%', overflowX: 'auto', margin: '0 -16px' }}>
+              <DateSelection
+                onDateTimeSelect={handleDateTimeSelect}
+                onBack={handleBack}
+                selectedStaff={selectedStaff}
+                selectedMenuId={selectedMenus[0]?.id || ""}
+              />
+            </Box>
+          );
       case 3:
         return <CustomerInfo onNext={handleNext} onBack={handleBack} />;
       case 4:

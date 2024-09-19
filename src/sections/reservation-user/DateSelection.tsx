@@ -34,11 +34,14 @@ import 'moment/locale/ja'
 import { useReservation } from "@/contexts/reservationcontext"
 import { useParams } from 'next/navigation'
 
+
 moment.locale('ja')
 
 interface DateSelectionProps {
-  onDateTimeSelect: (dateTime: Date) => void
-  onBack: () => void
+  onDateTimeSelect: (startTime: Date, endTime: Date) => void;
+  onBack: () => void;
+  selectedStaff: { id: string; name: string } | null;
+  selectedMenuId: string;
 }
 
 // テーマの色を修正
@@ -196,7 +199,7 @@ const OrangeButton = styled(Button)(({ theme }) => ({
   },
 }))
 
-const DateSelection: React.FC<DateSelectionProps> = ({ onDateTimeSelect, onBack }) => {
+const DateSelection: React.FC<DateSelectionProps> = ({ onDateTimeSelect, onBack, selectedStaff: selectedStaffProp, selectedMenuId }) => {
   const [startDate, setStartDate] = useState(moment().startOf('day'));
   const [availableSlots, setAvailableSlots] = useState<Record<string, string[]>>({});
   const [reservedSlots, setReservedSlots] = useState<Record<string, { startTime: string; endTime: string }[]>>({});
@@ -212,27 +215,27 @@ const DateSelection: React.FC<DateSelectionProps> = ({ onDateTimeSelect, onBack 
   const displayDays = isMobile ? 7 : 14;
 
   useEffect(() => {
-    if (selectedStaff) {
+    if (selectedStaffProp) {
       fetchAvailableSlots();
       fetchReservedSlots();
     }
     fetchOperatingHours();
-  }, [startDate, displayDays, selectedStaff, salonId]);
+  }, [startDate, displayDays, selectedStaffProp, salonId, selectedMenuId]);
 
   const fetchAvailableSlots = async () => {
-    if (!selectedStaff) {
+    if (!selectedStaffProp) {
       setError("スタッフが選択されていません");
       return;
     }
-
+  
     const endDate = moment(startDate).add(displayDays - 1, 'days').format('YYYY-MM-DD');
     try {
-      const response = await fetch(`/api/staff-availability?staffId=${selectedStaff.id}&startDate=${startDate.format('YYYY-MM-DD')}&endDate=${endDate}`);
+      const response = await fetch(`/api/staff-availability?staffId=${selectedStaffProp.id}&startDate=${startDate.format('YYYY-MM-DD')}&endDate=${endDate}&menuId=${selectedMenuId}`);
       if (!response.ok) {
         throw new Error('Failed to fetch staff availability');
       }
       const data = await response.json();
-
+  
       const newAvailableSlots: Record<string, string[]> = {};
       for (let i = 0; i < displayDays; i++) {
         const date = moment(startDate).add(i, 'days').format('YYYY-MM-DD');
@@ -313,13 +316,16 @@ const DateSelection: React.FC<DateSelectionProps> = ({ onDateTimeSelect, onBack 
 
   const handleTimeSlotClick = (date: moment.Moment, time: string): void => {
     const selectedDate = date.format('YYYY-MM-DD');
-    setSelectedDateTime(moment(`${selectedDate} ${time}`).toDate());
+    const startDateTime = moment(`${selectedDate} ${time}`).toDate();
+    const endDateTime = moment(startDateTime).add(1, 'hour').toDate(); // 仮に1時間後を終了時間とする
+    setSelectedDateTime(startDateTime);
     setIsDialogOpen(true);
   };
 
   const handleConfirm = (): void => {
     if (selectedDateTime) {
-      onDateTimeSelect(selectedDateTime);
+      const endDateTime = moment(selectedDateTime).add(1, 'hour').toDate(); // 仮に1時間後を終了時間とする
+      onDateTimeSelect(selectedDateTime, endDateTime);
     }
     setIsDialogOpen(false);
   };
