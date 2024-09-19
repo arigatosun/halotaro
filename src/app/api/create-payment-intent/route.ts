@@ -14,6 +14,13 @@ export async function POST(request: NextRequest) {
     console.log("Received request for userId:", userId);
     console.log("Selected menu IDs:", selectedMenuIds);
 
+    if (!userId || !selectedMenuIds || selectedMenuIds.length === 0) {
+      return NextResponse.json(
+        { error: "Invalid request data" },
+        { status: 400 }
+      );
+    }
+
     const stripeConnectId = await getUserStripeConnectId(userId);
     console.log("Retrieved Stripe Connect ID:", stripeConnectId);
 
@@ -27,6 +34,14 @@ export async function POST(request: NextRequest) {
 
     const amount = await getTotalAmount(selectedMenuIds, userId);
     console.log("Calculated total amount:", amount);
+
+    if (amount <= 0) {
+      console.error("Invalid amount:", amount);
+      return NextResponse.json(
+        { error: "Invalid amount calculated" },
+        { status: 400 }
+      );
+    }
 
     const paymentIntent = await stripe.paymentIntents.create(
       {

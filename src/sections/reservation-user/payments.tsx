@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   Elements,
   PaymentElement,
@@ -91,33 +91,41 @@ const Payment: React.FC<PaymentProps> = ({
     null
   );
   const [error, setError] = useState<string | null>(null);
-  const { setPaymentInfo } = useReservation();
+  const { setPaymentInfo, selectedMenus } = useReservation();
+
+  const fetchPaymentIntent = useCallback(async () => {
+    try {
+      console.log("Sending request with:", { userId, selectedMenus });
+      const response = await fetch("/api/create-payment-intent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId,
+          selectedMenuIds: selectedMenus.map(menu => menu.id.toString()),
+        }),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error("Server response:", errorData);
+        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log("Received PaymentIntent data:", data);
+      setClientSecret(data.clientSecret);
+      setConnectedAccountId(data.connectedAccountId);
+    } catch (err: any) {
+      console.error("Error fetching PaymentIntent:", err);
+      setError(
+        "決済の準備中にエラーが発生しました。もう一度お試しください。"
+      );
+    }
+  }, [userId, selectedMenus]);
 
   useEffect(() => {
-    const fetchPaymentIntent = async () => {
-      try {
-        const response = await fetch("/api/create-payment-intent", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ userId, selectedMenuIds: [selectedMenuId] }),
-        });
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        const data = await response.json();
-        console.log("Received PaymentIntent data:", data);
-        setClientSecret(data.clientSecret);
-        setConnectedAccountId(data.connectedAccountId);
-      } catch (err) {
-        console.error("Error fetching PaymentIntent:", err);
-        setError(
-          "決済の準備中にエラーが発生しました。もう一度お試しください。"
-        );
-      }
-    };
-
     fetchPaymentIntent();
-  }, [userId, selectedMenuId]);
+  }, [fetchPaymentIntent]);
 
   const handlePaymentComplete = (status: string, paymentIntent?: any) => {
     if (status === "succeeded" && paymentIntent) {

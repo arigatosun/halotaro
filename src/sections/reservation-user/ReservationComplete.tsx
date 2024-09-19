@@ -107,6 +107,8 @@ const ReservationComplete: React.FC<ReservationCompleteProps> = ({
     });
   };
 
+  const fullName = `${customerInfo.lastNameKanji} ${customerInfo.firstNameKanji}`;
+
   return (
     <Card className="w-[350px] mx-auto">
       <CardHeader>
@@ -131,7 +133,7 @@ const ReservationComplete: React.FC<ReservationCompleteProps> = ({
           <p className="text-sm">
             担当スタッフ: {selectedStaff ? selectedStaff.name : "Not selected"}
           </p>
-          <p className="text-sm">お客様名: {customerInfo.name}</p>
+          <p className="text-sm">お客様名: {fullName}</p>
           <p className="text-sm">
             選択したメニュー:{" "}
             {selectedMenus.map((menu) => menu.name).join(", ")}
