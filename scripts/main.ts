@@ -141,11 +141,8 @@ export async function syncReservations(
   salonboardUserId: string,
   password: string
 ) {
-  logger.setup();
-  console.log(
-    "Starting Salonboard reservation sync at",
-    new Date().toISOString()
-  );
+  logger.log("予約情報同期の開始 user_id:", haloTaroUserId);
+  logger.log(new Date().toISOString());
 
   const { browser, context } = await setupBrowser();
   const page = await context.newPage();
@@ -225,8 +222,8 @@ export async function syncMenus(
   salonboardUserId: string,
   password: string
 ) {
-  logger.setup();
-  console.log("Starting Salonboard menu sync at", new Date().toISOString());
+  logger.log("メニューの同期: user_id", haloTaroUserId);
+  logger.log(new Date().toISOString());
 
   const { browser, context } = await setupBrowser();
   const page = await context.newPage();
@@ -266,8 +263,8 @@ export async function syncStaffData(
   salonboardUserId: string,
   password: string
 ) {
-  logger.setup();
-  console.log("Starting Salonboard staff sync at", new Date().toISOString());
+  logger.log("スタッフ情報同期 user_id:", haloTaroUserId);
+  logger.log(new Date().toISOString());
 
   const { browser, context } = await setupBrowser();
   const page = await context.newPage();
