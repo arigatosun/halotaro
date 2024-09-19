@@ -2,8 +2,13 @@ import {withSentryConfig} from '@sentry/nextjs';
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  // 他の必要な設定があればここに追加
-};
+  images: {
+    domains: [
+      'imgbp.salonboard.com',
+      'zhfvgezhjpkrfvecpskg.supabase.co'
+    ],
+  },
+}
 
 export default withSentryConfig(nextConfig, {
 // For all available options, see:

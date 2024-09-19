@@ -1,4 +1,5 @@
-"use client";
+'use client'
+
 import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -16,6 +17,21 @@ import { PlusCircle, Pencil, Trash2, Loader2 } from "lucide-react";
 import CouponFormModal from "@/components/CouponFormModal";
 import { Coupon } from "@/types/coupon";
 import { useAuth } from "@/contexts/authcontext";
+import { Chip } from "@/components/ui/chip";
+
+const getCategoryDisplay = (category: string | null): { text: string; variant: "default" | "success" | "warning" } => {
+  if (category === null) return { text: '未分類', variant: "default" };
+  switch (category) {
+    case 'new':
+      return { text: '新規', variant: "success" };
+    case 'repeat':
+      return { text: '再来', variant: "warning" };
+    case 'all':
+      return { text: '全員', variant: "default" };
+    default:
+      return { text: category, variant: "default" };
+  }
+};
 
 const CouponManagement: React.FC = () => {
   const { user } = useAuth();
@@ -24,6 +40,7 @@ const CouponManagement: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCoupon, setEditingCoupon] = useState<Coupon | null>(null);
+  const [updatingCouponId, setUpdatingCouponId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchCoupons();
@@ -61,24 +78,85 @@ const CouponManagement: React.FC = () => {
   };
 
   const handleDelete = async (couponId: string) => {
-    // 削除ロジックを実装
-    toast({
-      title: "削除",
-      description: `クーポンID: ${couponId} の削除がクリックされました`,
-    });
+    if (window.confirm("このクーポンを削除してもよろしいですか？")) {
+      try {
+        const response = await fetch("/api/delete-coupon", {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ couponId }),
+        });
+  
+        if (!response.ok) {
+          throw new Error("Failed to delete coupon");
+        }
+  
+        // 成功した場合、ローカルの状態を更新
+        setCoupons(coupons.filter((coupon) => coupon.id !== couponId));
+  
+        toast({
+          title: "削除成功",
+          description: `クーポンID: ${couponId} が削除されました`,
+        });
+      } catch (error) {
+        console.error("Error deleting coupon:", error);
+        toast({
+          title: "削除エラー",
+          description: "クーポンの削除中にエラーが発生しました",
+          variant: "destructive",
+        });
+      }
+    }
   };
 
   const handleToggleReservable = async (
     couponId: string,
     isReservable: boolean
   ) => {
-    // 予約可能状態の切り替えロジックを実装
-    toast({
-      title: "予約可能状態変更",
-      description: `クーポンID: ${couponId} の予約可能状態が ${
-        isReservable ? "可能" : "不可能"
-      } に変更されました`,
-    });
+    setUpdatingCouponId(couponId);
+    setCoupons((prevCoupons) =>
+      prevCoupons.map((coupon) =>
+        coupon.id === couponId ? { ...coupon, is_reservable: isReservable } : coupon
+      )
+    );
+
+    try {
+      const response = await fetch("/api/update-coupon-reservable", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ couponId, isReservable }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to update coupon reservable status");
+      }
+
+      toast({
+        title: "予約可能状態変更",
+        description: `クーポンID: ${couponId} の予約可能状態が ${
+          isReservable ? "可能" : "不可能"
+        } に変更されました`,
+      });
+    } catch (error) {
+      console.error("Error updating coupon reservable status:", error);
+      
+      setCoupons((prevCoupons) =>
+        prevCoupons.map((coupon) =>
+          coupon.id === couponId ? { ...coupon, is_reservable: !isReservable } : coupon
+        )
+      );
+
+      toast({
+        title: "エラー",
+        description: "予約可能状態の更新に失敗しました",
+        variant: "destructive",
+      });
+    } finally {
+      setUpdatingCouponId(null);
+    }
   };
 
   const handleAddNew = () => {
@@ -92,7 +170,7 @@ const CouponManagement: React.FC = () => {
   };
 
   const handleSubmit = async (
-    couponData: Omit<Coupon, "id" | "created_at" | "updated_at">,
+    couponData: Omit<Coupon, "id" | "created_at" | "updated_at" | "is_reservable">,
     imageFile: File | null
   ) => {
     try {
@@ -105,34 +183,42 @@ const CouponManagement: React.FC = () => {
       if (imageFile) {
         formData.append("image", imageFile);
       }
-
+  
       const url = editingCoupon
-        ? `/api/coupons/${editingCoupon.id}`
-        : "/api/coupons";
-      const method = editingCoupon ? "PUT" : "POST";
-
+        ? `/api/update-coupon-reservable`
+        : "/api/post-coupons";
+      const method = editingCoupon ? "PATCH" : "POST";
+  
+      if (editingCoupon) {
+        formData.append("id", editingCoupon.id);
+      }
+  
       const response = await fetch(url, {
         method,
         body: formData,
       });
-
+  
       if (!response.ok) {
-        throw new Error(
-          `クーポンの${editingCoupon ? "更新" : "追加"}に失敗しました`
-        );
+        throw new Error(editingCoupon ? "クーポンの更新に失敗しました" : "クーポンの追加に失敗しました");
       }
-
+  
+      const updatedCoupon = await response.json();
+  
       toast({
         title: editingCoupon ? "更新成功" : "追加成功",
         description: `クーポンが${editingCoupon ? "更新" : "追加"}されました`,
       });
       setIsModalOpen(false);
-      fetchCoupons(); // クーポンリストを再取得
+      
+      if (editingCoupon) {
+        setCoupons(coupons.map(c => c.id === updatedCoupon.id ? updatedCoupon : c));
+      } else {
+        setCoupons([...coupons, updatedCoupon]);
+      }
     } catch (err) {
       toast({
-        title: `${editingCoupon ? "更新" : "追加"}エラー`,
-        description:
-          err instanceof Error ? err.message : "エラーが発生しました",
+        title: editingCoupon ? "更新エラー" : "追加エラー",
+        description: err instanceof Error ? err.message : "エラーが発生しました",
         variant: "destructive",
       });
     }
@@ -201,7 +287,12 @@ const CouponManagement: React.FC = () => {
                   </div>
                 )}
               </TableCell>
-              <TableCell>{coupon.category}</TableCell>
+              <TableCell>
+                {(() => {
+                  const { text, variant } = getCategoryDisplay(coupon.category);
+                  return <Chip variant={variant}>{text}</Chip>;
+                })()}
+              </TableCell>
               <TableCell>{coupon.name}</TableCell>
               <TableCell>
                 {coupon.price !== null
@@ -226,6 +317,7 @@ const CouponManagement: React.FC = () => {
                   onCheckedChange={(checked) =>
                     handleToggleReservable(coupon.id, checked)
                   }
+                  disabled={updatingCouponId === coupon.id}
                 />
               </TableCell>
               <TableCell>
@@ -246,7 +338,7 @@ const CouponManagement: React.FC = () => {
         onClose={handleModalClose}
         coupon={editingCoupon}
         onSubmit={handleSubmit}
-        userId="mock-user-id"
+        userId={user?.id || ''}
       />
       <Toaster />
     </div>
