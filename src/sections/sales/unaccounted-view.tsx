@@ -1,3 +1,5 @@
+"use client";
+
 import React from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -182,6 +184,13 @@ const CompactRegisterClosingUI: React.FC = () => {
         </CardHeader>
         <CardContent>
           <ReservationTable
+            reservations={[]}
+            loading={false}
+            error={null}
+            page={1}
+            limit={10}
+            totalCount={0}
+            onPageChange={() => {}}
             filterOptions={{
               dateRange: undefined,
               statuses: ["受付待ち"],

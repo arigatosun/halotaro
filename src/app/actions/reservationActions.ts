@@ -1,52 +1,85 @@
-// src/app/actions/reservationActions.ts
-'use server'
+"use server";
+
+import { createServerComponentClient } from "@supabase/auth-helpers-nextjs";
+import { cookies } from "next/headers";
 
 export interface Reservation {
-  id: string
-  time: string
-  client: string
-  service: string
-  staff: string
-  date: string
+  id: string;
+  user_id: string;
+  menu_id: string;
+  staff_id: string;
+  status: string;
+  total_price: number;
+  created_at: string;
+  updated_at: string;
+  start_time: string;
+  end_time: string;
+  customer_name: string;
+  staff_name: string | null;
+  menu_name: string;
+  scraped_menu: string | null;
+  scraped_customer: string | null;
 }
 
-// サンプルデータ
-let sampleReservations: Reservation[] = [
-  { id: '1', date: '2024-08-22', time: '10:00', client: '山田花子', service: 'カット', staff: '斉藤 恵司' },
-  { id: '2', date: '2024-08-22', time: '14:00', client: '鈴木一郎', service: 'カラー', staff: '徳 美加' },
-  { id: '3', date: '2024-08-22', time: '16:00', client: '佐藤美咲', service: 'パーマ', staff: '田原 誠基' },
-];
+export async function getReservations(
+  date?: string,
+  staff?: string,
+  page: number = 1,
+  limit: number = 30
+): Promise<{ data: Reservation[]; count: number }> {
+  console.log("getReservations called with:", { date, staff, page, limit });
 
-export async function getReservations(date: string, staff?: string): Promise<Reservation[]> {
-  // サンプルデータをフィルタリングして返す
-  return sampleReservations.filter(reservation => 
-    reservation.date === date && (!staff || staff === 'all' || reservation.staff === staff)
+  const supabase = createServerComponentClient({ cookies });
+
+  let query = supabase.from("reservations").select(
+    `
+      *,
+      reservation_customers (name),
+      staff (name),
+      menu_items (name),
+      scraped_menu,
+      scraped_customer
+    `,
+    { count: "exact" }
   );
-}
 
-export async function addReservation(reservation: Omit<Reservation, 'id'>): Promise<Reservation> {
-  const newReservation: Reservation = {
+  if (date) {
+    query = query
+      .gte("start_time", `${date}T00:00:00`)
+      .lt("start_time", `${date}T23:59:59`);
+  }
+
+  if (staff && staff !== "all") {
+    query = query.eq("staff_id", staff);
+  }
+
+  const { data, error, count } = await query
+    .order("start_time", { ascending: false })
+    .range((page - 1) * limit, page * limit - 1);
+
+  console.log("Query result:", { data, error, count });
+
+  if (error) {
+    console.error("Error fetching reservations:", error);
+    throw new Error("予約の取得に失敗しました");
+  }
+
+  const formattedData = data?.map((reservation) => ({
     ...reservation,
-    id: (sampleReservations.length + 1).toString()
+    customer_name:
+      reservation.reservation_customers?.[0]?.name ||
+      reservation.scraped_customer ||
+      "Unknown",
+    staff_name: reservation.staff?.name || null,
+    menu_name:
+      (reservation.menu_id !== 0 && reservation.menu_items?.name) ||
+      reservation.scraped_menu ||
+      "Unknown",
+  }));
+  console.log("Formatted data:", formattedData);
+
+  return {
+    data: formattedData as Reservation[],
+    count: count || 0,
   };
-  sampleReservations.push(newReservation);
-  return newReservation;
-}
-
-export async function updateReservation(id: string, reservation: Partial<Reservation>): Promise<Reservation> {
-  const index = sampleReservations.findIndex(r => r.id === id);
-  if (index !== -1) {
-    sampleReservations[index] = { ...sampleReservations[index], ...reservation };
-    return sampleReservations[index];
-  }
-  throw new Error('Reservation not found');
-}
-
-export async function deleteReservation(id: string): Promise<void> {
-  const index = sampleReservations.findIndex(r => r.id === id);
-  if (index !== -1) {
-    sampleReservations.splice(index, 1);
-  } else {
-    throw new Error('Reservation not found');
-  }
 }

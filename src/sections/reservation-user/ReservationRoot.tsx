@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Box } from "@mui/material";  // Boxをインポート
+import { Box } from "@mui/material";
 import MenuSelection from "@/sections/reservation-user/menu-selection";
 import StaffSelection from "@/sections/reservation-user/staff-selection";
 import CustomerInfo from "@/sections/reservation-user/CustomerInfo";
@@ -26,16 +26,16 @@ interface ReservationRootProps {
   userId: string;
 }
 
-interface DateSelectionProps {
-  onDateTimeSelect: (dateTime: Date) => void;
-  onBack: () => void;
-}
-
 function ReservationContent({ userId }: ReservationRootProps) {
   const [activeStep, setActiveStep] = useState(0);
-  const [selectedMenuId, setSelectedMenuId] = useState<string | null>(null);
   const [menuSelectionCompleted, setMenuSelectionCompleted] = useState(false);
-  const { setSelectedDateTime } = useReservation();
+  const { 
+    selectedMenus, 
+    setSelectedMenus, 
+    selectedStaff, 
+    setSelectedStaff, 
+    setSelectedDateTime 
+  } = useReservation();
 
   const handleNext = () => {
     setActiveStep((prevActiveStep) => prevActiveStep + 1);
@@ -49,23 +49,25 @@ function ReservationContent({ userId }: ReservationRootProps) {
     }
   };
 
-  const handleMenuSelect = (menuId: string) => {
-    setSelectedMenuId(menuId);
+  const handleMenuSelect = (menuId: string, name: string, price: number) => {
+    setSelectedMenus([{ id: menuId, name, price }]);
     setMenuSelectionCompleted(true);
-  };
-
-  const handleStaffSelect = () => {
     handleNext();
   };
 
-  const handleDateTimeSelect = (dateTime: Date) => {
-    setSelectedDateTime(dateTime);
+  const handleStaffSelect = (staff: { id: string; name: string } | null) => {
+    setSelectedStaff(staff);
+    handleNext();
+  };
+
+  const handleDateTimeSelect = (startTime: Date, endTime: Date) => {
+    setSelectedDateTime({ start: startTime, end: endTime });
     handleNext();
   };
 
   const handlePaymentComplete = (status: string, paymentIntent?: any) => {
     if (status === "succeeded") {
-      setActiveStep(4);
+      setActiveStep(5);
     }
   };
 
@@ -73,38 +75,42 @@ function ReservationContent({ userId }: ReservationRootProps) {
     console.log("Current step:", step);
     switch (step) {
       case 0:
-        return menuSelectionCompleted ? (
-          <StaffSelection
-            onSelectStaff={handleStaffSelect}
-            onBack={handleBack}
-            selectedMenuId={selectedMenuId!}
-            userId={userId}
-          />
-        ) : (
+        return (
           <MenuSelection onSelectMenu={handleMenuSelect} userId={userId} />
         );
       case 1:
+        return (
+          <StaffSelection
+            onSelectStaff={handleStaffSelect}
+            onBack={handleBack}
+            selectedMenuId={selectedMenus[0]?.id || ""}
+            userId={userId}
+          />
+        );
+      case 2:
         return (
           <Box sx={{ width: '100%', overflowX: 'auto', margin: '0 -16px' }}>
             <DateSelection
               onDateTimeSelect={handleDateTimeSelect}
               onBack={handleBack}
+              selectedStaffId={selectedStaff?.id || null}
+              selectedMenuId={selectedMenus[0]?.id || ""}
             />
           </Box>
         );
-      case 2:
-        return <CustomerInfo onNext={handleNext} onBack={handleBack} />;
       case 3:
+        return <CustomerInfo onNext={handleNext} onBack={handleBack} />;
+      case 4:
         return (
           <ReservationConfirmationAndPayment
             onNext={handleNext}
             onBack={handleBack}
             onPaymentComplete={handlePaymentComplete}
             userId={userId}
-            selectedMenuId={selectedMenuId!}
+            selectedMenuId={selectedMenus[0]?.id || ""}
           />
         );
-      case 4:
+      case 5:
         return <ReservationComplete userId={userId} />;
       default:
         return "Unknown step";

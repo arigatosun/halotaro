@@ -20,10 +20,20 @@ const ReservationConfirmation: React.FC<ReservationConfirmationProps> = ({
     customerInfo,
     calculateTotalAmount,
   } = useReservation();
-  console.log("selectedMenus:", selectedMenus);
-  // selectedMenus はすでに必要な情報を含んでいるため、
-  // 追加のフィルタリングは不要です
+
   const totalPrice = calculateTotalAmount(selectedMenus);
+
+  // 日時をフォーマットする関数
+  const formatDate = (date: Date) => {
+    return date.toLocaleString("ja-JP", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      weekday: "long",
+    });
+  };
 
   return (
     <div className="space-y-6">
@@ -47,16 +57,8 @@ const ReservationConfirmation: React.FC<ReservationConfirmationProps> = ({
             <div>
               <dt className="font-semibold">予約日時:</dt>
               <dd>
-                {" "}
                 {selectedDateTime
-                  ? selectedDateTime.toLocaleString("ja-JP", {
-                      year: "numeric",
-                      month: "long",
-                      day: "numeric",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                      weekday: "long",
-                    })
+                  ? `${formatDate(selectedDateTime.start)} - ${selectedDateTime.end.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" })}`
                   : "日時未選択"}
               </dd>
             </div>
@@ -67,8 +69,7 @@ const ReservationConfirmation: React.FC<ReservationConfirmationProps> = ({
             <div>
               <dt className="font-semibold">お客様情報:</dt>
               <dd>
-                {customerInfo.name} - {customerInfo.email} -{" "}
-                {customerInfo.phone}
+                {customerInfo.name} - {customerInfo.email} - {customerInfo.phone}
               </dd>
             </div>
             <div>

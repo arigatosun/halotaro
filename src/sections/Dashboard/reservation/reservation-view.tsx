@@ -1,95 +1,150 @@
 "use client";
-import React, { useState, useEffect } from 'react';
-import ReservationCalendar from '@/components/ReservationCalendar';
-import ReservationModal from '@/components/ReservationModal';
-import { Reservation, getReservations, addReservation, updateReservation, deleteReservation } from '@/app/actions/reservationActions';
+import React, { useState, useEffect } from "react";
+import { format } from "date-fns";
+import { getReservations} from "@/app/actions/reservationActions";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Reservation } from "@/types/reservation";
 
 const ReservationView: React.FC = () => {
-  const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedReservation, setSelectedReservation] = useState<Reservation | null>(null);
   const [reservations, setReservations] = useState<Reservation[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [selectedStaff, setSelectedStaff] = useState<string>("all");
+  const [page, setPage] = useState(1);
+  const [limit] = useState(10);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchReservations = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      console.log("Fetching reservations...");
+      console.log("Params:", {
+        date: format(selectedDate, "yyyy-MM-dd"),
+        staff: selectedStaff,
+        page,
+        limit
+      });
+      const { data, count } = await getReservations(
+        format(selectedDate, "yyyy-MM-dd"),
+        selectedStaff,
+        page,
+        limit
+      );
+      console.log("Fetched reservations:", data);
+      console.log("Total count:", count);
+      setReservations(data);
+      setTotalCount(count);
+    } catch (error) {
+      console.error("Error fetching reservations:", error);
+      setError("予約の取得中にエラーが発生しました。");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchReservations = async () => {
-      const data = await getReservations(selectedDate);
-      setReservations(data);
-    };
     fetchReservations();
-  }, [selectedDate]);
+  }, [selectedDate, selectedStaff, page]);
 
-  const handleReservationSelect = (reservation: Reservation) => {
-    setSelectedReservation(reservation);
-    setIsModalOpen(true);
+  const handleDateChange = (date: Date) => {
+    console.log("Date changed to:", date);
+    setSelectedDate(date);
+    setPage(1);
   };
 
-  const handleReservationCreate = (data: Partial<Reservation>) => {
-    setSelectedReservation(null);
-    setIsModalOpen(true);
+  const handleStaffChange = (value: string) => {
+    console.log("Staff changed to:", value);
+    setSelectedStaff(value);
+    setPage(1);
   };
 
-  const handleReservationUpdate = async (data: Reservation) => {
-    try {
-      await updateReservation(data.id, data);
-      setIsModalOpen(false);
-      setSelectedReservation(null);
-      // 予約を再取得
-      const updatedReservations = await getReservations(selectedDate);
-      setReservations(updatedReservations);
-    } catch (error) {
-      console.error('Failed to update reservation:', error);
-    }
+  const handleNextPage = () => {
+    setPage((prevPage) => prevPage + 1);
   };
 
-  const handleReservationDelete = async (id: string) => {
-    try {
-      await deleteReservation(id);
-      setIsModalOpen(false);
-      setSelectedReservation(null);
-      // 予約を再取得
-      const updatedReservations = await getReservations(selectedDate);
-      setReservations(updatedReservations);
-    } catch (error) {
-      console.error('Failed to delete reservation:', error);
-    }
+  const handlePrevPage = () => {
+    setPage((prevPage) => Math.max(prevPage - 1, 1));
   };
 
-  const handleModalSubmit = async (data: Partial<Reservation>) => {
-    if (selectedReservation) {
-      await handleReservationUpdate({ ...selectedReservation, ...data } as Reservation);
-    } else {
-      try {
-        await addReservation(data as Omit<Reservation, 'id'>);
-        setIsModalOpen(false);
-        // 予約を再取得
-        const updatedReservations = await getReservations(selectedDate);
-        setReservations(updatedReservations);
-      } catch (error) {
-        console.error('Failed to add reservation:', error);
-      }
-    }
-  };
+  console.log("Current reservations:", reservations);
 
   return (
-    <div className="p-8 pt-0">
-      <h2 className="text-3xl font-bold mb-8">予約管理</h2>
-      <ReservationCalendar
-        reservations={reservations}
-        onReservationSelect={handleReservationSelect}
-        onReservationUpdate={handleReservationUpdate}
-        onReservationCreate={handleReservationCreate}
-      />
-      <ReservationModal
-        isOpen={isModalOpen}
-        onClose={() => {
-          setIsModalOpen(false);
-          setSelectedReservation(null);
-        }}
-        onSubmit={handleModalSubmit}
-        onDelete={selectedReservation ? () => handleReservationDelete(selectedReservation.id) : undefined}
-        initialValues={selectedReservation || undefined}
-        title={selectedReservation ? "予約編集" : "新規予約"}
-      />
+    <div className="p-4">
+      <div className="mb-4 flex space-x-4">
+        <Input
+          type="date"
+          value={format(selectedDate, "yyyy-MM-dd")}
+          onChange={(e) => handleDateChange(new Date(e.target.value))}
+        />
+        <Select value={selectedStaff} onValueChange={handleStaffChange}>
+          <SelectTrigger>
+            <SelectValue placeholder="Select staff" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Staff</SelectItem>
+            {/* Add more staff options here */}
+          </SelectContent>
+        </Select>
+      </div>
+      {loading && <div>Loading...</div>}
+      {error && <div className="text-red-500">{error}</div>}
+      {!loading && !error && (
+        <>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>日時</TableHead>
+                <TableHead>ステータス</TableHead>
+                <TableHead>お客様名</TableHead>
+                <TableHead>メニュー</TableHead>
+                <TableHead>スタッフ</TableHead>
+                <TableHead>合計金額</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+  {reservations.length === 0 ? (
+    <TableRow>
+      <TableCell colSpan={6}>No reservations found</TableCell>
+    </TableRow>
+  ) : (
+    reservations.map((reservation) => (
+      <TableRow key={reservation.id}>
+        <TableCell>{format(new Date(reservation.start_time), "yyyy-MM-dd")}</TableCell>
+        <TableCell>{format(new Date(reservation.start_time), "HH:mm")}</TableCell>
+        <TableCell>{reservation.user_id}</TableCell>
+        <TableCell>-</TableCell> {/* メニューは空白 */}
+        <TableCell>{reservation.staff_id || "Unassigned"}</TableCell>
+        <TableCell>{reservation.status}</TableCell>
+        <TableCell>¥{reservation.total_price.toLocaleString()}</TableCell>
+      </TableRow>
+    ))
+  )}
+</TableBody>
+          </Table>
+          <div className="mt-4 flex justify-between">
+            <Button onClick={handlePrevPage} disabled={page === 1}>
+              Previous
+            </Button>
+            <span>
+              Page {page} of {Math.ceil(totalCount / limit)}
+            </span>
+            <Button onClick={handleNextPage} disabled={page * limit >= totalCount}>
+              Next
+            </Button>
+          </div>
+        </>
+      )}
+      <div className="mt-4">
+        <h3>Debug Info:</h3>
+        <pre>{JSON.stringify({ selectedDate, selectedStaff, page, limit, totalCount }, null, 2)}</pre>
+        <h3>Reservations:</h3>
+        <pre>{JSON.stringify(reservations, null, 2)}</pre>
+      </div>
     </div>
   );
 };

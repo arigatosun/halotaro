@@ -1,8 +1,6 @@
 "use client";
-import React, { useState, useCallback } from "react";
-import Link from "next/link";
-import { Calendar, Users, DollarSign, Search, X } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import React, { useState } from "react";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -16,6 +14,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { DatePickerWithRange } from "@/components/ui/date-picker-with-range";
 import ReservationTable from "@/components/ReservationTable";
 import { DateRange } from "react-day-picker";
+import { Search, X } from "lucide-react";
+import { useReservations } from "@/hooks/useReservations";
 
 interface FilterOptions {
   dateRange: DateRange | undefined;
@@ -26,7 +26,7 @@ interface FilterOptions {
   reservationRoute: string;
 }
 
-const ReservationListPage: React.FC = () => {
+const ReservationListView: React.FC = () => {
   const [filterOptions, setFilterOptions] = useState<FilterOptions>({
     dateRange: undefined,
     statuses: [],
@@ -35,6 +35,14 @@ const ReservationListPage: React.FC = () => {
     staff: "all",
     reservationRoute: "all",
   });
+  const [page, setPage] = useState(1);
+  const limit = 10;
+
+  const { reservations, loading, error, totalCount } = useReservations(
+    filterOptions,
+    page,
+    limit
+  );
 
   const handleDateRangeChange = (range: DateRange | undefined) => {
     setFilterOptions((prev) => ({ ...prev, dateRange: range }));
@@ -60,6 +68,7 @@ const ReservationListPage: React.FC = () => {
 
   const handleSearch = () => {
     // 検索ボタンが押されたときの処理（必要に応じて）
+    setPage(1); // 検索時にページを1にリセット
   };
 
   const handleClear = () => {
@@ -71,6 +80,11 @@ const ReservationListPage: React.FC = () => {
       staff: "all",
       reservationRoute: "all",
     });
+    setPage(1);
+  };
+
+  const handlePageChange = (newPage: number) => {
+    setPage(newPage);
   };
 
   return (
@@ -86,7 +100,7 @@ const ReservationListPage: React.FC = () => {
             />
             <div className="flex flex-wrap gap-2">
               {[
-                "受付待ち", // 新しいステータスを追加
+                "受付待ち",
                 "受付済み",
                 "施術中",
                 "来店処理済み",
@@ -169,11 +183,19 @@ const ReservationListPage: React.FC = () => {
 
       <Card>
         <CardContent>
-          <ReservationTable filterOptions={filterOptions} />
+          <ReservationTable
+            reservations={reservations}
+            loading={loading}
+            error={error}
+            page={page}
+            limit={limit}
+            totalCount={totalCount}
+            onPageChange={handlePageChange}
+          />
         </CardContent>
       </Card>
     </div>
   );
 };
 
-export default ReservationListPage;
+export default ReservationListView;

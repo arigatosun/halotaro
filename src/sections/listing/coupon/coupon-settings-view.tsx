@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -12,69 +12,71 @@ import {
 } from "@/components/ui/table";
 import { toast } from "@/components/ui/use-toast";
 import { Toaster } from "@/components/ui/toaster";
-import { PlusCircle, Pencil, Trash2 } from "lucide-react";
+import { PlusCircle, Pencil, Trash2, Loader2 } from "lucide-react";
 import CouponFormModal from "@/components/CouponFormModal";
-import { Coupon } from "@/hooks/useCouponManagement";
-
-// 仮のクーポンデータ
-// 更新されたモックデータ
-const mockCoupons: Coupon[] = [
-  {
-    id: "1",
-    name: "春の特別クーポン",
-    type: "割引",
-    description: "全メニュー20%オフ",
-    searchCategory: "割引",
-    price: 0,
-    duration: 60,
-    discountType: "percentage",
-    discountValue: 20,
-    image: "/mock-coupon-1.jpg",
-    isPublished: true,
-    isValid: true,
-    user_id: "mock-user-id",
-    applicableMenu: "全メニュー", // 追加
-  },
-  {
-    id: "2",
-    name: "新規顧客限定",
-    type: "無料サービス",
-    description: "ヘッドスパ10分無料",
-    searchCategory: "サービス",
-    price: 0,
-    duration: 10,
-    discountType: "amount",
-    discountValue: 0,
-    image: "/mock-coupon-2.jpg",
-    isPublished: false,
-    isValid: true,
-    user_id: "mock-user-id",
-    applicableMenu: "ヘッドスパ", // 追加
-  },
-];
+import { Coupon } from "@/types/coupon";
+import { useAuth } from "@/contexts/authcontext";
 
 const CouponManagement: React.FC = () => {
-  const [coupons] = useState<Coupon[]>(mockCoupons);
+  const { user } = useAuth();
+  const [coupons, setCoupons] = useState<Coupon[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCoupon, setEditingCoupon] = useState<Coupon | null>(null);
 
-  const handleEdit = (coupon: (typeof mockCoupons)[0]) => {
+  useEffect(() => {
+    fetchCoupons();
+  }, []);
+
+  const fetchCoupons = async () => {
+    if (!user) return;
+    try {
+      setIsLoading(true);
+      const response = await fetch("/api/get-coupons", {
+        method: "GET",
+        headers: {
+          "user-id": user.id,
+        },
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to fetch coupons");
+      }
+      const data = await response.json();
+      setCoupons(data);
+    } catch (error) {
+      console.error("Error fetching coupons:", error);
+      setError(
+        error instanceof Error ? error.message : "Failed to fetch coupons"
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleEdit = (coupon: Coupon) => {
     setEditingCoupon(coupon);
     setIsModalOpen(true);
   };
 
-  const handleDelete = (couponId: string) => {
+  const handleDelete = async (couponId: string) => {
+    // 削除ロジックを実装
     toast({
       title: "削除",
       description: `クーポンID: ${couponId} の削除がクリックされました`,
     });
   };
 
-  const handleTogglePublish = (couponId: string, isPublished: boolean) => {
+  const handleToggleReservable = async (
+    couponId: string,
+    isReservable: boolean
+  ) => {
+    // 予約可能状態の切り替えロジックを実装
     toast({
-      title: "公開状態変更",
-      description: `クーポンID: ${couponId} の公開状態が ${
-        isPublished ? "公開" : "非公開"
+      title: "予約可能状態変更",
+      description: `クーポンID: ${couponId} の予約可能状態が ${
+        isReservable ? "可能" : "不可能"
       } に変更されました`,
     });
   };
@@ -89,17 +91,64 @@ const CouponManagement: React.FC = () => {
     setEditingCoupon(null);
   };
 
-  const handleSubmit = (
-    couponData: Omit<Coupon, "id">,
+  const handleSubmit = async (
+    couponData: Omit<Coupon, "id" | "created_at" | "updated_at">,
     imageFile: File | null
   ) => {
-    // ここでは仮の実装としてトースト通知を表示
-    toast({
-      title: editingCoupon ? "更新" : "追加",
-      description: `クーポンが${editingCoupon ? "更新" : "追加"}されました`,
-    });
-    setIsModalOpen(false);
+    try {
+      const formData = new FormData();
+      Object.entries(couponData).forEach(([key, value]) => {
+        if (value !== null) {
+          formData.append(key, value.toString());
+        }
+      });
+      if (imageFile) {
+        formData.append("image", imageFile);
+      }
+
+      const url = editingCoupon
+        ? `/api/coupons/${editingCoupon.id}`
+        : "/api/coupons";
+      const method = editingCoupon ? "PUT" : "POST";
+
+      const response = await fetch(url, {
+        method,
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error(
+          `クーポンの${editingCoupon ? "更新" : "追加"}に失敗しました`
+        );
+      }
+
+      toast({
+        title: editingCoupon ? "更新成功" : "追加成功",
+        description: `クーポンが${editingCoupon ? "更新" : "追加"}されました`,
+      });
+      setIsModalOpen(false);
+      fetchCoupons(); // クーポンリストを再取得
+    } catch (err) {
+      toast({
+        title: `${editingCoupon ? "更新" : "追加"}エラー`,
+        description:
+          err instanceof Error ? err.message : "エラーが発生しました",
+        variant: "destructive",
+      });
+    }
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return <div className="text-red-500 text-center">{error}</div>;
+  }
 
   return (
     <div className="p-6">
@@ -128,10 +177,10 @@ const CouponManagement: React.FC = () => {
             <TableHead>クーポン写真</TableHead>
             <TableHead>種別</TableHead>
             <TableHead>クーポン名</TableHead>
-            <TableHead>適用先メニュー</TableHead>
-            <TableHead>チェック</TableHead>
+            <TableHead>価格</TableHead>
+            <TableHead>所要時間</TableHead>
             <TableHead>詳細</TableHead>
-            <TableHead>公開/非公開</TableHead>
+            <TableHead>予約可能</TableHead>
             <TableHead>削除</TableHead>
           </TableRow>
         </TableHeader>
@@ -140,9 +189,9 @@ const CouponManagement: React.FC = () => {
             <TableRow key={coupon.id}>
               <TableCell>{index + 1}</TableCell>
               <TableCell>
-                {coupon.image ? (
+                {coupon.image_url ? (
                   <img
-                    src={coupon.image}
+                    src={coupon.image_url}
                     alt={coupon.name}
                     className="w-16 h-16 object-cover"
                   />
@@ -152,10 +201,16 @@ const CouponManagement: React.FC = () => {
                   </div>
                 )}
               </TableCell>
-              <TableCell>{coupon.type}</TableCell>
+              <TableCell>{coupon.category}</TableCell>
               <TableCell>{coupon.name}</TableCell>
-              <TableCell>{coupon.applicableMenu}</TableCell>
-              <TableCell>{coupon.isValid ? "OK" : "NG"}</TableCell>
+              <TableCell>
+                {coupon.price !== null
+                  ? `¥${coupon.price.toLocaleString()}`
+                  : "-"}
+              </TableCell>
+              <TableCell>
+                {coupon.duration !== null ? `${coupon.duration}分` : "-"}
+              </TableCell>
               <TableCell>
                 <Button
                   variant="outline"
@@ -167,9 +222,9 @@ const CouponManagement: React.FC = () => {
               </TableCell>
               <TableCell>
                 <Switch
-                  checked={coupon.isPublished}
+                  checked={coupon.is_reservable || false}
                   onCheckedChange={(checked) =>
-                    handleTogglePublish(coupon.id, checked)
+                    handleToggleReservable(coupon.id, checked)
                   }
                 />
               </TableCell>
@@ -191,7 +246,7 @@ const CouponManagement: React.FC = () => {
         onClose={handleModalClose}
         coupon={editingCoupon}
         onSubmit={handleSubmit}
-        userId="mock-user-id" // 仮のユーザーID
+        userId="mock-user-id"
       />
       <Toaster />
     </div>

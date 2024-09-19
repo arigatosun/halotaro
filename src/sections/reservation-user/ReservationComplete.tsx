@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useReservation } from "@/contexts/reservationcontext";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -27,90 +27,85 @@ const ReservationComplete: React.FC<ReservationCompleteProps> = ({
     paymentInfo,
   } = useReservation();
 
+  const saveReservation = useCallback(async () => {
+    try {
+      const reservationData = {
+        userId,
+        menuId: selectedMenus[0].id,
+        staffId: selectedStaff?.id,
+        startTime: selectedDateTime?.start.toISOString(),
+        endTime: selectedDateTime?.end.toISOString(),
+        totalPrice: selectedMenus.reduce(
+          (total, menu) => total + menu.price,
+          0
+        ),
+        customerInfo,
+        paymentInfo,
+      };
+
+      const response = await fetch("/api/create-reservation", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(reservationData),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(
+          errorData.error || "予約の保存中にエラーが発生しました"
+        );
+      }
+
+      const result = await response.json();
+      setStatus("予約が完了しました");
+      toast({
+        title: "予約が保存されました",
+        description: `予約ID: ${result.reservationId}`,
+      });
+    } catch (error) {
+      console.error("予約の保存中にエラーが発生しました:", error);
+      setStatus("予約の保存中にエラーが発生しました");
+      toast({
+        title: "エラー",
+        description:
+          error instanceof Error
+            ? error.message
+            : "予約情報の保存中にエラーが発生しました。",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [
+    userId,
+    selectedMenus,
+    selectedDateTime,
+    selectedStaff,
+    customerInfo,
+    paymentInfo,
+    toast,
+  ]);
+
   useEffect(() => {
-    console.log("Component mounted"); // マウント回数を確認するためのログ
-
-    let ignore = false;
-
-    const saveReservation = async () => {
-      const isReservationSaved = localStorage.getItem("isReservationSaved");
-      if (isReservationSaved === "true") {
-        if (!ignore) {
-          setStatus("予約が既に完了しています");
-          setLoading(false);
-        }
-        return;
-      }
-
-      try {
-        const reservationData = {
-          userId,
-          menuId: selectedMenus[0].id,
-          staffId: selectedStaff?.id,
-          reservationDateTime: selectedDateTime?.toISOString(),
-          totalPrice: selectedMenus.reduce(
-            (total, menu) => total + menu.price,
-            0
-          ),
-          customerInfo,
-          paymentInfo,
-        };
-
-        const response = await fetch("/api/create-reservation", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(reservationData),
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(
-            errorData.error || "予約の保存中にエラーが発生しました"
-          );
-        }
-
-        const result = await response.json();
-        if (!ignore) {
-          setStatus("予約が完了しました");
-          toast({
-            title: "予約が保存されました",
-            description: `予約ID: ${result.reservationId}`,
-          });
-          localStorage.setItem("isReservationSaved", "true");
-        }
-      } catch (error) {
-        if (!ignore) {
-          console.error("予約の保存中にエラーが発生しました:", error);
-          setStatus("予約の保存中にエラーが発生しました");
-          toast({
-            title: "エラー",
-            description:
-              error instanceof Error
-                ? error.message
-                : "予約情報の保存中にエラーが発生しました。",
-            variant: "destructive",
-          });
-        }
-      } finally {
-        if (!ignore) {
-          setLoading(false);
-        }
-      }
-    };
-
     saveReservation();
-
-    return () => {
-      ignore = true;
-      localStorage.removeItem("isReservationSaved");
-    };
-  }, []); // 依存配列を空に
+  }, [saveReservation]);
 
   if (loading) {
     return <Skeleton className="w-[100px] h-[20px] rounded-full" />;
   }
+
+  const formatDateTime = (date: Date) => {
+    return date.toLocaleString("ja-JP", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      weekday: "long",
+    });
+  };
 
   return (
     <Card className="w-[350px] mx-auto">
@@ -125,7 +120,12 @@ const ReservationComplete: React.FC<ReservationCompleteProps> = ({
           <p className="text-sm">
             予約日時:{" "}
             {selectedDateTime
-              ? selectedDateTime.toLocaleString()
+              ? `${formatDateTime(
+                  selectedDateTime.start
+                )} - ${selectedDateTime.end.toLocaleTimeString("ja-JP", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}`
               : "Not selected"}
           </p>
           <p className="text-sm">
