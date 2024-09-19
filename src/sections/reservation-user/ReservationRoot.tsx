@@ -121,7 +121,7 @@ function ReservationContent({ userId }: ReservationRootProps) {
     <Layout>
       <Box sx={{ padding: '0 16px' }}>
         <ReservationHeader currentStep={activeStep} />
-        <h1>{steps[activeStep]}</h1>
+       
         {getStepContent(activeStep)}
       </Box>
     </Layout>
