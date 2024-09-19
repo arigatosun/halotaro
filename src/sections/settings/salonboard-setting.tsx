@@ -99,6 +99,34 @@ const SalonBoardIntegrationView: React.FC = () => {
     }
   };
 
+  const handleSyncReservationToSalonboard = async () => {
+    setIsLoading(true);
+    setResult(null);
+
+    try {
+      const response = await fetch("/api/salonboard-sync-reservation", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ haloTaroUserId: user.id }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Reservation sync to Salonboard failed");
+      }
+
+      const data = await response.json();
+      setResult(data.message);
+    } catch (error) {
+      setResult(
+        "サロンボードへの予約同期中にエラーが発生しました。もう一度お試しください。"
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // handleSync 関数を更新して、スタッフ同期にも対応
   const handleSync = async (
     type: "reservations" | "menus" | "staff" | "coupons"
@@ -225,6 +253,13 @@ const SalonBoardIntegrationView: React.FC = () => {
                     className="flex-1 bg-pink-500 hover:bg-pink-600"
                   >
                     {isLoading ? "実行中..." : "クーポンを同期"}
+                  </Button>
+                  <Button
+                    onClick={handleSyncReservationToSalonboard}
+                    disabled={isLoading || !savedCredentials}
+                    className="flex-1 bg-yellow-500 hover:bg-yellow-600"
+                  >
+                    {isLoading ? "実行中..." : "予約をサロンボードに同期"}
                   </Button>
                 </div>
               </div>

@@ -1,21 +1,17 @@
-
-'use client'
-
-import React, { useState, useEffect } from 'react'
-
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableContainer, 
-  TableHead, 
-  TableRow, 
-  Paper, 
-  Button, 
-  Dialog, 
-  DialogActions, 
-  DialogContent, 
-  DialogContentText, 
+import React, { useState, useEffect, useCallback } from "react";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
+  Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
   DialogTitle,
   Snackbar,
   Alert,
@@ -26,376 +22,299 @@ import {
   Box,
   useMediaQuery,
   TableCellProps,
-  Tooltip,
-  IconButton,
-  Fade
-} from '@mui/material'
-import { ChevronLeft, ChevronRight, Info, Event } from '@mui/icons-material'
-import moment from 'moment'
-import 'moment/locale/ja'
-import { useReservation } from "@/contexts/reservationcontext"
-import { useParams } from 'next/navigation'
+} from "@mui/material";
+import { ChevronLeft, ChevronRight } from "@mui/icons-material";
+import moment from "moment";
+import "moment/locale/ja";
+import { useReservation } from "@/contexts/reservationcontext";
 
-
-moment.locale('ja')
+moment.locale("ja");
 
 interface DateSelectionProps {
-
-  onDateTimeSelect: (dateTime: Date) => void
-  onBack: () => void
+  onDateTimeSelect: (startTime: Date, endTime: Date) => void;
+  onBack: () => void;
+  selectedStaffId: string | null;
+  selectedMenuId: string;
 }
 
-// テーマの色を修正
 const theme = createTheme({
   palette: {
     primary: {
-      main: '#f97316', // オレンジ色
+      main: "#3a86ff",
     },
     secondary: {
-      main: '#3b82f6', // ブルー色（土曜日用）
+      main: "#ff006e",
     },
     background: {
-      default: '#f8f9fa',
-      paper: '#ffffff',
+      default: "#f8f9fa",
+      paper: "#ffffff",
     },
     text: {
-      primary: '#333333',
-      secondary: '#666666',
-    },
-    error: {
-      main: '#ef4444', // 赤色
+      primary: "#333333",
+      secondary: "#666666",
     },
   },
   typography: {
     fontFamily: '"Noto Sans JP", sans-serif',
   },
-  components: {
-    MuiButton: {
-      styleOverrides: {
-        root: {
-          borderRadius: '8px',
-          textTransform: 'none',
-        },
-      },
-    },
-    MuiTableCell: {
-      styleOverrides: {
-        root: {
-          borderColor: 'rgba(224, 224, 224, 0.5)',
-        },
-      },
-    },
-  },
-})
+});
 
 interface StyledTableCellProps extends TableCellProps {
-  isHourBorder?: boolean
+  isHourBorder?: boolean;
 }
 
 const StyledTableCell = styled(TableCell, {
-  shouldForwardProp: (prop) => prop !== 'isHourBorder',
+  shouldForwardProp: (prop) => prop !== "isHourBorder",
 })<StyledTableCellProps>(({ theme, isHourBorder }) => ({
-  padding: '4px',
-  textAlign: 'center',
+  padding: "4px",
+  textAlign: "center",
   borderRight: `1px solid ${theme.palette.divider}`,
-  borderBottom: isHourBorder ? `2px solid ${theme.palette.divider}` : `1px solid ${theme.palette.divider}`,
-  width: '80px', // 固定幅を設定
-  minWidth: '80px',
-  maxWidth: '80px', // 最大幅も設定して一定に保つ
-  height: '40px',
-  '&.header': {
+  borderBottom: isHourBorder
+    ? `2px solid ${theme.palette.divider}`
+    : `1px solid ${theme.palette.divider}`,
+  width: "80px",
+  minWidth: "80px",
+  height: "40px",
+  "&.header": {
     backgroundColor: theme.palette.background.paper,
     zIndex: 2,
   },
-  '&.year-month': {
-    position: 'sticky',
+  "&.year-month": {
+    position: "sticky",
     top: 0,
     zIndex: 3,
     backgroundColor: theme.palette.background.paper,
   },
-  '&.day-date': {
-    position: 'sticky',
-    top: '40px',
+  "&.day-date": {
+    position: "sticky",
+    top: "40px",
     zIndex: 3,
     backgroundColor: theme.palette.background.paper,
   },
-  '&.time': {
+  "&.time": {
     left: 0,
     zIndex: 4,
-    position: 'sticky',
+    position: "sticky",
     backgroundColor: theme.palette.background.paper,
   },
-  '&.time-right': {
+  "&.time-right": {
     right: 0,
     zIndex: 4,
-    position: 'sticky',
+    position: "sticky",
     backgroundColor: theme.palette.background.paper,
   },
-  '&.nav-button': {
+  "&.nav-button": {
     zIndex: 5,
   },
-  '&.date': {
-    position: 'sticky',
-    top: '96px',
+  "&.date": {
+    position: "sticky",
+    top: "96px",
     zIndex: 2,
     backgroundColor: theme.palette.background.paper,
   },
-  '&.saturday': {
-    color: theme.palette.secondary.main, // 土曜日の色をブルーに変更
+  "&.saturday": {
+    color: theme.palette.primary.main,
   },
-  '&.sunday': {
-    color: theme.palette.error.main,
+  "&.sunday": {
+    color: theme.palette.secondary.main,
   },
-  '&.holiday': {
-    backgroundColor: '#f0f4f8', // 休業日の背景色をナチュラルな色に変更
+  "&.holiday": {
+    backgroundColor: theme.palette.action.disabledBackground,
   },
-}))
+}));
 
 const TimeSlotButton = styled(Button)(({ theme }) => ({
-  minWidth: '100%',
-  width: '100%',
-  height: '100%',
-  padding: '2px',
-  fontSize: '0.9rem',
-  borderRadius: '4px',
-  transition: 'all 0.3s ease',
-  '&.available': {
+  minWidth: "100%",
+  width: "100%",
+  height: "100%",
+  padding: "2px",
+  fontSize: "0.9rem",
+  borderRadius: "4px",
+  "&.available": {
     color: theme.palette.primary.main,
-    '&:hover': {
-      backgroundColor: theme.palette.primary.light,
-      color: theme.palette.primary.contrastText,
-    },
   },
-  '&.unavailable': {
+  "&.unavailable": {
     color: theme.palette.text.disabled,
   },
-  // 予約済みのスロットを灰色の×に変更
-  '&.reserved': {
-    color: theme.palette.text.disabled,
-  },
-}))
+}));
 
-const ScrollableTableContainer = styled(TableContainer)<{ component?: React.ElementType }>(({ theme }) => ({
-  maxHeight: 'calc(100vh - 280px)',
-  overflow: 'auto',
-  width: '100%',
-  '&::-webkit-scrollbar': {
-    width: '8px',
+const ScrollableTableContainer = styled(TableContainer)<{
+  component?: React.ElementType;
+}>(({ theme }) => ({
+  maxHeight: "calc(100vh - 280px)",
+  overflow: "auto",
+  width: "100%",
+  "&::-webkit-scrollbar": {
+    width: "10px",
   },
-  '&::-webkit-scrollbar-track': {
-    background: 'transparent',
+  "&::-webkit-scrollbar-track": {
+    background: "transparent",
   },
-  '&::-webkit-scrollbar-thumb': {
+  "&::-webkit-scrollbar-thumb": {
     backgroundColor: theme.palette.grey[300],
-    borderRadius: '4px',
+    borderRadius: "5px",
   },
-  paddingRight: '8px',
-}))
+  paddingRight: "10px",
+}));
 
-const OrangeButton = styled(Button)(({ theme }) => ({
-  backgroundColor: '#f97316',
-  color: 'white',
-  '&:hover': {
-    backgroundColor: '#ea580c',
-  },
-}))
-
-const DateSelection: React.FC<DateSelectionProps> = ({ onDateTimeSelect, onBack, selectedStaffId, selectedMenuId }) => {
-  const [startDate, setStartDate] = useState(moment().startOf('day'));
-  const [availableSlots, setAvailableSlots] = useState<Record<string, string[]>>({});
-
-  const [reservedSlots, setReservedSlots] = useState<Record<string, { startTime: string; endTime: string }[]>>({});
-  const [operatingHours, setOperatingHours] = useState<Record<string, { isHoliday: boolean; openTime: string | null; closeTime: string | null }>>({});
-  const [selectedDateTime, setSelectedDateTime] = useState<Date | null>(null);
+const DateSelection: React.FC<DateSelectionProps> = ({
+  onDateTimeSelect,
+  onBack,
+  selectedStaffId,
+  selectedMenuId,
+}) => {
+  const [startDate, setStartDate] = useState(moment().startOf("day"));
+  const [availableSlots, setAvailableSlots] = useState<
+    Record<string, string[]>
+  >({});
+  const [selectedStartTime, setSelectedStartTime] = useState<Date | null>(null);
+  const [selectedEndTime, setSelectedEndTime] = useState<Date | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { selectedStaff } = useReservation();
-  const params = useParams();
-  const salonId = params["user-id"] as string;
+  const [menuDuration, setMenuDuration] = useState<number>(0);
 
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const displayDays = isMobile ? 7 : 14;
 
   useEffect(() => {
-
-    if (selectedStaff) {
-      fetchAvailableSlots();
-      fetchReservedSlots();
+    if (selectedStaffId && selectedMenuId) {
+      fetchStaffShifts();
+      fetchMenuDuration();
     }
-    fetchOperatingHours();
-  }, [startDate, displayDays, selectedStaff, salonId]);
+  }, [startDate, displayDays, selectedStaffId, selectedMenuId]);
 
-  const fetchAvailableSlots = async () => {
-    if (!selectedStaff) {
-      setError("スタッフが選択されていません");
-      return;
-    }
-
-    const endDate = moment(startDate).add(displayDays - 1, 'days').format('YYYY-MM-DD');
+  const fetchStaffShifts = async () => {
     try {
-      const response = await fetch(`/api/staff-availability?staffId=${selectedStaff.id}&startDate=${startDate.format('YYYY-MM-DD')}&endDate=${endDate}`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch staff availability');
-      }
-      const data = await response.json();
-
-      const newAvailableSlots: Record<string, string[]> = {};
-      for (let i = 0; i < displayDays; i++) {
-        const date = moment(startDate).add(i, 'days').format('YYYY-MM-DD');
-        const shifts = data[date] || [];
-        newAvailableSlots[date] = generateTimeSlots(shifts);
-      }
-      setAvailableSlots(newAvailableSlots);
-    } catch (error) {
-      console.error('Error fetching available slots:', error);
-      setError('利用可能な時間枠の取得に失敗しました');
+      const endDate = startDate
+        .clone()
+        .add(displayDays - 1, "days")
+        .format("YYYY-MM-DD");
+      const response = await fetch(
+        `/api/get-staff-shifts?staffId=${selectedStaffId}&startDate=${startDate.format(
+          "YYYY-MM-DD"
+        )}&endDate=${endDate}`
+      );
+      if (!response.ok) throw new Error("Failed to fetch staff shifts");
+      const shifts = await response.json();
+      processShiftsData(shifts);
+    } catch (err) {
+      console.error("Error fetching staff shifts:", err);
+      setError("スタッフのシフト情報の取得に失敗しました");
     }
   };
 
-  const fetchReservedSlots = async () => {
-    if (!selectedStaff) {
-      return;
-    }
-
-    const endDate = moment(startDate).add(displayDays - 1, 'days').format('YYYY-MM-DD');
+  const fetchMenuDuration = async () => {
     try {
-      const response = await fetch(`/api/staff-reservations?staffId=${selectedStaff.id}&startDate=${startDate.format('YYYY-MM-DD')}&endDate=${endDate}`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch staff reservations');
-      }
-      const data = await response.json();
-      setReservedSlots(data);
-    } catch (error) {
-      console.error('Error fetching reserved slots:', error);
-      setError('予約済み時間帯の取得に失敗しました');
+      const response = await fetch(
+        `/api/get-menu-duration?menuId=${selectedMenuId}`
+      );
+      if (!response.ok) throw new Error("Failed to fetch menu duration");
+      const { duration } = await response.json();
+      setMenuDuration(duration);
+    } catch (err) {
+      console.error("Error fetching menu duration:", err);
+      setError("メニュー情報の取得に失敗しました");
     }
   };
 
-  const fetchOperatingHours = async () => {
-    const endDate = moment(startDate).add(displayDays - 1, 'days').format('YYYY-MM-DD');
-    try {
-      const response = await fetch(`/api/salon-operating-hours?salonId=${salonId}&startDate=${startDate.format('YYYY-MM-DD')}&endDate=${endDate}`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch salon operating hours');
+  const processShiftsData = (shifts: any[]) => {
+    const slots: Record<string, string[]> = {};
+    shifts.forEach((shift) => {
+      if (shift.shift_status === "出勤") {
+        const date = moment(shift.date).format("YYYY-MM-DD");
+        const startTime = moment(shift.start_time, "HH:mm:ss");
+        const endTime = moment(shift.end_time, "HH:mm:ss");
+        slots[date] = [];
+        while (startTime.isBefore(endTime)) {
+          slots[date].push(startTime.format("HH:mm"));
+          startTime.add(30, "minutes");
+        }
       }
-      const { success, data } = await response.json();
-      if (success) {
-        setOperatingHours(data);
-      } else {
-        throw new Error('Failed to fetch salon operating hours');
-      }
-    } catch (error) {
-      console.error('Error fetching operating hours:', error);
-      setError('営業時間の取得に失敗しました');
-    }
-  };
-
-  const generateTimeSlots = (shifts: { startTime: string; endTime: string }[]): string[] => {
-    const allSlots = Array.from({ length: 28 }, (_, i) => 
-      moment('09:00', 'HH:mm').add(i * 30, 'minutes').format('HH:mm')
-    );
-    
-    return allSlots.filter(slot => 
-      shifts.some(shift => 
-        moment(slot, 'HH:mm').isBetween(moment(shift.startTime, 'HH:mm'), moment(shift.endTime, 'HH:mm'), null, '[]')
-      )
-    );
-  };
-
-  const isSlotAvailable = (date: string, time: string): boolean => {
-    const dateTimeString = `${date}T${time}:00`;
-    const slotDateTime = moment(dateTimeString);
-    
-    const isAvailableInShift = availableSlots[date]?.includes(time);
-    
-    const isReserved = reservedSlots[date]?.some(reservation => {
-      const reservationStart = moment(reservation.startTime);
-      const reservationEnd = moment(reservation.endTime);
-      return slotDateTime.isBetween(reservationStart, reservationEnd, null, '[)');
     });
-
-    return isAvailableInShift && !isReserved;
+    setAvailableSlots(slots);
   };
 
-  const handleTimeSlotClick = (date: moment.Moment, time: string): void => {
-    const selectedDate = date.format('YYYY-MM-DD');
-    setSelectedDateTime(moment(`${selectedDate} ${time}`).toDate());
+  const handleTimeSlotClick = (date: moment.Moment, time: string) => {
+    const startTime = moment(`${date.format("YYYY-MM-DD")} ${time}`);
+    const endTime = startTime.clone().add(menuDuration, "minutes");
+    setSelectedStartTime(startTime.toDate());
+    setSelectedEndTime(endTime.toDate());
     setIsDialogOpen(true);
   };
 
-  const handleConfirm = (): void => {
-    if (selectedDateTime) {
-      onDateTimeSelect(selectedDateTime);
+  const handleConfirm = () => {
+    if (selectedStartTime && selectedEndTime) {
+      onDateTimeSelect(selectedStartTime, selectedEndTime);
     }
     setIsDialogOpen(false);
   };
 
-  const handleCancel = (): void => {
+  const handleCancel = () => {
     setIsDialogOpen(false);
     setSelectedStartTime(null);
     setSelectedEndTime(null);
   };
 
-  const handlePreviousPeriod = (): void => {
-    const newStartDate = moment(startDate).subtract(7, 'days');
-    if (newStartDate.isSameOrAfter(moment(), 'day')) {
+  const handlePreviousPeriod = () => {
+    const newStartDate = moment(startDate).subtract(7, "days");
+    if (newStartDate.isSameOrAfter(moment(), "day")) {
       setStartDate(newStartDate);
     }
   };
 
-  const handleNextPeriod = (): void => {
-    setStartDate(moment(startDate).add(7, 'days'));
+  const handleNextPeriod = () => {
+    setStartDate(moment(startDate).add(7, "days"));
   };
 
-  const isHoliday = (date: moment.Moment): boolean => {
-    const dateStr = date.format('YYYY-MM-DD');
-    return operatingHours[dateStr]?.isHoliday || false;
+  const isHoliday = (date: moment.Moment) => {
+    return date.date() === 25; // 例: 25日を休業日とする
   };
 
-  const renderTimeSlots = (date: moment.Moment, time: string): JSX.Element => {
-    const dateStr = date.format('YYYY-MM-DD')
-    if (isHoliday(date)) {
-      return (
-        <Typography variant="body2" color="text.secondary">
-          休業日
-        </Typography>
-      )
-    }
-    const isAvailable = isSlotAvailable(dateStr, time)
-    const isReserved = reservedSlots[dateStr]?.some(reservation => 
-      moment(`${dateStr}T${time}`).isBetween(moment(reservation.startTime), moment(reservation.endTime), null, '[)')
-    )
-
+  const renderTimeSlots = (date: moment.Moment, time: string) => {
+    const dateStr = date.format("YYYY-MM-DD");
+    const slots = availableSlots[dateStr] || [];
+    const isAvailable = slots.includes(time);
     return (
-      <Tooltip title={isAvailable ? '予約可能' : (isReserved ? '予約済み' : '予約不可')} arrow>
-        <TimeSlotButton
-          onClick={() => isAvailable && handleTimeSlotClick(date, time)}
-          disabled={!isAvailable || isReserved}
-          className={isReserved ? 'reserved' : (isAvailable ? 'available' : 'unavailable')}
-        >
-          {isAvailable ? '〇' : '×'}
-        </TimeSlotButton>
-      </Tooltip>
-    )
-  }
+      <TimeSlotButton
+        onClick={() => isAvailable && handleTimeSlotClick(date, time)}
+        disabled={!isAvailable}
+        className={isAvailable ? "available" : "unavailable"}
+      >
+        {isAvailable ? "〇" : "×"}
+      </TimeSlotButton>
+    );
+  };
 
-  const renderYearMonthRow = (): JSX.Element => {
+  const timeSlots = Array.from({ length: 28 }, (_, i) =>
+    moment("09:00", "HH:mm")
+      .add(i * 30, "minutes")
+      .format("HH:mm")
+  );
+
+  const renderYearMonthRow = () => {
     const months: { [key: string]: number } = {};
     Array.from({ length: displayDays }, (_, i) => {
-      const date = moment(startDate).add(i, 'days');
+      const date = moment(startDate).add(i, "days");
       const key = `${date.year()}年${date.month() + 1}月`;
       if (!months[key]) {
         months[key] = 0;
       }
       months[key]++;
     });
-  
+
     return (
       <TableRow>
-        <StyledTableCell className="header year-month nav-button time" style={{ left: 0 }}>
-          <OrangeButton onClick={handlePreviousPeriod} disabled={startDate.isSame(moment(), 'day')} fullWidth>
-            ◀前の{isMobile ? '一週間' : '二週間'}
-          </OrangeButton>
+        <StyledTableCell
+          className="header year-month nav-button time"
+          style={{ left: 0 }}
+        >
+          <Button
+            onClick={handlePreviousPeriod}
+            disabled={startDate.isSame(moment(), "day")}
+            fullWidth
+          >
+            ◀前の{isMobile ? "一週間" : "二週間"}
+          </Button>
         </StyledTableCell>
         {Object.entries(months).map(([key, count], index) => (
           <StyledTableCell
@@ -406,118 +325,106 @@ const DateSelection: React.FC<DateSelectionProps> = ({ onDateTimeSelect, onBack,
             <Typography variant="h6">{key}</Typography>
           </StyledTableCell>
         ))}
-        <StyledTableCell className="header year-month nav-button time-right" style={{ right: 0 }}>
-          <OrangeButton onClick={handleNextPeriod} fullWidth>
-            次の{isMobile ? '一週間' : '二週間'}▶
-          </OrangeButton>
+        <StyledTableCell
+          className="header year-month nav-button time-right"
+          style={{ right: 0 }}
+        >
+          <Button onClick={handleNextPeriod} fullWidth>
+            次の{isMobile ? "一週間" : "二週間"}▶
+          </Button>
         </StyledTableCell>
       </TableRow>
     );
   };
-  
-  const renderDayRow = (): JSX.Element => {
+
+  const renderDayRow = () => {
     return (
       <TableRow>
         <StyledTableCell className="header day-date time">時間</StyledTableCell>
         {Array.from({ length: displayDays }, (_, i) => {
-          const date = moment(startDate).add(i, 'days');
+          const date = moment(startDate).add(i, "days");
           const isSaturday = date.day() === 6;
           const isSunday = date.day() === 0;
           return (
-            <StyledTableCell 
-              key={i} 
-              className={`header day-date ${isSaturday ? 'saturday' : ''} ${isSunday ? 'sunday' : ''}`}
+            <StyledTableCell
+              key={i}
+              className={`header day-date ${isSaturday ? "saturday" : ""} ${
+                isSunday ? "sunday" : ""
+              }`}
             >
-              <Typography variant="body2">{date.format('(ddd)')}</Typography>
-              <Typography variant="h6">{date.format('D')}</Typography>
+              <Typography variant="body2">{date.format("(ddd)")}</Typography>
+              <Typography variant="h6">{date.format("D")}</Typography>
             </StyledTableCell>
           );
         })}
-        <StyledTableCell className="header day-date time-right">時間</StyledTableCell>
+        <StyledTableCell className="header day-date time-right">
+          時間
+        </StyledTableCell>
       </TableRow>
     );
   };
 
-  const timeSlots: string[] = Array.from({ length: 28 }, (_, i) => 
-    moment('09:00', 'HH:mm').add(i * 30, 'minutes').format('HH:mm')
-  );
-
   return (
     <ThemeProvider theme={theme}>
-      <Box sx={{ marginTop: '20px', width: '100%', overflowX: 'hidden' }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', marginBottom: '20px', justifyContent: 'space-between' }}>
-          <OrangeButton onClick={onBack} startIcon={<ChevronLeft />}>
-            戻る
-          </OrangeButton>
-          <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-            スタッフ選択: {selectedStaff ? selectedStaff.name : '未選択'}
-          </Typography>
-          
-            <IconButton>
-             
-            </IconButton>
-       
-        </Box>
-        <Paper elevation={3} sx={{ position: 'relative', overflow: 'hidden', borderRadius: '12px' }}>
-          <Table style={{ borderCollapse: 'separate', borderSpacing: 0 }}>
+      <Box sx={{ marginTop: "20px", width: "100%", overflowX: "hidden" }}>
+        <Button
+          onClick={onBack}
+          startIcon={<ChevronLeft />}
+          style={{ marginBottom: "10px" }}
+        >
+          戻る
+        </Button>
+        <Box
+          sx={{
+            position: "relative",
+            overflow: "hidden",
+            border: "2px solid #000",
+          }}
+        >
+          <Table style={{ borderCollapse: "separate", borderSpacing: 0 }}>
             <TableHead>
               {renderYearMonthRow()}
               {renderDayRow()}
             </TableHead>
           </Table>
           <ScrollableTableContainer>
-            <Table style={{ borderCollapse: 'separate', borderSpacing: 0 }}>
+            <Table style={{ borderCollapse: "separate", borderSpacing: 0 }}>
               <TableBody>
                 {timeSlots.map((time, index) => (
                   <TableRow key={index}>
-                    <StyledTableCell className="time" isHourBorder={time.endsWith(':00')}>
+                    <StyledTableCell
+                      className="time"
+                      isHourBorder={time.endsWith(":00")}
+                    >
                       {time}
                     </StyledTableCell>
                     {Array.from({ length: displayDays }, (_, i) => {
-                      const date = moment(startDate).add(i, 'days')
+                      const date = moment(startDate).add(i, "days");
                       if (isHoliday(date)) {
                         return index === 0 ? (
                           <StyledTableCell
                             key={i}
                             className="holiday"
                             rowSpan={28}
-                            isHourBorder={time.endsWith(':00')}
+                            isHourBorder={time.endsWith(":00")}
                           >
-                            <Box
-                              sx={{
-                                display: 'flex',
-                                flexDirection: 'column',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                height: '100%',
-                                borderRadius: '8px',
-                                padding: '8px',
-                              }}
-                            >
-                              <Event sx={{ fontSize: 40, color: 'text.secondary' }} />
-                              <Typography
-                                variant="h6"
-                                color="text.secondary"
-                                sx={{
-                                  mt: 1,
-                                  writingMode: 'vertical-rl',
-                                  textOrientation: 'upright',
-                                  letterSpacing: '0.5em',
-                                }}
-                              >
-                                休業日
-                              </Typography>
-                            </Box>
+                            <Typography variant="h6">休業日</Typography>
                           </StyledTableCell>
-                        ) : null
+                        ) : null;
                       }
                       return (
-                        <StyledTableCell key={i} isHourBorder={time.endsWith(':00')}>
+                        <StyledTableCell
+                          key={i}
+                          isHourBorder={time.endsWith(":00")}
+                        >
                           {renderTimeSlots(date, time)}
                         </StyledTableCell>
-                      )
+                      );
                     })}
-                    <StyledTableCell className="time-right" isHourBorder={time.endsWith(':00')}>
+                    <StyledTableCell
+                      className="time-right"
+                      isHourBorder={time.endsWith(":00")}
+                    >
                       {time}
                     </StyledTableCell>
                   </TableRow>
@@ -525,38 +432,52 @@ const DateSelection: React.FC<DateSelectionProps> = ({ onDateTimeSelect, onBack,
               </TableBody>
             </Table>
           </ScrollableTableContainer>
-        </Paper>
-        <Dialog 
-          open={isDialogOpen} 
-          onClose={handleCancel}
-          TransitionComponent={Fade}
-          transitionDuration={300}
-        >
-          <DialogTitle style={{ backgroundColor: theme.palette.primary.main, color: theme.palette.primary.contrastText }}>
+        </Box>
+        <Dialog open={isDialogOpen} onClose={handleCancel}>
+          <DialogTitle
+            style={{
+              backgroundColor: theme.palette.primary.light,
+              color: theme.palette.primary.contrastText,
+            }}
+          >
             予約確認
           </DialogTitle>
           <DialogContent>
-            <DialogContentText style={{ marginTop: '16px' }}>
-              {selectedStartTime && selectedEndTime && `${moment(selectedStartTime).format('YYYY年M月D日(ddd) HH:mm')} - ${moment(selectedEndTime).format('HH:mm')}に予約しますか？`}
+            <DialogContentText style={{ marginTop: "16px" }}>
+              {selectedStartTime &&
+                selectedEndTime &&
+                `${moment(selectedStartTime).format(
+                  "YYYY年M月D日(ddd) HH:mm"
+                )} - ${moment(selectedEndTime).format(
+                  "HH:mm"
+                )}に予約しますか？`}
             </DialogContentText>
           </DialogContent>
           <DialogActions>
             <Button onClick={handleCancel} color="primary">
               キャンセル
             </Button>
-            <OrangeButton onClick={handleConfirm} variant="contained">
+            <Button onClick={handleConfirm} variant="contained" color="primary">
               確定
-            </OrangeButton>
+            </Button>
           </DialogActions>
         </Dialog>
-        <Snackbar open={!!error} autoHideDuration={6000} onClose={() => setError(null)}>
-          <Alert onClose={() => setError(null)} severity="error" variant="filled">
+        <Snackbar
+          open={!!error}
+          autoHideDuration={6000}
+          onClose={() => setError(null)}
+        >
+          <Alert
+            onClose={() => setError(null)}
+            severity="error"
+            variant="filled"
+          >
             {error}
           </Alert>
         </Snackbar>
       </Box>
     </ThemeProvider>
-  )
-}
+  );
+};
 
-export default DateSelection
+export default DateSelection;

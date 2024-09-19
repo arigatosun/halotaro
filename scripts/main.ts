@@ -17,6 +17,13 @@ import { scrapeCoupons } from "./coupon/scrapeCoupons";
 import { processCouponData } from "./coupon/processCouponData";
 import { saveCoupons } from "./coupon/save-coupons";
 import { decrypt, encrypt } from "@/utils/encryption";
+import { processReservation } from "@/utils/reservaitonProcessor";
+import {
+  fillReservationForm,
+  submitReservation,
+  updateSyncStatus,
+} from "./harotaro-to-salonboard/syncReseravtionToSalonboardHelpers";
+import { format } from "date-fns";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -26,8 +33,6 @@ const supabase = createClient(
 interface SessionData {
   cookies: any[];
 }
-
-const SESSION_FILE = path.join(process.cwd(), "session.json");
 
 export async function saveSession(userId: string, context: BrowserContext) {
   const cookies = await context.cookies();
@@ -136,6 +141,56 @@ async function loginAndNavigate(
   );
 }
 
+// サロンボードのログイン画面にログインする
+async function loginWithManualCaptcha(
+  page: Page,
+  userId: string,
+  password: string
+) {
+  await page.goto("https://salonboard.com/login/");
+  await page.fill('input[name="userId"]', userId);
+  await page.fill('input[name="password"]', password);
+
+  await Promise.all([page.click(".common-CNCcommon__primaryBtn.loginBtnSize")]);
+
+  await page.waitForEvent("load");
+
+  const isLoggedIn = await page.isVisible("#todayReserve");
+  if (!isLoggedIn) {
+    throw new Error("Login failed: Dashboard element not found");
+  }
+
+  console.log("ログイン完了");
+}
+
+async function checkAndRelogin(
+  page: Page,
+  userId: string,
+  password: string,
+  context: BrowserContext,
+  haloTaroUserId: string
+) {
+  const errorSelector = ".mod_color_e50000.mod_font01.mod_align_center";
+  const isErrorPresent = await page.isVisible(errorSelector);
+
+  if (isErrorPresent) {
+    console.log("セッションの期限切れを検出しました。再ログインを試みます。");
+    await loginWithManualCaptcha(page, userId, password);
+    await saveSession(haloTaroUserId, context);
+
+    // 現在のURLに再度アクセス
+    await page.reload({ waitUntil: "networkidle" });
+
+    // 再ログイン後もエラーが表示される場合
+    if (await page.isVisible(errorSelector)) {
+      throw new Error(
+        "再ログイン後もエラーが発生しています。手動での確認が必要です。"
+      );
+    }
+  }
+}
+
+// サロンボードの予約情報を同期する
 export async function syncReservations(
   haloTaroUserId: string,
   salonboardUserId: string,
@@ -217,6 +272,7 @@ export async function syncReservations(
   }
 }
 
+// サロンボードのメニュー情報を同期する
 export async function syncMenus(
   haloTaroUserId: string,
   salonboardUserId: string,
@@ -258,6 +314,7 @@ export async function syncMenus(
   }
 }
 
+// サロンボードのスタッフ情報を同期する
 export async function syncStaffData(
   haloTaroUserId: string,
   salonboardUserId: string,
@@ -301,6 +358,7 @@ export async function syncStaffData(
   }
 }
 
+// サロンボードのクーポン情報を同期する
 export async function syncCoupons(
   haloTaroUserId: string,
   salonboardUserId: string,
@@ -343,50 +401,76 @@ export async function syncCoupons(
   }
 }
 
-async function loginWithManualCaptcha(
-  page: Page,
-  userId: string,
-  password: string
+export async function syncReservationToSalonboard(
+  haloTaroUserId: string,
+  salonboardUserId: string,
+  password: string,
+  reservationId: string
 ) {
-  await page.goto("https://salonboard.com/login/");
-  await page.fill('input[name="userId"]', userId);
-  await page.fill('input[name="password"]', password);
+  logger.log(
+    "予約情報のサロンボードへの同期開始 user_id:",
+    haloTaroUserId,
+    "reservation_id:",
+    reservationId
+  );
+  logger.log(new Date().toISOString());
 
-  await Promise.all([page.click(".common-CNCcommon__primaryBtn.loginBtnSize")]);
+  const { browser, context } = await setupBrowser();
+  const page = await context.newPage();
 
-  await page.waitForEvent("load");
+  try {
+    // サロンボードにログインし、スケジュールページに移動
+    await loginAndNavigate(
+      page,
+      context,
+      haloTaroUserId,
+      salonboardUserId,
+      password,
+      "https://salonboard.com/KLP/schedule/salonSchedule/"
+    );
 
-  const isLoggedIn = await page.isVisible("#todayReserve");
-  if (!isLoggedIn) {
-    throw new Error("Login failed: Dashboard element not found");
+    // スタッフIDを取得
+    const staffId = await getStaffId(page);
+    if (!staffId) {
+      throw new Error("スタッフIDの取得に失敗しました。");
+    }
+
+    // 現在の時間を取得
+    const now = new Date();
+    const currentHour = format(now, "HH");
+
+    // 予約ページのURLを構築
+    const reserveUrl = `https://salonboard.com/KLP/reserve/ext/extReserveRegist/?staffId=${staffId}&date=${format(
+      now,
+      "yyyyMMdd"
+    )}&rsvHour=${currentHour}&rsvMinute=00`;
+
+    // 予約ページに遷移
+    await page.goto(reserveUrl);
+
+    // 5秒待機（テスト用）
+    await page.waitForTimeout(5000);
+
+    logger.log("予約ページへの遷移が完了しました。");
+    return "予約ページへの遷移が完了しました。";
+  } catch (error) {
+    logger.error("サロンボードへの予約同期中にエラーが発生しました:", error);
+    throw error;
+  } finally {
+    await browser.close();
   }
-
-  console.log("ログイン完了");
 }
 
-async function checkAndRelogin(
-  page: Page,
-  userId: string,
-  password: string,
-  context: BrowserContext,
-  haloTaroUserId: string
-) {
-  const errorSelector = ".mod_color_e50000.mod_font01.mod_align_center";
-  const isErrorPresent = await page.isVisible(errorSelector);
-
-  if (isErrorPresent) {
-    console.log("セッションの期限切れを検出しました。再ログインを試みます。");
-    await loginWithManualCaptcha(page, userId, password);
-    await saveSession(haloTaroUserId, context);
-
-    // 現在のURLに再度アクセス
-    await page.reload({ waitUntil: "networkidle" });
-
-    // 再ログイン後もエラーが表示される場合
-    if (await page.isVisible(errorSelector)) {
-      throw new Error(
-        "再ログイン後もエラーが発生しています。手動での確認が必要です。"
-      );
+async function getStaffId(page: Page): Promise<string | null> {
+  const staffElement = await page.$('li.scheduleMainHead[id^="STAFF_"]');
+  if (staffElement) {
+    const idAttribute = await staffElement.getAttribute("id");
+    if (idAttribute) {
+      const match = idAttribute.match(/STAFF_(\w+)_/);
+      if (match) {
+        return match[1];
+      }
     }
   }
+  return null;
 }
