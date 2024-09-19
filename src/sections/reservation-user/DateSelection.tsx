@@ -1,8 +1,6 @@
-
 'use client'
 
 import React, { useState, useEffect } from 'react'
-
 import { 
   Table, 
   TableBody, 
@@ -36,11 +34,9 @@ import 'moment/locale/ja'
 import { useReservation } from "@/contexts/reservationcontext"
 import { useParams } from 'next/navigation'
 
-
 moment.locale('ja')
 
 interface DateSelectionProps {
-
   onDateTimeSelect: (dateTime: Date) => void
   onBack: () => void
 }
@@ -200,10 +196,9 @@ const OrangeButton = styled(Button)(({ theme }) => ({
   },
 }))
 
-const DateSelection: React.FC<DateSelectionProps> = ({ onDateTimeSelect, onBack, selectedStaffId, selectedMenuId }) => {
+const DateSelection: React.FC<DateSelectionProps> = ({ onDateTimeSelect, onBack }) => {
   const [startDate, setStartDate] = useState(moment().startOf('day'));
   const [availableSlots, setAvailableSlots] = useState<Record<string, string[]>>({});
-
   const [reservedSlots, setReservedSlots] = useState<Record<string, { startTime: string; endTime: string }[]>>({});
   const [operatingHours, setOperatingHours] = useState<Record<string, { isHoliday: boolean; openTime: string | null; closeTime: string | null }>>({});
   const [selectedDateTime, setSelectedDateTime] = useState<Date | null>(null);
@@ -217,7 +212,6 @@ const DateSelection: React.FC<DateSelectionProps> = ({ onDateTimeSelect, onBack,
   const displayDays = isMobile ? 7 : 14;
 
   useEffect(() => {
-
     if (selectedStaff) {
       fetchAvailableSlots();
       fetchReservedSlots();
@@ -332,8 +326,7 @@ const DateSelection: React.FC<DateSelectionProps> = ({ onDateTimeSelect, onBack,
 
   const handleCancel = (): void => {
     setIsDialogOpen(false);
-    setSelectedStartTime(null);
-    setSelectedEndTime(null);
+    setSelectedDateTime(null);
   };
 
   const handlePreviousPeriod = (): void => {
@@ -537,7 +530,7 @@ const DateSelection: React.FC<DateSelectionProps> = ({ onDateTimeSelect, onBack,
           </DialogTitle>
           <DialogContent>
             <DialogContentText style={{ marginTop: '16px' }}>
-              {selectedStartTime && selectedEndTime && `${moment(selectedStartTime).format('YYYY年M月D日(ddd) HH:mm')} - ${moment(selectedEndTime).format('HH:mm')}に予約しますか？`}
+              {selectedDateTime && `${moment(selectedDateTime).format('YYYY年M月D日(ddd) HH:mm')}に予約しますか？`}
             </DialogContentText>
           </DialogContent>
           <DialogActions>
