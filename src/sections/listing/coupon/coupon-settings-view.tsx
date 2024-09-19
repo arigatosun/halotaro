@@ -244,17 +244,6 @@ const CouponManagement: React.FC = () => {
           <PlusCircle className="mr-2 h-4 w-4" />
           クーポン新規追加
         </Button>
-        <Button
-          variant="outline"
-          onClick={() =>
-            toast({
-              title: "並び替え",
-              description: "クーポン並び替え登録がクリックされました",
-            })
-          }
-        >
-          クーポン並び替え登録
-        </Button>
       </div>
       <Table>
         <TableHeader>
@@ -265,7 +254,7 @@ const CouponManagement: React.FC = () => {
             <TableHead>クーポン名</TableHead>
             <TableHead>価格</TableHead>
             <TableHead>所要時間</TableHead>
-            <TableHead>詳細</TableHead>
+            <TableHead>編集</TableHead>
             <TableHead>予約可能</TableHead>
             <TableHead>削除</TableHead>
           </TableRow>
