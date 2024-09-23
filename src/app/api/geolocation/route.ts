@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { geolocation } from "@vercel/edge";
 
-export const config = {
-  runtime: "edge",
-};
+export const runtime = "edge";
 
 export async function GET(request: NextRequest) {
   const { city, country, region } = geolocation(request);
