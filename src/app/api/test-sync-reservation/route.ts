@@ -1,33 +1,33 @@
-// app/api/salonboard-sync-reservation/route.ts
+// app/api/test-sync-reservation/route.ts
 
 import { NextRequest, NextResponse } from "next/server";
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
 import { cookies } from "next/headers";
-import { decrypt } from "@/utils/encryption";
 import { syncReservationToSalonboard } from "../../../../scripts/main";
+import { decrypt } from "@/utils/encryption";
 import { logger } from "../../../../scripts/logger";
 
 export async function POST(request: NextRequest) {
   const supabase = createRouteHandlerClient({ cookies });
 
   try {
-    const { haloTaroUserId, reservationId } = await request.json();
+    const { userId } = await request.json();
 
-    if (!haloTaroUserId || !reservationId) {
+    if (!userId) {
       return NextResponse.json(
-        {
-          error: "Bad Request",
-          message: "User ID and Reservation ID are required",
-        },
+        { error: "Bad Request", message: "User ID is required" },
         { status: 400 }
       );
     }
 
-    // Supabaseからサロンボードの認証情報を取得
+    // テスト用の予約ID
+    const testReservationId = "12345678-1234-5678-1234-567812345679";
+
+    // サロンボードの認証情報を取得
     const { data: credentials, error: credentialsError } = await supabase
       .from("salonboard_credentials")
       .select("username, encrypted_password")
-      .eq("user_id", haloTaroUserId)
+      .eq("user_id", userId)
       .single();
 
     if (credentialsError || !credentials) {
@@ -54,62 +54,59 @@ export async function POST(request: NextRequest) {
         reservation_customers (name, name_kana, phone)
       `
       )
-      .eq("id", reservationId)
+      .eq("id", testReservationId)
       .single();
+
+    console.log(reservation);
 
     if (reservationError || !reservation) {
       logger.error("Failed to retrieve reservation data", reservationError);
       return NextResponse.json(
-        { error: "Not Found", message: "Reservation data not found" },
+        { error: "Not Found", message: "Test reservation data not found" },
         { status: 404 }
       );
     }
 
-    // 予約データを適切な形式に変換
+    // reservationData オブジェクトを構築
     const reservationData = {
       startTime: reservation.start_time,
       endTime: reservation.end_time,
-      staffName: reservation.staff.name,
+      staffName: reservation.staff?.name,
       customerInfo: {
-        name: reservation.reservation_customers.name,
-        kana: reservation.reservation_customers.name_kana,
-        phone: reservation.reservation_customers.phone,
+        name: reservation.reservation_customers[0]?.name,
+        kana: reservation.reservation_customers[0]?.name_kana,
+        phone: reservation.reservation_customers[0]?.phone,
       },
-      memo: reservation.memo || "ハロタロからの予約",
+      memo: reservation.memo || "テスト予約",
     };
 
-    // syncReservationToSalonboard関数を呼び出し
+    // 予約の同期を実行
     const result = await syncReservationToSalonboard(
-      haloTaroUserId,
+      userId,
       credentials.username,
       decrypt(credentials.encrypted_password),
-      reservationId,
+      testReservationId,
       reservationData
     );
 
-    return NextResponse.json({ message: result });
+    return NextResponse.json({
+      message: "Test reservation synced successfully",
+      result,
+    });
   } catch (error) {
-    logger.error("Error syncing reservation to Salonboard:", error);
+    logger.error("Error syncing test reservation:", error);
 
     if (error instanceof Error) {
-      // エラータイプに基づいて適切なステータスコードを設定
-      let statusCode = 500;
-      if (error.message.includes("Not Found")) {
-        statusCode = 404;
-      } else if (error.message.includes("Bad Request")) {
-        statusCode = 400;
-      }
-
       return NextResponse.json(
         { error: "Sync Failed", message: error.message },
-        { status: statusCode }
+        { status: 500 }
       );
     }
 
     return NextResponse.json(
       {
         error: "Internal Server Error",
-        message: "An unexpected error occurred",
+        message: "An unexpected error occurred during test sync",
       },
       { status: 500 }
     );

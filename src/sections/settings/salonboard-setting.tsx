@@ -104,16 +104,19 @@ const SalonBoardIntegrationView: React.FC = () => {
     setResult(null);
 
     try {
-      const response = await fetch("/api/salonboard-sync-reservation", {
+      const response = await fetch("/api/test-sync-reservation", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ haloTaroUserId: user.id }),
+        body: JSON.stringify({ userId: user.id }),
       });
 
       if (!response.ok) {
-        throw new Error("Reservation sync to Salonboard failed");
+        const errorData = await response.json();
+        throw new Error(
+          errorData.error || "Reservation sync to Salonboard failed"
+        );
       }
 
       const data = await response.json();
@@ -253,13 +256,6 @@ const SalonBoardIntegrationView: React.FC = () => {
                     className="flex-1 bg-pink-500 hover:bg-pink-600"
                   >
                     {isLoading ? "実行中..." : "クーポンを同期"}
-                  </Button>
-                  <Button
-                    onClick={handleSyncReservationToSalonboard}
-                    disabled={isLoading || !savedCredentials}
-                    className="flex-1 bg-yellow-500 hover:bg-yellow-600"
-                  >
-                    {isLoading ? "実行中..." : "予約をサロンボードに同期"}
                   </Button>
                 </div>
               </div>

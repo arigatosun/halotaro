@@ -18,11 +18,7 @@ import { processCouponData } from "./coupon/processCouponData";
 import { saveCoupons } from "./coupon/save-coupons";
 import { decrypt, encrypt } from "@/utils/encryption";
 import { processReservation } from "@/utils/reservaitonProcessor";
-import {
-  fillReservationForm,
-  submitReservation,
-  updateSyncStatus,
-} from "./harotaro-to-salonboard/syncReseravtionToSalonboardHelpers";
+import { fillReservationForm } from "./harotaro-to-salonboard/syncReseravtionToSalonboardHelpers";
 import { format } from "date-fns";
 
 const supabase = createClient(
@@ -82,6 +78,7 @@ async function setupBrowser(): Promise<{
 }> {
   const browser = await chromium.launch({
     headless: false,
+    channel: "chrome", // ここでChromeを使用
     args: [
       "--no-sandbox",
       "--disable-setuid-sandbox",
@@ -89,20 +86,29 @@ async function setupBrowser(): Promise<{
       "--window-position=0,0",
       "--ignore-certifcate-errors",
       "--ignore-certifcate-errors-spki-list",
+      "--disable-blink-features=AutomationControlled", // 追加
+      "--start-maximized", // 追加
     ],
   });
 
   const context = await browser.newContext({
     userAgent:
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
     viewport: { width: 1920, height: 1080 },
     deviceScaleFactor: 1,
-    hasTouch: false,
-    isMobile: false,
+    hasTouch: false, // デスクトップ環境に合わせて変更
+    isMobile: false, // デスクトップ環境に合わせて変更
     locale: "ja-JP",
     timezoneId: "Asia/Tokyo",
     geolocation: { longitude: 139.7594549, latitude: 35.6828387 },
     permissions: ["geolocation"],
+  });
+
+  // navigator.webdriver を偽装してヘッドレス検知を回避
+  await context.addInitScript(() => {
+    Object.defineProperty(navigator, "webdriver", {
+      get: () => false,
+    });
   });
 
   return { browser, context };
@@ -405,7 +411,8 @@ export async function syncReservationToSalonboard(
   haloTaroUserId: string,
   salonboardUserId: string,
   password: string,
-  reservationId: string
+  reservationId: string,
+  reservationData: any
 ) {
   logger.log(
     "予約情報のサロンボードへの同期開始 user_id:",
@@ -429,29 +436,49 @@ export async function syncReservationToSalonboard(
       "https://salonboard.com/KLP/schedule/salonSchedule/"
     );
 
-    // スタッフIDを取得
-    const staffId = await getStaffId(page);
+    // スタッフ名に基づいてスタッフIDを取得
+    const staffId = await getStaffIdByName(page, reservationData.staffName);
     if (!staffId) {
-      throw new Error("スタッフIDの取得に失敗しました。");
+      logger.error(
+        "スタッフが見つかりませんでした。",
+        reservationData.staffName
+      );
+      logger.error(
+        "スタッフが見つかりませんでした。, user_id:",
+        haloTaroUserId
+      );
+      logger.error(
+        "スタッフが見つかりませんでした。, salonboard_user_id:",
+        salonboardUserId
+      );
+      throw new Error(
+        `スタッフ "${reservationData.staffName}" が見つかりませんでした。`
+      );
     }
 
-    // 現在の時間を取得
-    const now = new Date();
-    const currentHour = format(now, "HH");
-
-    // 予約ページのURLを構築
+    // 予約ページに移動
+    const startTime = new Date(reservationData.startTime);
     const reserveUrl = `https://salonboard.com/KLP/reserve/ext/extReserveRegist/?staffId=${staffId}&date=${format(
-      now,
+      startTime,
       "yyyyMMdd"
-    )}&rsvHour=${currentHour}&rsvMinute=00`;
-
-    // 予約ページに遷移
+    )}&rsvHour=${format(
+      startTime,
+      "HH"
+    )}&rsvMinute=00&rlastupdate=20240919182008`;
     await page.goto(reserveUrl);
 
-    // 5秒待機（テスト用）
-    await page.waitForTimeout(5000);
+    // 予約フォームを入力
+    await fillReservationForm(page, reservationData);
 
-    logger.log("予約ページへの遷移が完了しました。");
+    console.log("予約を送信中...");
+    // 予約を送信
+    await page.evaluate(() => {
+      const button = document.querySelector("#regist") as HTMLElement;
+      button.click();
+    });
+
+    await page.waitForTimeout(300000);
+
     return "予約ページへの遷移が完了しました。";
   } catch (error) {
     logger.error("サロンボードへの予約同期中にエラーが発生しました:", error);
@@ -461,16 +488,43 @@ export async function syncReservationToSalonboard(
   }
 }
 
-async function getStaffId(page: Page): Promise<string | null> {
-  const staffElement = await page.$('li.scheduleMainHead[id^="STAFF_"]');
-  if (staffElement) {
-    const idAttribute = await staffElement.getAttribute("id");
-    if (idAttribute) {
-      const match = idAttribute.match(/STAFF_(\w+)_/);
-      if (match) {
-        return match[1];
+function normalizeString(str: string): string {
+  return str
+    .replace(/\s+/g, "") // すべての空白文字（半角、全角、タブ、改行など）を削除
+    .replace(/　/g, "") // 全角スペースを削除
+    .toLowerCase() // 小文字に変換
+    .normalize("NFKC"); // Unicode正規化（全角英数字を半角に変換など）
+}
+
+async function getStaffIdByName(
+  page: Page,
+  staffName: string
+): Promise<string | null> {
+  const normalizedStaffName = normalizeString(staffName);
+
+  // スタッフリストを取得
+  const staffList = await page.$$("li.scheduleMainHead");
+
+  for (const staffElement of staffList) {
+    // スタッフの名前を取得
+    const nameElement = await staffElement.$(".scheduleLinkInner");
+    if (!nameElement) continue;
+
+    const name = await nameElement.innerText();
+    const normalizedName = normalizeString(name);
+
+    // 正規化した名前が一致した場合、IDを取得して返す
+    if (normalizedName === normalizedStaffName) {
+      const idAttribute = await staffElement.getAttribute("id");
+      if (idAttribute) {
+        const match = idAttribute.match(/STAFF_(\w+)_/);
+        if (match) {
+          return match[1];
+        }
       }
     }
   }
+
+  // 一致するスタッフが見つからなかった場合
   return null;
 }

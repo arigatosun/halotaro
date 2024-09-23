@@ -25,7 +25,9 @@ interface ReservationContextType {
   selectedMenus: SelectedMenuItem[];
   setSelectedMenus: React.Dispatch<React.SetStateAction<SelectedMenuItem[]>>;
   selectedDateTime: SelectedDateTime | null;
-  setSelectedDateTime: React.Dispatch<React.SetStateAction<SelectedDateTime | null>>;
+  setSelectedDateTime: React.Dispatch<
+    React.SetStateAction<SelectedDateTime | null>
+  >;
   selectedStaff: SelectedStaff | null;
   setSelectedStaff: React.Dispatch<React.SetStateAction<SelectedStaff | null>>;
   customerInfo: {
@@ -56,8 +58,11 @@ export const ReservationProvider: React.FC<{ children: React.ReactNode }> = ({
 }) => {
   // 各種状態の初期化
   const [selectedMenus, setSelectedMenus] = useState<SelectedMenuItem[]>([]);
-  const [selectedDateTime, setSelectedDateTime] = useState<SelectedDateTime | null>(null);
-  const [selectedStaff, setSelectedStaff] = useState<SelectedStaff | null>(null);
+  const [selectedDateTime, setSelectedDateTime] =
+    useState<SelectedDateTime | null>(null);
+  const [selectedStaff, setSelectedStaff] = useState<SelectedStaff | null>(
+    null
+  );
   const [paymentInfo, setPaymentInfo] = useState<any | null>(null);
   const [customerInfo, setCustomerInfo] = useState({
     name: "",
