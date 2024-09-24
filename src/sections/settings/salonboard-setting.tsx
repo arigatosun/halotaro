@@ -99,6 +99,37 @@ const SalonBoardIntegrationView: React.FC = () => {
     }
   };
 
+  const handleSyncReservationToSalonboard = async () => {
+    setIsLoading(true);
+    setResult(null);
+
+    try {
+      const response = await fetch("/api/test-sync-reservation", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ userId: user.id }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(
+          errorData.error || "Reservation sync to Salonboard failed"
+        );
+      }
+
+      const data = await response.json();
+      setResult(data.message);
+    } catch (error) {
+      setResult(
+        "サロンボードへの予約同期中にエラーが発生しました。もう一度お試しください。"
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // handleSync 関数を更新して、スタッフ同期にも対応
   const handleSync = async (
     type: "reservations" | "menus" | "staff" | "coupons"

@@ -91,16 +91,6 @@ export default function MenuSelection({ onSelectMenu, userId }: MenuSelectionPro
       <h2 className="text-lg font-bold md:text-xl">
         クーポン・メニューを選択してください
       </h2>
-      <div className="relative">
-        <input
-          type="text"
-          placeholder="メニューを検索..."
-          className="w-full pl-8 pr-2 py-1 text-sm border rounded-full md:py-2 md:pl-10"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
-        <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 md:w-5 md:h-5" />
-      </div>
       <Tabs defaultValue="all" onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid grid-cols-4 w-full">
           <TabsTrigger value="all" className="text-xs py-1 px-0 md:text-sm md:py-2">すべて</TabsTrigger>
