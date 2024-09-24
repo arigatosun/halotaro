@@ -1,6 +1,9 @@
 // src/services/menuService.ts
+
 import * as menuActions from "@/app/actions/menuActions";
+import * as couponActions from "@/app/actions/couponActions";
 import { MenuItem } from "@/types/menuItem";
+import { Coupon } from "@/types/coupon";
 
 export async function getMenuItems(userId: string): Promise<MenuItem[]> {
   try {
@@ -73,11 +76,30 @@ export async function getTotalAmount(
     return 0;
   }
 
-  const allMenus = await getMenuItems(userId);
+  const selectedMenus: { price: number }[] = [];
 
-  const selectedMenus = allMenus.filter((menu) =>
-    menuIds.includes(menu.id.toString())
-  );
+  for (const menuId of menuIds) {
+    let menuItem: MenuItem | null = null;
+
+    // menuId を数値に変換してメニューテーブルを参照
+    const menuIdNumber = parseInt(menuId, 10);
+    if (!isNaN(menuIdNumber)) {
+      menuItem = await menuActions.getMenuItemById(menuIdNumber, userId);
+    }
+
+    if (menuItem && menuItem.price !== null) {
+      selectedMenus.push({ price: menuItem.price });
+    } else {
+      // クーポンテーブルを参照
+      const couponItem = await couponActions.getCouponById(menuId, userId);
+      if (couponItem && couponItem.price !== null) {
+        selectedMenus.push({ price: couponItem.price });
+      } else {
+        console.error(`Menu ID ${menuId} がメニューまたはクーポンテーブルに存在しません`);
+      }
+    }
+  }
+
   console.log("Selected menus:", selectedMenus);
 
   const total = calculateTotalAmount(selectedMenus);

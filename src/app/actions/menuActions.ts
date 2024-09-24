@@ -64,3 +64,19 @@ export async function toggleReservable(
     throw new Error("Failed to update reservable status");
   }
 }
+
+export async function getMenuItemById(id: number, userId: string): Promise<MenuItem | null> {
+  const { data, error } = await supabase
+    .from("menu_items")
+    .select("*")
+    .eq("id", id)
+    .eq("user_id", userId)
+    .single();
+
+  if (error) {
+    console.error(`Failed to fetch menu item with id ${id}:`, error);
+    return null;
+  }
+
+  return data as MenuItem;
+}
