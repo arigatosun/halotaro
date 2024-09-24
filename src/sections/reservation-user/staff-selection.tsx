@@ -1,78 +1,94 @@
-import React from "react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { useReservation } from "@/contexts/reservationcontext";
-import { Staff, useStaffManagement } from "@/hooks/useStaffManagement";
+"use client"
+import React, { useState, useEffect } from "react";
+import { format } from "date-fns";
+import { getReservations, Reservation } from "@/app/actions/reservationActions";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import ReservationCalendar from "@/components/ReservationCalendar";
+import { useStaffManagement } from "@/hooks/useStaffManagement";
+import { useAuth } from "@/contexts/authcontext";  // AuthコンテキストをインポートElse
 
-interface StaffSelectionProps {
-  onSelectStaff: (staff: Staff | null) => void;
-  onBack: () => void;
-  selectedMenuId: string;
-  userId: string;
-}
+const ReservationView: React.FC = () => {
+  const [reservations, setReservations] = useState<Reservation[]>([]);
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [selectedStaff, setSelectedStaff] = useState<string>("all");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const { user, loading: authLoading } = useAuth();  // AuthコンテキストからUserとLoadingの状態を取得
+  const { staffList, loading: staffLoading, error: staffError } = useStaffManagement(user?.id || "");
 
-const StaffSelection: React.FC<StaffSelectionProps> = ({
-  onSelectStaff,
-  onBack,
-  selectedMenuId,
-  userId,
-}) => {
-  const { setSelectedStaff } = useReservation();
-  const { staffList, loading, error } = useStaffManagement(userId);
-
-  const handleStaffSelect = (staff: Staff | null) => {
-    if (staff) {
-      setSelectedStaff({ id: staff.id, name: staff.name });
-    } else {
-      setSelectedStaff(null);
+  const fetchReservations = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const { data, count } = await getReservations(
+        format(selectedDate, "yyyy-MM-dd"),
+        selectedStaff
+      );
+      setReservations(data);
+    } catch (error) {
+      console.error("Error fetching reservations:", error);
+      setError("予約の取得中にエラーが発生しました。");
+    } finally {
+      setLoading(false);
     }
-    onSelectStaff(staff);
   };
 
-  if (loading) return <div>Loading...</div>;
-  if (error) return <div>Error: {error.message}</div>;
+  useEffect(() => {
+    if (!authLoading && user) {
+      fetchReservations();
+    }
+  }, [selectedDate, selectedStaff, user, authLoading]);
+
+  const handleDateChange = (date: Date) => {
+    setSelectedDate(date);
+  };
+
+  const handleStaffChange = (value: string) => {
+    setSelectedStaff(value);
+  };
+
+  if (authLoading) return <div>認証情報を読み込み中...</div>;
+  if (!user) return <div>ログインしてください</div>;
+  if (staffLoading) return <div>スタッフ情報を読み込み中...</div>;
+  if (staffError) return <div className="text-red-500">スタッフ情報の取得に失敗しました。</div>;
 
   return (
-    <div className="space-y-6">
-      <h2 className="text-2xl font-bold">スタッフの選択</h2>
-      <Card className="mb-4">
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between">
-            <span>指定しない</span>
-            <Button
-              onClick={() => handleStaffSelect(null)}
-              className="bg-orange-500 hover:bg-orange-600 text-white"
-            >
-              選択する
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-      {staffList
-        .filter((staff) => staff.is_published)
-        .map((staff) => (
-          <Card key={staff.id} className="mb-4">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <span className="font-bold">{staff.name}</span>
-                  <p className="text-sm text-gray-500">{staff.role}</p>
-                </div>
-                <Button
-                  onClick={() => handleStaffSelect(staff)}
-                  className="bg-orange-500 hover:bg-orange-600 text-white"
-                >
-                  選択する
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      <Button onClick={onBack} variant="outline">
-        戻る
-      </Button>
+    <div className="p-4">
+      <div className="mb-4 flex space-x-4">
+        <Input
+          type="date"
+          value={format(selectedDate, "yyyy-MM-dd")}
+          onChange={(e) => handleDateChange(new Date(e.target.value))}
+        />
+        <Select value={selectedStaff} onValueChange={handleStaffChange}>
+          <SelectTrigger>
+            <SelectValue placeholder="スタッフを選択" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">全てのスタッフ</SelectItem>
+            {staffList.map((staff) => (
+              <SelectItem key={staff.id} value={staff.id}>
+                {staff.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {loading && <div>予約情報を読み込み中...</div>}
+      {error && <div className="text-red-500">{error}</div>}
+      {!loading && !error && (
+        <ReservationCalendar
+          selectedDate={selectedDate}
+          selectedStaff={selectedStaff}
+          reservations={reservations}
+          onDateChange={handleDateChange}
+          onStaffChange={handleStaffChange}
+        />
+      )}
     </div>
   );
 };
 
-export default StaffSelection;
+export default ReservationView;

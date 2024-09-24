@@ -1,170 +1,196 @@
 import React, { useState } from 'react';
-import { Calendar as BigCalendar, CalendarProps, momentLocalizer, Views, SlotInfo } from 'react-big-calendar';
-import moment from 'moment';
-import 'react-big-calendar/lib/css/react-big-calendar.css';
-
-moment.locale('ja');
-const localizer = momentLocalizer(moment);
-
-declare module 'react-big-calendar' {
-  interface CalendarProps<TEvent, TResource> {
-    onEventDrop?: (args: {
-      event: TEvent;
-      start: Date;
-      end: Date;
-      allDay: boolean;
-      resourceId?: string;
-    }) => void;
-    onEventResize?: (args: {
-      event: TEvent;
-      start: Date;
-      end: Date;
-      allDay: boolean;
-    }) => void;
-  }
-}
-
-export interface Reservation {
-  id: string;
-  time: string;
-  client: string;
-  service: string;
-  staff: string;
-  date: string;
-}
-
+import { Reservation } from '@/app/actions/reservationActions';
+import { useStaffManagement } from '@/hooks/useStaffManagement';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import DayViewCalendar from '@/sections/Dashboard/reservation/calendar/DayviewCalendar';
+import WeekViewCalendar from '@/sections/Dashboard/reservation/calendar/WeekViewCalendar';
+import MonthViewCalendar from '@/sections/Dashboard/reservation/calendar/MonthViewCalendar';
+import { EventInput } from '@fullcalendar/core';
+import { addDays, subDays, addWeeks, subWeeks, addMonths, subMonths, startOfWeek, endOfWeek, format, getWeek } from 'date-fns';
+import { ja } from 'date-fns/locale';
 
 interface ReservationCalendarProps {
-    reservations: Reservation[]; // 追加
-    onReservationSelect: (reservation: Reservation) => void;
-    onReservationUpdate: (reservation: Reservation) => void;
-    onReservationCreate: (reservation: Partial<Reservation>) => void;
-  }
-
-interface CalendarEvent {
-  id: string;
-  title: string;
-  start: Date;
-  end: Date;
-  resource?: string;
+  selectedDate: Date;
+  selectedStaff: string;
+  reservations: Reservation[];
+  onDateChange: (date: Date) => void;
+  onStaffChange: (staff: string) => void;
 }
 
-// サンプルデータ
-const sampleReservations: Reservation[] = [
-  { id: '1', date: '2024-08-22', time: '10:00', client: '山田花子', service: 'カット', staff: '斉藤 恵司' },
-  { id: '2', date: '2024-08-22', time: '14:00', client: '鈴木一郎', service: 'カラー', staff: '徳 美加' },
-  { id: '3', date: '2024-08-22', time: '16:00', client: '佐藤美咲', service: 'パーマ', staff: '田原 誠基' },
-];
+type CalendarView = 'day' | 'week' | 'month';
 
 const ReservationCalendar: React.FC<ReservationCalendarProps> = ({
-    onReservationSelect,
-    onReservationUpdate,
-    onReservationCreate,
-    reservations,
-  }) => {
-    const [view, setView] = useState<string>(Views.DAY);
-    const [date, setDate] = useState(new Date());
+  selectedDate,
+  reservations,
+  onDateChange,
+}) => {
+  const [view, setView] = useState<CalendarView>('day');
+  const [selectedEvent, setSelectedEvent] = useState<EventInput | null>(null);
+  const { staffList } = useStaffManagement();
 
-  const events: CalendarEvent[] = sampleReservations.map(reservation => ({
-    id: reservation.id,
-    title: `${reservation.client} - ${reservation.service}`,
-    start: new Date(`${reservation.date}T${reservation.time}`),
-    end: moment(`${reservation.date}T${reservation.time}`).add(1, 'hour').toDate(),
-    resource: reservation.staff,
-  }));
-
-  const handleSelectSlot = (slotInfo: SlotInfo) => {
-    const newReservation = {
-      date: moment(slotInfo.start).format('YYYY-MM-DD'),
-      time: moment(slotInfo.start).format('HH:mm'),
-      staff: slotInfo.resourceId as string,
-    };
-    onReservationCreate(newReservation);
+  const handleEventClick = (event: EventInput) => {
+    setSelectedEvent(event);
+    setView('day');
+    onDateChange(new Date(event.start as string));
   };
 
-  const handleSelectEvent = (event: CalendarEvent) => {
-    const reservation = sampleReservations.find(r => r.id === event.id);
-    if (reservation) {
-      onReservationSelect(reservation);
+  const handlePrevious = () => {
+    switch (view) {
+      case 'day':
+        onDateChange(subDays(selectedDate, 1));
+        break;
+      case 'week':
+        onDateChange(subWeeks(selectedDate, 1));
+        break;
+      case 'month':
+        onDateChange(subMonths(selectedDate, 1));
+        break;
     }
   };
 
-  const handleEventChange = (args: {
-    event: CalendarEvent;
-    start: Date;
-    end: Date;
-    allDay: boolean;
-    resourceId?: string;
-  }) => {
-    const { event, start, end, resourceId } = args;
-    if (event && start && end) {
-      const updatedReservation = {
-        ...sampleReservations.find(r => r.id === event.id),
-        date: moment(start).format('YYYY-MM-DD'),
-        time: moment(start).format('HH:mm'),
-        staff: resourceId,
-      };
-      onReservationUpdate(updatedReservation as Reservation);
+  const handleNext = () => {
+    switch (view) {
+      case 'day':
+        onDateChange(addDays(selectedDate, 1));
+        break;
+      case 'week':
+        onDateChange(addWeeks(selectedDate, 1));
+        break;
+      case 'month':
+        onDateChange(addMonths(selectedDate, 1));
+        break;
     }
+  };
+
+  const handleToday = () => {
+    onDateChange(new Date());
+  };
+
+  const renderCalendar = () => {
+    switch (view) {
+      case 'day':
+        return (
+          <DayViewCalendar
+            selectedDate={selectedDate}
+            reservations={reservations}
+            staffList={staffList}
+            onEventClick={handleEventClick}
+          />
+        );
+      case 'week':
+        return (
+          <WeekViewCalendar
+            selectedDate={selectedDate}
+            reservations={reservations}
+            onEventClick={handleEventClick}
+          />
+        );
+      case 'month':
+        return (
+          <MonthViewCalendar
+            selectedDate={selectedDate}
+            reservations={reservations}
+            onEventClick={handleEventClick}
+          />
+        );
+    }
+  };
+
+  const renderNavigationButtons = () => {
+    return (
+      <div className="flex justify-between items-center mb-4">
+        <Button onClick={handlePrevious}>前へ</Button>
+        <div className="text-lg font-bold">
+          {view === 'day' && format(selectedDate, 'yyyy年M月d日(E)', { locale: ja })}
+          {view === 'week' && `${format(startOfWeek(selectedDate), 'yyyy年M月d日', { locale: ja })} - ${format(endOfWeek(selectedDate), 'M月d日', { locale: ja })}`}
+          {view === 'month' && format(selectedDate, 'yyyy年M月', { locale: ja })}
+        </div>
+        <Button onClick={handleNext}>次へ</Button>
+      </div>
+    );
+  };
+
+  const renderWeekSelector = () => {
+    if (view !== 'week') return null;
+
+    const currentWeek = getWeek(selectedDate);
+    const weeks = Array.from({ length: 52 }, (_, i) => i + 1);
+
+    return (
+      <Select
+        value={currentWeek.toString()}
+        onValueChange={(value) => {
+          const newDate = addWeeks(startOfWeek(new Date(selectedDate.getFullYear(), 0, 1)), parseInt(value) - 1);
+          onDateChange(newDate);
+        }}
+      >
+        <SelectTrigger className="w-[180px]">
+          <SelectValue placeholder="週を選択" />
+        </SelectTrigger>
+        <SelectContent>
+          {weeks.map((week) => (
+            <SelectItem key={week} value={week.toString()}>
+              {week}週目
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    );
+  };
+
+  const renderMonthSelector = () => {
+    if (view !== 'month') return null;
+
+    const months = Array.from({ length: 12 }, (_, i) => new Date(selectedDate.getFullYear(), i, 1));
+
+    return (
+      <Select
+        value={selectedDate.getMonth().toString()}
+        onValueChange={(value) => onDateChange(new Date(selectedDate.getFullYear(), parseInt(value), 1))}
+      >
+        <SelectTrigger className="w-[180px]">
+          <SelectValue placeholder="月を選択" />
+        </SelectTrigger>
+        <SelectContent>
+          {months.map((date, index) => (
+            <SelectItem key={index} value={index.toString()}>
+              {format(date, 'M月', { locale: ja })}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    );
   };
 
   return (
-    <BigCalendar<CalendarEvent, { id: string; title: string }>
-      localizer={localizer}
-      events={events}
-      startAccessor="start"
-      endAccessor="end"
-      view={view as any}
-      onView={(newView) => setView(newView)}
-      date={date}
-      onNavigate={setDate}
-      selectable
-      resources={[
-        { id: '窪塚洋介', title: '窪塚洋介' },
-        { id: '槇原敬之', title: '槇原敬之' },
-        { id: '田原 誠基', title: '田原 誠基' },
-        { id: '田中大地', title: '田中大地' },
-        { id: 'カリスマTSUCHIGA!', title: 'カリスマTSUCHIGA!' },
-      ]}
-      resourceIdAccessor="id"
-      resourceTitleAccessor="title"
-      onSelectSlot={handleSelectSlot}
-      onSelectEvent={handleSelectEvent}
-      onEventDrop={handleEventChange}
-      onEventResize={handleEventChange}
-      step={15}
-      timeslots={4}
-      min={new Date(0, 0, 0, 10, 0, 0)}
-      max={new Date(0, 0, 0, 21, 0, 0)}
-      formats={{
-        timeGutterFormat: (date: Date, culture?: string, localizer?: { format: (date: Date, format: string, culture?: string) => string }) => 
-          localizer?.format(date, 'HH:mm', culture) ?? '',
-        dayFormat: (date: Date, culture?: string, localizer?: { format: (date: Date, format: string, culture?: string) => string }) => 
-          localizer?.format(date, 'M月D日(ddd)', culture) ?? '',
-        dayHeaderFormat: (date: Date, culture?: string, localizer?: { format: (date: Date, format: string, culture?: string) => string }) => 
-          localizer?.format(date, 'YYYY年M月D日(ddd)', culture) ?? '',
-        dayRangeHeaderFormat: ({ start, end }: { start: Date, end: Date }, culture?: string, localizer?: { format: (date: Date, format: string, culture?: string) => string }) => 
-          `${localizer?.format(start, 'YYYY年M月D日', culture)} - ${localizer?.format(end, 'YYYY年M月D日', culture)}`,
-      }}
-      style={{ height: 'calc(100vh - 200px)' }}
-      messages={{
-        today: '今日',
-        previous: '前へ',
-        next: '次へ',
-        month: '月',
-        week: '週',
-        day: '日',
-        agenda: 'アジェンダ',
-        date: '日付',
-        time: '時間',
-        event: 'イベント',
-        allDay: '終日',
-        work_week: '稼働週',
-        yesterday: '昨日',
-        tomorrow: '明日',
-        noEventsInRange: 'この期間には予約はありません。',
-      }}
-    />
+    <div className="space-y-4">
+      <div className="flex justify-center space-x-2">
+        <Button onClick={() => setView('day')} variant={view === 'day' ? 'default' : 'outline'}>日</Button>
+        <Button onClick={() => setView('week')} variant={view === 'week' ? 'default' : 'outline'}>週</Button>
+        <Button onClick={() => setView('month')} variant={view === 'month' ? 'default' : 'outline'}>月</Button>
+      </div>
+      {renderNavigationButtons()}
+      {view === 'week' && renderWeekSelector()}
+      {view === 'month' && renderMonthSelector()}
+      {view === 'day' && <Button onClick={handleToday}>今日</Button>}
+      {renderCalendar()}
+      <Dialog open={!!selectedEvent} onOpenChange={() => setSelectedEvent(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>予約詳細</DialogTitle>
+          </DialogHeader>
+          {selectedEvent && (
+            <div>
+              <p>顧客名: {selectedEvent.title}</p>
+              <p>開始時間: {new Date(selectedEvent.start as string).toLocaleString()}</p>
+              <p>終了時間: {new Date(selectedEvent.end as string).toLocaleString()}</p>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 };
 

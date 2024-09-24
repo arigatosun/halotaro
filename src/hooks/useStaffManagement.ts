@@ -16,7 +16,7 @@ interface ErrorWithMessage {
   message: string;
 }
 
-export function useStaffManagement(userId: string) {
+export function useStaffManagement(userId?: string) {
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<ErrorWithMessage | null>(null);
@@ -24,10 +24,17 @@ export function useStaffManagement(userId: string) {
   const fetchStaff = useCallback(async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from("staff")
-        .select("*")
-        .eq("user_id", userId);
+      let query = supabase.from("staff").select("*");
+      
+      if (userId) {
+        // ユーザーIDが提供された場合、そのユーザーに関連するスタッフを取得
+        query = query.eq("user_id", userId);
+      } else {
+        // ユーザーIDが提供されない場合、公開されているスタッフのみを取得
+        query = query.eq("is_published", true);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
 
