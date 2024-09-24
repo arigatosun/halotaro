@@ -7,8 +7,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import DayViewCalendar from '@/sections/Dashboard/reservation/calendar/DayviewCalendar';
 import WeekViewCalendar from '@/sections/Dashboard/reservation/calendar/WeekViewCalendar';
 import MonthViewCalendar from '@/sections/Dashboard/reservation/calendar/MonthViewCalendar';
-import { EventInput } from '@fullcalendar/core';
-import { addDays, subDays, addWeeks, subWeeks, addMonths, subMonths, startOfWeek, endOfWeek, format, getWeek } from 'date-fns';
+import { EventApi, EventClickArg } from '@fullcalendar/core';
+import { addDays, subDays, addWeeks, subWeeks, addMonths, subMonths, startOfWeek, endOfWeek, format } from 'date-fns';
 import { ja } from 'date-fns/locale';
 
 interface ReservationCalendarProps {
@@ -27,13 +27,17 @@ const ReservationCalendar: React.FC<ReservationCalendarProps> = ({
   onDateChange,
 }) => {
   const [view, setView] = useState<CalendarView>('day');
-  const [selectedEvent, setSelectedEvent] = useState<EventInput | null>(null);
+  const [selectedEvent, setSelectedEvent] = useState<EventApi | null>(null);
   const { staffList } = useStaffManagement();
 
-  const handleEventClick = (event: EventInput) => {
-    setSelectedEvent(event);
-    setView('day');
-    onDateChange(new Date(event.start as string));
+  const handleEventClick = (clickInfo: EventClickArg) => {
+    setSelectedEvent(clickInfo.event);
+    if (clickInfo.event.start) {
+      if (view !== 'day') {
+        setView('day');
+        onDateChange(clickInfo.event.start);
+      }
+    }
   };
 
   const handlePrevious = () => {
@@ -84,6 +88,7 @@ const ReservationCalendar: React.FC<ReservationCalendarProps> = ({
           <WeekViewCalendar
             selectedDate={selectedDate}
             reservations={reservations}
+            staffList={staffList}
             onEventClick={handleEventClick}
           />
         );
@@ -92,11 +97,13 @@ const ReservationCalendar: React.FC<ReservationCalendarProps> = ({
           <MonthViewCalendar
             selectedDate={selectedDate}
             reservations={reservations}
+            staffList={staffList}
             onEventClick={handleEventClick}
           />
         );
     }
   };
+  
 
   const renderNavigationButtons = () => {
     return (
@@ -109,34 +116,6 @@ const ReservationCalendar: React.FC<ReservationCalendarProps> = ({
         </div>
         <Button onClick={handleNext}>次へ</Button>
       </div>
-    );
-  };
-
-  const renderWeekSelector = () => {
-    if (view !== 'week') return null;
-
-    const currentWeek = getWeek(selectedDate);
-    const weeks = Array.from({ length: 52 }, (_, i) => i + 1);
-
-    return (
-      <Select
-        value={currentWeek.toString()}
-        onValueChange={(value) => {
-          const newDate = addWeeks(startOfWeek(new Date(selectedDate.getFullYear(), 0, 1)), parseInt(value) - 1);
-          onDateChange(newDate);
-        }}
-      >
-        <SelectTrigger className="w-[180px]">
-          <SelectValue placeholder="週を選択" />
-        </SelectTrigger>
-        <SelectContent>
-          {weeks.map((week) => (
-            <SelectItem key={week} value={week.toString()}>
-              {week}週目
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
     );
   };
 
@@ -172,8 +151,7 @@ const ReservationCalendar: React.FC<ReservationCalendarProps> = ({
         <Button onClick={() => setView('month')} variant={view === 'month' ? 'default' : 'outline'}>月</Button>
       </div>
       {renderNavigationButtons()}
-      {view === 'week' && renderWeekSelector()}
-      {view === 'month' && renderMonthSelector()}
+      {renderMonthSelector()}
       {view === 'day' && <Button onClick={handleToday}>今日</Button>}
       {renderCalendar()}
       <Dialog open={!!selectedEvent} onOpenChange={() => setSelectedEvent(null)}>
@@ -184,8 +162,10 @@ const ReservationCalendar: React.FC<ReservationCalendarProps> = ({
           {selectedEvent && (
             <div>
               <p>顧客名: {selectedEvent.title}</p>
-              <p>開始時間: {new Date(selectedEvent.start as string).toLocaleString()}</p>
-              <p>終了時間: {new Date(selectedEvent.end as string).toLocaleString()}</p>
+              <p>メニュー: {selectedEvent.extendedProps.menuName}</p>
+              <p>担当スタッフ: {selectedEvent.extendedProps.staffName}</p>
+              <p>開始時間: {selectedEvent.start ? selectedEvent.start.toLocaleString() : 'N/A'}</p>
+              <p>終了時間: {selectedEvent.end ? selectedEvent.end.toLocaleString() : 'N/A'}</p>
             </div>
           )}
         </DialogContent>

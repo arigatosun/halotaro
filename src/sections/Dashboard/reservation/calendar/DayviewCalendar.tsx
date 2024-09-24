@@ -8,7 +8,7 @@ interface DayViewCalendarProps {
   selectedDate: Date;
   reservations: Reservation[];
   staffList: { id: string; name: string }[];
-  onEventClick: (event: EventInput) => void;
+  onEventClick: (clickInfo: EventClickArg) => void; // 修正
 }
 
 const DayViewCalendar: React.FC<DayViewCalendarProps> = ({
@@ -23,11 +23,12 @@ const DayViewCalendar: React.FC<DayViewCalendarProps> = ({
     start: new Date(reservation.start_time),
     end: new Date(reservation.end_time),
     title: reservation.customer_name,
+    extendedProps: {
+      menuName: reservation.menu_name,
+      staffName: reservation.staff_name,
+      // その他の必要な情報
+    },
   }));
-
-  const handleEventClick = (clickInfo: EventClickArg) => {
-    onEventClick(clickInfo.event.toPlainObject());
-  };
 
   const calendarOptions: CalendarOptions = {
     plugins: [resourceTimelinePlugin],
@@ -37,7 +38,7 @@ const DayViewCalendar: React.FC<DayViewCalendarProps> = ({
     events: events,
     slotDuration: "00:30:00",
     headerToolbar: false,
-    eventClick: handleEventClick,
+    eventClick: onEventClick, // 修正
     height: 'auto',
     schedulerLicenseKey: 'CC-Attribution-NonCommercial-NoDerivatives',
   };
