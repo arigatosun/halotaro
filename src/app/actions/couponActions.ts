@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabaseClient";
 
 export async function getCouponItems(userId: string): Promise<Coupon[]> {
   const { data, error } = await supabase
-    .from("coupons") // クーポンテーブルの名前を正確に指定してください
+    .from("coupons") 
     .select("*")
     .eq("user_id", userId);
 

@@ -63,17 +63,29 @@ export async function POST(request: Request) {
       );
     }
 
-    // トランザクションを使用して競合状態を回避
+    // メニューIDが整数かどうかを判定
+
+    const isMenuIdInteger = /^\d+$/.test(menuId);
+    const p_menu_id = isMenuIdInteger ? Number(menuId) : null;
+    const p_coupon_id = isMenuIdInteger ? null : menuId; // UUID の場合
+
+    // フルネームとフルネーム（カナ）を組み立てる
+    const customerFullName = `${customerInfo.lastNameKanji} ${customerInfo.firstNameKanji}`;
+    const customerFullNameKana = `${customerInfo.lastNameKana} ${customerInfo.firstNameKana}`;
+
+    // RPC関数の呼び出し
     const { data: reservation, error: reservationError } = await supabase.rpc(
       "create_reservation",
       {
         p_user_id: userId,
-        p_menu_id: menuId,
+        p_menu_id: p_menu_id,
+        p_coupon_id: p_coupon_id,
         p_staff_id: staffId,
         p_start_time: startTime,
         p_end_time: endTime,
         p_total_price: totalPrice,
-        p_customer_name: customerInfo.name,
+        p_customer_name: customerFullName,
+        p_customer_name_kana: customerFullNameKana,
         p_customer_email: customerInfo.email,
         p_customer_phone: customerInfo.phone,
         p_payment_method: paymentInfo?.method,
