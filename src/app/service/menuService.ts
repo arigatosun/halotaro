@@ -80,18 +80,19 @@ export async function getTotalAmount(
 
   for (const menuId of menuIds) {
     let menuItem: MenuItem | null = null;
+    let couponItem: Coupon | null = null;
 
-    // menuId を数値に変換してメニューテーブルを参照
-    const menuIdNumber = parseInt(menuId, 10);
-    if (!isNaN(menuIdNumber)) {
+    // menuIdが完全に数字で構成されている場合のみ数値として処理
+    if (/^\d+$/.test(menuId)) {
+      const menuIdNumber = Number(menuId);
       menuItem = await menuActions.getMenuItemById(menuIdNumber, userId);
     }
 
     if (menuItem && menuItem.price !== null) {
       selectedMenus.push({ price: menuItem.price });
     } else {
-      // クーポンテーブルを参照
-      const couponItem = await couponActions.getCouponById(menuId, userId);
+      // UUIDの場合はそのまま文字列としてクーポンを取得
+      couponItem = await couponActions.getCouponById(menuId, userId);
       if (couponItem && couponItem.price !== null) {
         selectedMenus.push({ price: couponItem.price });
       } else {
