@@ -102,20 +102,32 @@ const ReservationCalendar: React.FC = () => {
     }
   };
 
-  const handleFormSubmit = async (data: Partial<Reservation>) => {
+  const handleFormSubmit = async (data: Partial<Reservation>, isNew: boolean) => {
+    console.log('Form submitted with data:', data);
     try {
-      const method = isNewReservation ? 'POST' : 'PUT';
+      const method = isNew ? 'POST' : 'PUT';
       const response = await fetch('/api/calendar-data', {
-        method,
+        method: method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       });
-      if (!response.ok) throw new Error('Failed to save reservation');
-      await loadData();
+      console.log('API response status:', response.status);
+  
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('API error:', errorData);
+        throw new Error(errorData.error || `Failed to ${isNew ? 'create' : 'update'} reservation`);
+      }
+  
+      const updatedReservation = await response.json();
+      console.log('Updated reservation:', updatedReservation);
+  
       setIsFormOpen(false);
-      setToastMessage('予約が保存されました');
+      setToastMessage(`予約が${isNew ? '作成' : '更新'}されました`);
+      await loadData();
     } catch (error) {
-      setToastMessage('予約の保存に失敗しました');
+      console.error('Error in handleFormSubmit:', error);
+      setToastMessage(`予約の${isNew ? '作成' : '更新'}に失敗しました`);
     }
   };
 
