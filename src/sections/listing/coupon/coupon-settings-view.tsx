@@ -88,8 +88,10 @@ const CouponManagement: React.FC = () => {
           body: JSON.stringify({ couponId }),
         });
   
+        const data = await response.json();
+  
         if (!response.ok) {
-          throw new Error("Failed to delete coupon");
+          throw new Error(data.message || "クーポンの削除中にエラーが発生しました。");
         }
   
         // 成功した場合、ローカルの状態を更新
@@ -97,19 +99,19 @@ const CouponManagement: React.FC = () => {
   
         toast({
           title: "削除成功",
-          description: `クーポンID: ${couponId} が削除されました`,
+          description: data.message || `クーポンID: ${couponId} が削除されました`,
         });
       } catch (error) {
         console.error("Error deleting coupon:", error);
         toast({
           title: "削除エラー",
-          description: "クーポンの削除中にエラーが発生しました",
+          description: error instanceof Error ? error.message : "クーポンの削除中にエラーが発生しました。",
           variant: "destructive",
         });
       }
     }
   };
-
+  
   const handleToggleReservable = async (
     couponId: string,
     isReservable: boolean

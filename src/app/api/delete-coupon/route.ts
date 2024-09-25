@@ -1,4 +1,3 @@
-// app/api/delete-coupon/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
@@ -12,7 +11,7 @@ export async function DELETE(request: NextRequest) {
     const { couponId } = await request.json();
 
     if (!couponId) {
-      return NextResponse.json({ message: "Coupon ID is required" }, { status: 400 });
+      return NextResponse.json({ message: "クーポンIDが必要です" }, { status: 400 });
     }
 
     // クーポンの削除
@@ -21,13 +20,21 @@ export async function DELETE(request: NextRequest) {
       .delete()
       .eq("id", couponId);
 
-    if (error) throw error;
+    if (error) {
+      if (error.code === '23503' && error.details?.includes('reservations')) {
+        return NextResponse.json(
+          { message: "このクーポンは現在予約されているため削除できません。" },
+          { status: 409 }
+        );
+      }
+      throw error;
+    }
 
-    return NextResponse.json({ message: "Coupon deleted successfully" });
+    return NextResponse.json({ message: "クーポンが正常に削除されました。" });
   } catch (error) {
     console.error("Error deleting coupon:", error);
     return NextResponse.json(
-      { message: "Internal server error" },
+      { message: "クーポンの削除中にエラーが発生しました。" },
       { status: 500 }
     );
   }

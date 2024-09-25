@@ -168,21 +168,23 @@ const AuthenticatedMenuSettingsPage: React.FC<{ userId: string }> = ({
           body: JSON.stringify({ menuItemId }),
         });
   
+        const data = await response.json();
+  
         if (!response.ok) {
-          throw new Error("Failed to delete menu item");
+          throw new Error(data.message || "メニューの削除中にエラーが発生しました。");
         }
   
         setMenuItems(prevItems => prevItems.filter(item => item.id !== menuItemId));
   
         toast({
           title: "削除成功",
-          description: `メニューID: ${menuItemId} が削除されました`,
+          description: data.message || `メニューID: ${menuItemId} が削除されました`,
         });
       } catch (error) {
         console.error("Error deleting menu item:", error);
         toast({
           title: "削除エラー",
-          description: "メニューの削除中にエラーが発生しました",
+          description: error instanceof Error ? error.message : "メニューの削除中にエラーが発生しました。",
           variant: "destructive",
         });
       }
@@ -251,7 +253,7 @@ return (
       <TableHeader>
         <TableRow>
           <TableHead>No.</TableHead>
-          <TableHead>メニュー画像</TableHead>
+          <TableHead>メニュー写真</TableHead>
           <TableHead>メニュー名</TableHead>
           <TableHead>カテゴリ</TableHead>
           <TableHead>価格</TableHead>
