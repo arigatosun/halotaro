@@ -26,38 +26,33 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
   staffList,
   menuList
 }) => {
-  console.log('ReservationForm props:', { reservation, isNew, staffList, menuList });
-
   const [formData, setFormData] = useState<Partial<Reservation>>({});
-
+ 
   useEffect(() => {
     if (reservation) {
-      const formattedReservation = {
+      setFormData({
         ...reservation,
         start_time: moment.utc(reservation.start_time).local().format('YYYY-MM-DDTHH:mm'),
         end_time: moment.utc(reservation.end_time).local().format('YYYY-MM-DDTHH:mm'),
-      };
-      console.log('Setting form data:', formattedReservation);
-      setFormData(formattedReservation);
+      });
     } else {
       setFormData({});
     }
   }, [reservation]);
 
   const handleChange = (name: string, value: string) => {
-    console.log('Form field changed:', { name, value });
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    setFormData(prev => ({ ...prev, [name]: value }));
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const { customer_name, menu_name, staff_name, ...dataToUpdate } = formData;
+    const selectedMenu = menuList.find(menu => menu.id === formData.menu_id);
     const updatedReservation = {
-      ...dataToUpdate,
+      ...formData,
       start_time: moment(formData.start_time).utc().format(),
       end_time: moment(formData.end_time).utc().format(),
+      total_price: selectedMenu ? selectedMenu.price : 0,
     };
-    console.log('Submitting form with data:', updatedReservation);
     onSubmit(updatedReservation, isNew);
   };
 
@@ -69,6 +64,93 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
         </DialogHeader>
         <form onSubmit={handleSubmit}>
           <div className="space-y-4">
+            {isNew && (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="customer_name">顧客名</Label>
+                  <Input
+                    id="customer_name"
+                    name="customer_name"
+                    value={formData.customer_name || ''}
+                    onChange={(e) => handleChange('customer_name', e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="customer_email">メールアドレス</Label>
+                  <Input
+                    id="customer_email"
+                    name="customer_email"
+                    type="email"
+                    value={formData.customer_email || ''}
+                    onChange={(e) => handleChange('customer_email', e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="customer_phone">電話番号</Label>
+                  <Input
+                    id="customer_phone"
+                    name="customer_phone"
+                    type="tel"
+                    value={formData.customer_phone || ''}
+                    onChange={(e) => handleChange('customer_phone', e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="customer_name_kana">顧客名（カナ）</Label>
+                  <Input
+                    id="customer_name_kana"
+                    name="customer_name_kana"
+                    value={formData.customer_name_kana || ''}
+                    onChange={(e) => handleChange('customer_name_kana', e.target.value)}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="staff_id">担当スタッフ</Label>
+                  <Select
+                    value={formData.staff_id || ''}
+                    onValueChange={(value) => handleChange('staff_id', value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="スタッフを選択" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {staffList.map((staff) => (
+                        <SelectItem key={staff.id} value={staff.id}>
+                          {staff.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+        <label htmlFor="menu_id">メニュー</label>
+        <Select
+          value={formData.menu_id || ''}
+          onValueChange={(value) => handleChange('menu_id', value)}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="メニューを選択" />
+          </SelectTrigger>
+          <SelectContent>
+            {menuList.map((menu) => (
+              <SelectItem key={menu.id} value={menu.id}>
+                {menu.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+              </>
+            )}
+
             <div className="space-y-2">
               <Label htmlFor="start_time">開始時間</Label>
               <Input
@@ -92,27 +174,6 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
                 required
               />
             </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="staff_id">担当スタッフ</Label>
-              <Select
-                value={formData.staff_id || ''}
-                onValueChange={(value) => handleChange('staff_id', value)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="スタッフを選択" />
-                </SelectTrigger>
-                <SelectContent>
-                  {staffList.map((staff) => (
-                    <SelectItem key={staff.id} value={staff.id}>
-                      {staff.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* 必要に応じて他のフィールドを追加 */}
           </div>
           <div className="flex justify-between mt-6">
             <Button type="submit">{isNew ? '予約を作成' : '予約を更新'}</Button>

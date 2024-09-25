@@ -18,23 +18,34 @@ const ReservationCalendar: React.FC = () => {
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const [menuList, setMenuList] = useState<MenuItem[]>([]);
 
-  const { user } = useAuth();
+  const { user, session } = useAuth();
 
   useEffect(() => {
-    if (user) {
+    if (user && session) {
       loadData();
     }
-  }, [user]);
+  }, [user, session]);
 
   const loadData = async () => {
+    if (!session) return;
+
     try {
-      const response = await fetch('/api/calendar-data');
-      if (!response.ok) throw new Error('Failed to fetch data');
+      const response = await fetch('/api/calendar-data', {
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`
+        }
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('Error fetching data:', errorData);
+        throw new Error(errorData.error || 'Failed to fetch data');
+      }
       const data = await response.json();
       setReservations(data.reservations);
       setStaffList(data.staffList);
       setMenuList(data.menuList);
     } catch (error) {
+      console.error('Error in loadData:', error);
       setToastMessage('データの取得に失敗しました');
     }
   };
@@ -103,25 +114,34 @@ const ReservationCalendar: React.FC = () => {
   };
 
   const handleFormSubmit = async (data: Partial<Reservation>, isNew: boolean) => {
+    if (!session) {
+      setToastMessage('セッションが無効です。再度ログインしてください。');
+      return;
+    }
+
     console.log('Form submitted with data:', data);
     try {
       const method = isNew ? 'POST' : 'PUT';
       const response = await fetch('/api/calendar-data', {
         method: method,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
         body: JSON.stringify(data),
       });
+      
       console.log('API response status:', response.status);
-  
+
       if (!response.ok) {
         const errorData = await response.json();
         console.error('API error:', errorData);
         throw new Error(errorData.error || `Failed to ${isNew ? 'create' : 'update'} reservation`);
       }
-  
+
       const updatedReservation = await response.json();
       console.log('Updated reservation:', updatedReservation);
-  
+
       setIsFormOpen(false);
       setToastMessage(`予約が${isNew ? '作成' : '更新'}されました`);
       await loadData();
@@ -132,15 +152,28 @@ const ReservationCalendar: React.FC = () => {
   };
 
   const handleDeleteReservation = async (id: string) => {
+    if (!session) {
+      setToastMessage('セッションが無効です。再度ログインしてください。');
+      return;
+    }
+
     try {
       const response = await fetch(`/api/calendar-data?id=${id}`, {
         method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`
+        }
       });
-      if (!response.ok) throw new Error('Failed to delete reservation');
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('Error deleting reservation:', errorData);
+        throw new Error(errorData.error || 'Failed to delete reservation');
+      }
       await loadData();
       setIsFormOpen(false);
       setToastMessage('予約が削除されました');
     } catch (error) {
+      console.error('Error in handleDeleteReservation:', error);
       setToastMessage('予約の削除に失敗しました');
     }
   };
