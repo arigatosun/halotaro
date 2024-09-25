@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import Image from 'next/image';
 import {
   Dialog,
   DialogContent,
@@ -16,7 +17,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import { Coupon } from "@/types/coupon";
 
 interface CouponFormModalProps {
@@ -24,7 +24,7 @@ interface CouponFormModalProps {
   onClose: () => void;
   coupon: Coupon | null;
   onSubmit: (
-    coupon: Omit<Coupon, "id" | "created_at" | "updated_at">,
+    coupon: Omit<Coupon, "id" | "created_at" | "updated_at" | "is_reservable">,
     imageFile: File | null
   ) => void;
   userId: string;
@@ -42,14 +42,39 @@ const CouponFormModal: React.FC<CouponFormModalProps> = ({
   const [description, setDescription] = useState(coupon?.description || "");
   const [price, setPrice] = useState(coupon?.price?.toString() || "");
   const [duration, setDuration] = useState(coupon?.duration?.toString() || "");
-  const [isReservable, setIsReservable] = useState(
-    coupon?.is_reservable || false
-  );
   const [imageFile, setImageFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(coupon?.image_url || null);
+
+  // プレースホルダー用のテキスト
+  const placeholders = {
+    name: "例: 驚きの実感☆育毛促進プレミアムヘッドスパ",
+    description: "例: 今話題の「プロセルセラピーズ」と「育毛促進ヘッドスパ」の欲張りWメニュー☆他店ではマネできない圧倒的な専門技術♪数に限りがあるため定員になり次第受付終了☆",
+    price: "例: 5000",
+    duration: "例: 60",
+  };
+
+  useEffect(() => {
+    if (coupon) {
+      setName(coupon.name);
+      setCategory(coupon.category || "");
+      setDescription(coupon.description || "");
+      setPrice(coupon.price?.toString() || "");
+      setDuration(coupon.duration?.toString() || "");
+      setPreviewUrl(coupon.image_url || null);
+    } else {
+      setName("");
+      setCategory("");
+      setDescription("");
+      setPrice("");
+      setDuration("");
+      setPreviewUrl(null);
+    }
+    setImageFile(null);
+  }, [coupon]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const couponData: Omit<Coupon, "id" | "created_at" | "updated_at"> = {
+    const couponData: Omit<Coupon, "id" | "created_at" | "updated_at" | "is_reservable"> = {
       user_id: userId,
       coupon_id: coupon?.coupon_id || "",
       name,
@@ -57,7 +82,6 @@ const CouponFormModal: React.FC<CouponFormModalProps> = ({
       description,
       price: price ? parseInt(price) : null,
       duration: duration ? parseInt(duration) : null,
-      is_reservable: isReservable,
       image_url: coupon?.image_url || null,
     };
     onSubmit(couponData, imageFile);
@@ -65,105 +89,74 @@ const CouponFormModal: React.FC<CouponFormModalProps> = ({
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      setImageFile(e.target.files[0]);
+      const file = e.target.files[0];
+      setImageFile(file);
+      setPreviewUrl(URL.createObjectURL(file));
     }
   };
-
-  const RequiredLabel: React.FC<{
-    htmlFor: string;
-    children: React.ReactNode;
-  }> = ({ htmlFor, children }) => (
-    <Label htmlFor={htmlFor} className="flex items-center">
-      {children}
-      <span className="text-red-500 ml-1">*</span>
-    </Label>
-  );
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[600px]">
         <DialogHeader>
-          <DialogTitle>クーポン掲載情報編集</DialogTitle>
+          <DialogTitle>{coupon ? "クーポン編集" : "クーポン新規追加"}</DialogTitle>
         </DialogHeader>
-        <p className="text-sm text-gray-500 mb-4">
-          <span className="text-red-500">*</span> の付いた項目は必須です
-        </p>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <RequiredLabel htmlFor="category">カテゴリ</RequiredLabel>
+            <Label htmlFor="category">カテゴリ</Label>
             <Select value={category} onValueChange={setCategory}>
               <SelectTrigger>
                 <SelectValue placeholder="選択してください" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="discount">割引</SelectItem>
-                <SelectItem value="service">サービス</SelectItem>
-                {/* 必要に応じて他のカテゴリを追加 */}
+                <SelectItem value="all">全員</SelectItem>
+                <SelectItem value="new">新規</SelectItem>
+                <SelectItem value="repeat">再来</SelectItem>
               </SelectContent>
             </Select>
+            <p className="text-sm text-gray-500 mt-1">対象となる顧客カテゴリを選択してください</p>
           </div>
-
           <div>
-            <RequiredLabel htmlFor="name">クーポン名</RequiredLabel>
+            <Label htmlFor="name">クーポン名</Label>
             <Input
               id="name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              maxLength={36}
+              placeholder={placeholders.name}
               required
             />
-            <span className="text-xs text-gray-500">{name.length}/36</span>
           </div>
-
           <div>
-            <RequiredLabel htmlFor="description">クーポン内容</RequiredLabel>
+            <Label htmlFor="description">説明</Label>
             <Textarea
               id="description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              maxLength={90}
+              placeholder={placeholders.description}
+            />
+          </div>
+          <div>
+            <Label htmlFor="price">価格（円）</Label>
+            <Input
+              id="price"
+              type="number"
+              value={price}
+              onChange={(e) => setPrice(e.target.value)}
+              placeholder={placeholders.price}
               required
             />
-            <span className="text-xs text-gray-500">
-              {description.length}/90
-            </span>
           </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <RequiredLabel htmlFor="price">価格（税込）</RequiredLabel>
-              <Input
-                id="price"
-                type="number"
-                value={price}
-                onChange={(e) => setPrice(e.target.value)}
-                required
-              />
-            </div>
-            <div>
-              <RequiredLabel htmlFor="duration">所要目安時間</RequiredLabel>
-              <div className="flex items-center space-x-2">
-                <Input
-                  id="duration"
-                  type="number"
-                  value={duration}
-                  onChange={(e) => setDuration(e.target.value)}
-                  required
-                />
-                <span className="text-xs">分</span>
-              </div>
-            </div>
-          </div>
-
           <div>
-            <Label htmlFor="isReservable">予約可能</Label>
-            <Switch
-              id="isReservable"
-              checked={isReservable}
-              onCheckedChange={setIsReservable}
+            <Label htmlFor="duration">所要時間（分）</Label>
+            <Input
+              id="duration"
+              type="number"
+              value={duration}
+              onChange={(e) => setDuration(e.target.value)}
+              placeholder={placeholders.duration}
+              required
             />
           </div>
-
           <div>
             <Label htmlFor="image">クーポン画像</Label>
             <Input
@@ -172,13 +165,29 @@ const CouponFormModal: React.FC<CouponFormModalProps> = ({
               onChange={handleImageChange}
               accept="image/*"
             />
+            {previewUrl ? (
+              <div className="mt-2">
+                <p className="text-sm text-gray-500 mb-2">
+                  {imageFile ? "新しい画像が選択されています" : "現在の画像"}:
+                </p>
+                <Image
+                  src={previewUrl}
+                  alt="クーポン画像プレビュー"
+                  width={100}
+                  height={100}
+                  objectFit="cover"
+                  className="rounded-md"
+                />
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500 mt-1">クーポンを視覚的に魅力的にする画像をアップロードしてください</p>
+            )}
           </div>
-
-          <div className="flex justify-end space-x-2 mt-6">
+          <div className="flex justify-end space-x-2">
             <Button type="button" variant="outline" onClick={onClose}>
               キャンセル
             </Button>
-            <Button type="submit">登録</Button>
+            <Button type="submit">保存</Button>
           </div>
         </form>
       </DialogContent>

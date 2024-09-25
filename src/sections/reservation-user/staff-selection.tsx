@@ -3,6 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useReservation } from "@/contexts/reservationcontext";
 import { Staff, useStaffManagement } from "@/hooks/useStaffManagement";
+import { ChevronRight } from "lucide-react";
 
 interface StaffSelectionProps {
   onSelectStaff: (staff: Staff | null) => void;
@@ -11,12 +12,12 @@ interface StaffSelectionProps {
   userId: string;
 }
 
-const StaffSelection: React.FC<StaffSelectionProps> = ({
+export default function StaffSelection({
   onSelectStaff,
   onBack,
   selectedMenuId,
   userId,
-}) => {
+}: StaffSelectionProps) {
   const { setSelectedStaff } = useReservation();
   const { staffList, loading, error } = useStaffManagement(userId);
 
@@ -29,50 +30,40 @@ const StaffSelection: React.FC<StaffSelectionProps> = ({
     onSelectStaff(staff);
   };
 
-  if (loading) return <div>Loading...</div>;
-  if (error) return <div>Error: {error.message}</div>;
+  if (loading) return <div className="p-2 text-center text-sm">読み込み中...</div>;
+  if (error) return <div className="p-2 text-center text-sm text-red-500">エラー: {error.message}</div>;
 
   return (
-    <div className="space-y-6">
-      <h2 className="text-2xl font-bold">スタッフの選択</h2>
-      <Card className="mb-4">
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between">
-            <span>指定しない</span>
-            <Button
-              onClick={() => handleStaffSelect(null)}
-              className="bg-orange-500 hover:bg-orange-600 text-white"
-            >
-              選択する
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+    <div className="space-y-3 p-2 md:p-4">
+      <h2 className="text-lg font-bold md:text-xl">スタッフを選択してください</h2>
       {staffList
         .filter((staff) => staff.is_published)
         .map((staff) => (
-          <Card key={staff.id} className="mb-4">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
+          <Card key={staff.id} className="mb-2">
+            <CardContent className="p-3">
+              <div className="flex justify-between items-center">
                 <div>
-                  <span className="font-bold">{staff.name}</span>
-                  <p className="text-sm text-gray-500">{staff.role}</p>
+                  <h3 className="text-base font-semibold">{staff.name}</h3>
+                  <p className="text-xs text-gray-500">{staff.role}</p>
                 </div>
                 <Button
                   onClick={() => handleStaffSelect(staff)}
-                  className="bg-orange-500 hover:bg-orange-600 text-white"
+                  className="bg-orange-500 hover:bg-orange-600 text-white text-xs py-1 px-2 h-auto ml-auto md:text-sm md:py-2 md:px-4"
                 >
-                  選択する
+                  選択
+                  <ChevronRight className="ml-1 w-3 h-3 md:w-4 md:h-4" />
                 </Button>
               </div>
             </CardContent>
           </Card>
         ))}
-      <Button onClick={onBack} variant="outline">
+      <Button 
+        onClick={onBack} 
+        variant="outline" 
+        className="text-sm md:text-base"
+      >
         戻る
       </Button>
     </div>
   );
-};
-
-export default StaffSelection;
+}

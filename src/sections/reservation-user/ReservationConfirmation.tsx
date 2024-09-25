@@ -35,6 +35,15 @@ const ReservationConfirmation: React.FC<ReservationConfirmationProps> = ({
     });
   };
 
+  // フルネームを生成する関数
+  const getFullName = (kanji: boolean) => {
+    if (kanji) {
+      return `${customerInfo.lastNameKanji} ${customerInfo.firstNameKanji}`;
+    } else {
+      return `${customerInfo.lastNameKana} ${customerInfo.firstNameKana}`;
+    }
+  };
+
   return (
     <div className="space-y-6">
       <h2 className="text-2xl font-bold">予約内容の確認</h2>
@@ -69,7 +78,9 @@ const ReservationConfirmation: React.FC<ReservationConfirmationProps> = ({
             <div>
               <dt className="font-semibold">お客様情報:</dt>
               <dd>
-                {customerInfo.name} - {customerInfo.email} - {customerInfo.phone}
+                {getFullName(true)} ({getFullName(false)})
+                <br />
+                {customerInfo.email} - {customerInfo.phone}
               </dd>
             </div>
             <div>
@@ -83,7 +94,7 @@ const ReservationConfirmation: React.FC<ReservationConfirmationProps> = ({
         <Button onClick={onBack} variant="outline">
           戻る
         </Button>
-        <Button onClick={onNext}>予約を確定する</Button>
+        <Button onClick={onNext}>事前決済する</Button>
       </div>
     </div>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useReservation } from "@/contexts/reservationcontext";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -12,9 +12,8 @@ interface ReservationCompleteProps {
   userId: string;
 }
 
-const ReservationComplete: React.FC<ReservationCompleteProps> = ({
-  userId,
-}) => {
+const ReservationComplete: React.FC<ReservationCompleteProps> = ({ userId }) => {
+  const hasSaved = useRef(false);
   const [status, setStatus] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const router = useRouter();
@@ -28,6 +27,8 @@ const ReservationComplete: React.FC<ReservationCompleteProps> = ({
   } = useReservation();
 
   const saveReservation = useCallback(async () => {
+    if (hasSaved.current) return; // 既に保存済みなら何もしない
+    hasSaved.current = true;
     try {
       const reservationData = {
         userId,
@@ -53,9 +54,10 @@ const ReservationComplete: React.FC<ReservationCompleteProps> = ({
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(
-          errorData.error || "予約の保存中にエラーが発生しました"
-        );
+        if (response.status === 409) {
+          throw new Error("この予約は既に存在します");
+        }
+        throw new Error(errorData.error || "予約の保存中にエラーが発生しました");
       }
 
       const result = await response.json();
@@ -65,6 +67,7 @@ const ReservationComplete: React.FC<ReservationCompleteProps> = ({
         description: `予約ID: ${result.reservationId}`,
       });
     } catch (error) {
+      hasSaved.current = false; // エラー時は再試行可能にする
       console.error("予約の保存中にエラーが発生しました:", error);
       setStatus("予約の保存中にエラーが発生しました");
       toast({
@@ -107,6 +110,8 @@ const ReservationComplete: React.FC<ReservationCompleteProps> = ({
     });
   };
 
+  const fullName = `${customerInfo.lastNameKanji} ${customerInfo.firstNameKanji}`;
+
   return (
     <Card className="w-[350px] mx-auto">
       <CardHeader>
@@ -131,7 +136,7 @@ const ReservationComplete: React.FC<ReservationCompleteProps> = ({
           <p className="text-sm">
             担当スタッフ: {selectedStaff ? selectedStaff.name : "Not selected"}
           </p>
-          <p className="text-sm">お客様名: {customerInfo.name}</p>
+          <p className="text-sm">お客様名: {fullName}</p>
           <p className="text-sm">
             選択したメニュー:{" "}
             {selectedMenus.map((menu) => menu.name).join(", ")}
