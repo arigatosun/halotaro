@@ -4,15 +4,17 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useReservation } from "@/contexts/reservationcontext";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/use-toast";
+import { CalendarIcon, ClockIcon, UserIcon, ScissorsIcon, MailIcon, CheckCircleIcon } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
 
 interface ReservationCompleteProps {
   userId: string;
 }
 
-const ReservationComplete: React.FC<ReservationCompleteProps> = ({ userId }) => {
+export default function ReservationComplete({ userId }: ReservationCompleteProps) {
   const hasSaved = useRef(false);
   const [status, setStatus] = useState<string>("");
   const [loading, setLoading] = useState(true);
@@ -27,7 +29,7 @@ const ReservationComplete: React.FC<ReservationCompleteProps> = ({ userId }) => 
   } = useReservation();
 
   const saveReservation = useCallback(async () => {
-    if (hasSaved.current) return; // 既に保存済みなら何もしない
+    if (hasSaved.current) return;
     hasSaved.current = true;
     try {
       const reservationData = {
@@ -67,7 +69,7 @@ const ReservationComplete: React.FC<ReservationCompleteProps> = ({ userId }) => 
         description: `予約ID: ${result.reservationId}`,
       });
     } catch (error) {
-      hasSaved.current = false; // エラー時は再試行可能にする
+      hasSaved.current = false;
       console.error("予約の保存中にエラーが発生しました:", error);
       setStatus("予約の保存中にエラーが発生しました");
       toast({
@@ -96,7 +98,13 @@ const ReservationComplete: React.FC<ReservationCompleteProps> = ({ userId }) => 
   }, [saveReservation]);
 
   if (loading) {
-    return <Skeleton className="w-[100px] h-[20px] rounded-full" />;
+    return (
+      <div className="w-full max-w-2xl mx-auto mt-8 space-y-4">
+        <Skeleton className="h-8 w-3/4 mx-auto" />
+        <Skeleton className="h-64 w-full" />
+        <Skeleton className="h-10 w-full" />
+      </div>
+    );
   }
 
   const formatDateTime = (date: Date) => {
@@ -113,45 +121,87 @@ const ReservationComplete: React.FC<ReservationCompleteProps> = ({ userId }) => 
   const fullName = `${customerInfo.lastNameKanji} ${customerInfo.firstNameKanji}`;
 
   return (
-    <Card className="w-[350px] mx-auto">
+    <Card className="w-full max-w-2xl mx-auto">
       <CardHeader>
-        <CardTitle>{status}</CardTitle>
+        <CardTitle className="text-2xl font-bold text-center flex items-center justify-center">
+          <CheckCircleIcon className="mr-2 text-primary" />
+          {status}
+        </CardTitle>
       </CardHeader>
-      <CardContent>
-        <p className="text-sm text-muted-foreground mb-4">
+      <CardContent className="space-y-6">
+        <p className="text-center text-muted-foreground">
           ご予約ありがとうございます。以下の内容で予約を承りました。
         </p>
-        <div className="space-y-2">
-          <p className="text-sm">
-            予約日時:{" "}
-            {selectedDateTime
-              ? `${formatDateTime(
-                  selectedDateTime.start
-                )} - ${selectedDateTime.end.toLocaleTimeString("ja-JP", {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}`
-              : "Not selected"}
-          </p>
-          <p className="text-sm">
-            担当スタッフ: {selectedStaff ? selectedStaff.name : "Not selected"}
-          </p>
-          <p className="text-sm">お客様名: {fullName}</p>
-          <p className="text-sm">
-            選択したメニュー:{" "}
-            {selectedMenus.map((menu) => menu.name).join(", ")}
-          </p>
+        <div className="space-y-4">
+          <div className="flex items-start space-x-3">
+            <CalendarIcon className="w-5 h-5 mt-1 text-primary" />
+            <div>
+              <h3 className="font-semibold">予約日時</h3>
+              <p className="text-sm text-muted-foreground">
+                {selectedDateTime
+                  ? `${formatDateTime(selectedDateTime.start)}`
+                  : "未選択"}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-start space-x-3">
+            <ClockIcon className="w-5 h-5 mt-1 text-primary" />
+            <div>
+              <h3 className="font-semibold">予約時間</h3>
+              <p className="text-sm text-muted-foreground">
+                {selectedDateTime
+                  ? `${selectedDateTime.start.toLocaleTimeString("ja-JP", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })} - ${selectedDateTime.end.toLocaleTimeString("ja-JP", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}`
+                  : "未選択"}
+              </p>
+            </div>
+          </div>
+          <Separator />
+          <div className="flex items-start space-x-3">
+            <UserIcon className="w-5 h-5 mt-1 text-primary" />
+            <div>
+              <h3 className="font-semibold">担当スタッフ</h3>
+              <p className="text-sm text-muted-foreground">{selectedStaff ? selectedStaff.name : "指定なし"}</p>
+            </div>
+          </div>
+          <div className="flex items-start space-x-3">
+            <UserIcon className="w-5 h-5 mt-1 text-primary" />
+            <div>
+              <h3 className="font-semibold">お客様名</h3>
+              <p className="text-sm text-muted-foreground">{fullName}</p>
+            </div>
+          </div>
+          <Separator />
+          <div className="flex items-start space-x-3">
+            <ScissorsIcon className="w-5 h-5 mt-1 text-primary" />
+            <div>
+              <h3 className="font-semibold">選択したメニュー</h3>
+              <ul className="text-sm text-muted-foreground list-disc list-inside">
+                {selectedMenus.map((menu, index) => (
+                  <li key={index}>{menu.name}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
         </div>
-        <p className="text-sm text-muted-foreground mt-4">
-          予約の詳細は、ご登録いただいたメールアドレス ({customerInfo.email})
-          に送信されます。
+        <p className="text-sm text-muted-foreground flex items-center justify-center">
+          <MailIcon className="w-4 h-4 mr-2 text-primary" />
+          予約の詳細は、{customerInfo.email} に送信されます。
         </p>
-        <Button className="mt-4 w-full" onClick={() => router.push("/")}>
+      </CardContent>
+      <CardFooter className="flex justify-center pt-6">
+        <Button 
+          onClick={() => router.push("/")}
+          className="w-full sm:w-auto"
+        >
           トップページに戻る
         </Button>
-      </CardContent>
+      </CardFooter>
     </Card>
   );
-};
-
-export default ReservationComplete;
+}

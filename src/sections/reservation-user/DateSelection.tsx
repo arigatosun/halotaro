@@ -365,6 +365,42 @@ const DateSelection: React.FC<DateSelectionProps> = ({
     return isAvailableInShift && !isReserved;
   };
 
+   // モバイル用の時間帯ボタンのスタイル
+  const MobileTimeSlotButton = styled(Button)(({ theme }) => ({
+    minWidth: "60px",
+    margin: "4px",
+    padding: "6px 8px",
+    fontSize: "0.8rem",
+    borderRadius: "4px",
+    "&.available": {
+      backgroundColor: theme.palette.primary.main,
+      color: "#fff",
+      "&:hover": {
+        backgroundColor: theme.palette.primary.dark,
+      },
+    },
+    "&.unavailable": {
+      backgroundColor: theme.palette.grey[300],
+      color: theme.palette.text.disabled,
+    },
+    "&.reserved": {
+      backgroundColor: theme.palette.grey[400],
+      color: theme.palette.text.disabled,
+    },
+  }));
+
+    // スタイル付きのコンパクトボタンを作成
+    const CompactButton = styled(Button)(({ theme }) => ({
+      minWidth: 'auto',
+      padding: '6px 12px',
+      borderRadius: '20px',
+      textTransform: 'none',
+      boxShadow: 'none',
+      '&:hover': {
+        boxShadow: 'none',
+      },
+    }));
+
   const handleTimeSlotClick = (date: moment.Moment, time: string): void => {
     const selectedDate = date.format("YYYY-MM-DD");
     const startDateTime = moment(`${selectedDate} ${time}`).toDate();
@@ -387,14 +423,14 @@ const DateSelection: React.FC<DateSelectionProps> = ({
   };
 
   const handlePreviousPeriod = (): void => {
-    const newStartDate = moment(startDate).subtract(7, "days");
+    const newStartDate = moment(startDate).subtract(isMobile ? 7 : 14, "days");
     if (newStartDate.isSameOrAfter(moment(), "day")) {
       setStartDate(newStartDate);
     }
   };
 
   const handleNextPeriod = (): void => {
-    setStartDate(moment(startDate).add(7, "days"));
+    setStartDate(moment(startDate).add(isMobile ? 7 : 14, "days"));
   };
 
   const isHoliday = (date: moment.Moment): boolean => {
@@ -517,6 +553,169 @@ const DateSelection: React.FC<DateSelectionProps> = ({
       .add(i * 30, "minutes")
       .format("HH:mm")
   );
+
+  if (isMobile) {
+    return (
+      <ThemeProvider theme={theme}>
+        <Box sx={{ marginTop: "20px", width: "100%", minHeight: "100vh", position: "relative", paddingBottom: "60px" }}>
+          <Box
+            sx={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: "16px",
+            }}
+          >
+            <OrangeButton
+              variant="contained"
+              onClick={handlePreviousPeriod}
+              disabled={startDate.isSame(moment(), "day")}
+              startIcon={<ChevronLeft />}
+            >
+              前週
+            </OrangeButton>
+            <OrangeButton
+              variant="contained"
+              onClick={handleNextPeriod}
+              endIcon={<ChevronRight />}
+            >
+              次週
+            </OrangeButton>
+          </Box>
+
+          {Array.from({ length: 7 }, (_, i) => {
+            const date = moment(startDate).add(i, "days");
+            const dateStr = date.format("YYYY-MM-DD");
+            const isSaturday = date.day() === 6;
+            const isSunday = date.day() === 0;
+            return (
+              <Paper key={dateStr} sx={{ marginBottom: "16px", padding: "12px" }}>
+                <Typography 
+                  variant="subtitle1" 
+                  sx={{ 
+                    marginBottom: "8px", 
+                    fontWeight: "bold",
+                    color: isSaturday 
+                      ? theme.palette.secondary.main 
+                      : isSunday 
+                      ? theme.palette.error.main 
+                      : "inherit"
+                  }}
+                >
+                  {date.format("M/D (ddd)")}
+                </Typography>
+                {isHoliday(date) ? (
+                  <Typography variant="body2" color="text.secondary">
+                    休業日
+                  </Typography>
+                ) : (
+                  <Box sx={{ display: "flex", flexWrap: "wrap", justifyContent: "center" }}>
+                    {timeSlots.map((time) => {
+                      const isAvailable = isSlotAvailable(dateStr, time);
+                      const isReserved = reservedSlots[dateStr]?.some((reservation) =>
+                        moment(`${dateStr}T${time}`).isBetween(
+                          moment(reservation.startTime),
+                          moment(reservation.endTime),
+                          null,
+                          "[)"
+                        )
+                      );
+                      return (
+                        <MobileTimeSlotButton
+                          key={time}
+                          onClick={() =>
+                            isAvailable && handleTimeSlotClick(date, time)
+                          }
+                          disabled={!isAvailable || isReserved}
+                          className={
+                            isReserved
+                              ? "reserved"
+                              : isAvailable
+                              ? "available"
+                              : "unavailable"
+                          }
+                        >
+                          {time}
+                        </MobileTimeSlotButton>
+                      );
+                    })}
+                  </Box>
+                )}
+              </Paper>
+              
+            );
+          })}
+          <Dialog
+            open={isDialogOpen}
+            onClose={handleCancel}
+            TransitionComponent={Fade}
+            transitionDuration={300}
+          >
+            <DialogTitle
+              style={{
+                backgroundColor: theme.palette.primary.main,
+                color: theme.palette.primary.contrastText,
+              }}
+            >
+              予約確認
+            </DialogTitle>
+            <DialogContent>
+              <DialogContentText style={{ marginTop: "16px" }}>
+                {selectedDateTime &&
+                  `${moment(selectedDateTime).format(
+                    "YYYY年M月D日(ddd) HH:mm"
+                  )}に予約しますか？`}
+              </DialogContentText>
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={handleCancel} color="primary">
+                キャンセル
+              </Button>
+              <OrangeButton onClick={handleConfirm} variant="contained">
+                確定
+              </OrangeButton>
+            </DialogActions>
+          </Dialog>
+          <Snackbar
+            open={!!error}
+            autoHideDuration={6000}
+            onClose={() => setError(null)}
+          >
+            <Alert
+              onClose={() => setError(null)}
+              severity="error"
+              variant="filled"
+            >
+              {error}
+            </Alert>
+          </Snackbar>
+        </Box>
+        <Box
+            sx={{
+              marginTop: "0px",
+              paddingLeft: "20px",
+            }}
+          >
+            <Button 
+              onClick={onBack} 
+              startIcon={<ChevronLeft />}
+              variant="contained"
+              color="primary"
+              sx={{ 
+                flexDirection: 'row', 
+                alignItems: 'center',
+                color: 'white',
+                '& .MuiButton-startIcon': {
+                  marginRight: '4px',
+                },
+              }}
+            >
+              戻る
+            </Button>
+          </Box>
+      </ThemeProvider>
+    )
+  }
 
   return (
     <ThemeProvider theme={theme}>
