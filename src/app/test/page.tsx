@@ -1,68 +1,21 @@
-"use client";
-import React, { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+// app/test-automation/page.tsx
 
-type GeoData = {
-  city: string;
-  region: string;
-  country: string;
-};
+import SalonboardAutomation from "@/components/SalonboardAutomation";
 
-export default function GeolocationTestPage() {
-  const [geoData, setGeoData] = useState<GeoData | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const fetchGeoData = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await fetch("/api/geolocation");
-      if (!response.ok) {
-        throw new Error("Failed to fetch geolocation data");
-      }
-      const data = await response.json();
-      setGeoData(data);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchGeoData();
-  }, []);
-
+export default function TestAutomationPage() {
   return (
-    <div className="container mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-4">Geolocation Test Page</h1>
-      <Card>
-        <CardHeader>
-          <CardTitle>Your Geolocation Data</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {loading && <p>Loading...</p>}
-          {error && <p className="text-red-500">Error: {error}</p>}
-          {geoData && (
-            <div>
-              <p>
-                <strong>City:</strong> {geoData.city}
-              </p>
-              <p>
-                <strong>Region:</strong> {geoData.region}
-              </p>
-              <p>
-                <strong>Country:</strong> {geoData.country}
-              </p>
-            </div>
-          )}
-          <Button onClick={fetchGeoData} className="mt-4">
-            Refresh Data
-          </Button>
-        </CardContent>
-      </Card>
+    <div className="min-h-screen bg-gray-100 py-6 flex flex-col justify-center sm:py-12">
+      <div className="relative py-3 sm:max-w-xl sm:mx-auto">
+        <div className="absolute inset-0 bg-gradient-to-r from-cyan-400 to-light-blue-500 shadow-lg transform -skew-y-6 sm:skew-y-0 sm:-rotate-6 sm:rounded-3xl"></div>
+        <div className="relative px-4 py-10 bg-white shadow-lg sm:rounded-3xl sm:p-20">
+          <div className="max-w-md mx-auto">
+            <h1 className="text-2xl font-semibold mb-6 text-center">
+              Salonboard Automation Test
+            </h1>
+            <SalonboardAutomation />
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
