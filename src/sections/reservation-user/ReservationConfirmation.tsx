@@ -94,7 +94,7 @@ const ReservationConfirmation: React.FC<ReservationConfirmationProps> = ({
         <Button onClick={onBack} variant="outline">
           戻る
         </Button>
-        <Button onClick={onNext}>予約を確定する</Button>
+        <Button onClick={onNext}>事前決済する</Button>
       </div>
     </div>
   );

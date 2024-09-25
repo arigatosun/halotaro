@@ -248,7 +248,7 @@ const CouponManagement: React.FC = () => {
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>順番</TableHead>
+            <TableHead>No.</TableHead>
             <TableHead>クーポン写真</TableHead>
             <TableHead>種別</TableHead>
             <TableHead>クーポン名</TableHead>
