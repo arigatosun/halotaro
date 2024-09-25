@@ -1,177 +1,212 @@
-import React, { useState } from 'react';
-import { Reservation } from '@/app/actions/reservationActions';
-import { useStaffManagement } from '@/hooks/useStaffManagement';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import DayViewCalendar from '@/sections/Dashboard/reservation/calendar/DayviewCalendar';
-import WeekViewCalendar from '@/sections/Dashboard/reservation/calendar/WeekViewCalendar';
-import MonthViewCalendar from '@/sections/Dashboard/reservation/calendar/MonthViewCalendar';
-import { EventApi, EventClickArg } from '@fullcalendar/core';
-import { addDays, subDays, addWeeks, subWeeks, addMonths, subMonths, startOfWeek, endOfWeek, format } from 'date-fns';
-import { ja } from 'date-fns/locale';
+import React, { useState, useEffect } from 'react';
+import FullCalendar from '@fullcalendar/react';
+import resourceTimelinePlugin from '@fullcalendar/resource-timeline';
+import interactionPlugin from '@fullcalendar/interaction';
+import { EventClickArg, DateSelectArg, EventDropArg } from '@fullcalendar/core';
+import { CustomToast } from '@/components/CustomToast';
+import ReservationForm from '@/sections/Dashboard/reservation/calendar/ReservationForm';
+import ReservationDetails from '@/sections/Dashboard/reservation/calendar/ReservationDetails';
+import { Reservation, Staff, MenuItem } from '@/types/reservation';
+import { useAuth } from '@/lib/useAuth';
 
-interface ReservationCalendarProps {
-  selectedDate: Date;
-  selectedStaff: string;
-  reservations: Reservation[];
-  onDateChange: (date: Date) => void;
-  onStaffChange: (staff: string) => void;
-}
+const ReservationCalendar: React.FC = () => {
+  const [reservations, setReservations] = useState<Reservation[]>([]);
+  const [selectedReservation, setSelectedReservation] = useState<Reservation | null>(null);
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [isNewReservation, setIsNewReservation] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+  const [staffList, setStaffList] = useState<Staff[]>([]);
+  const [menuList, setMenuList] = useState<MenuItem[]>([]);
 
-type CalendarView = 'day' | 'week' | 'month';
+  const { user } = useAuth();
 
-const ReservationCalendar: React.FC<ReservationCalendarProps> = ({
-  selectedDate,
-  reservations,
-  onDateChange,
-}) => {
-  const [view, setView] = useState<CalendarView>('day');
-  const [selectedEvent, setSelectedEvent] = useState<EventApi | null>(null);
-  const { staffList } = useStaffManagement();
+  useEffect(() => {
+    if (user) {
+      loadData();
+    }
+  }, [user]);
+
+  const loadData = async () => {
+    try {
+      const response = await fetch('/api/calendar-data');
+      if (!response.ok) throw new Error('Failed to fetch data');
+      const data = await response.json();
+      setReservations(data.reservations);
+      setStaffList(data.staffList);
+      setMenuList(data.menuList);
+    } catch (error) {
+      setToastMessage('データの取得に失敗しました');
+    }
+  };
+
+  const loadStaffList = async () => {
+    try {
+      const response = await fetch('/api/staff-list');
+      if (!response.ok) throw new Error('Failed to fetch staff list');
+      const data = await response.json();
+      setStaffList(data);
+    } catch (error) {
+      setToastMessage('スタッフリストの取得に失敗しました');
+    }
+  };
+
+  const loadMenuList = async () => {
+    try {
+      const response = await fetch('/api/menu-list');
+      if (!response.ok) throw new Error('Failed to fetch menu list');
+      const data = await response.json();
+      setMenuList(data);
+    } catch (error) {
+      setToastMessage('メニューリストの取得に失敗しました');
+    }
+  };
 
   const handleEventClick = (clickInfo: EventClickArg) => {
-    setSelectedEvent(clickInfo.event);
-    if (clickInfo.event.start) {
-      if (view !== 'day') {
-        setView('day');
-        onDateChange(clickInfo.event.start);
-      }
+    console.log('Event clicked:', clickInfo.event);
+    console.log('Event extendedProps:', clickInfo.event.extendedProps);
+    setSelectedReservation(clickInfo.event.extendedProps as Reservation);
+    setIsNewReservation(false);
+    setIsFormOpen(false); // 詳細表示を先に行うため、フォームは開かない
+  };
+
+  const handleDateSelect = (selectInfo: DateSelectArg) => {
+    console.log('Date selected:', selectInfo);
+    const newReservation: Partial<Reservation> = {
+      start_time: selectInfo.startStr,
+      end_time: selectInfo.endStr,
+      staff_id: selectInfo.resource ? selectInfo.resource.id : '',
+    };
+    console.log('New reservation:', newReservation);
+    setSelectedReservation(newReservation as Reservation);
+    setIsNewReservation(true);
+    setIsFormOpen(true);
+  };
+
+  const handleEventDrop = async (dropInfo: EventDropArg) => {
+    try {
+      const updatedReservation = {
+        ...dropInfo.event.extendedProps,
+        start_time: dropInfo.event.start?.toISOString(),
+        end_time: dropInfo.event.end?.toISOString(),
+      };
+      const response = await fetch('/api/calendar-data', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedReservation),
+      });
+      if (!response.ok) throw new Error('Failed to update reservation');
+      await loadData();
+      setToastMessage('予約が更新されました');
+    } catch (error) {
+      setToastMessage('予約の更新に失敗しました');
     }
   };
 
-  const handlePrevious = () => {
-    switch (view) {
-      case 'day':
-        onDateChange(subDays(selectedDate, 1));
-        break;
-      case 'week':
-        onDateChange(subWeeks(selectedDate, 1));
-        break;
-      case 'month':
-        onDateChange(subMonths(selectedDate, 1));
-        break;
+  const handleFormSubmit = async (data: Partial<Reservation>) => {
+    try {
+      const method = isNewReservation ? 'POST' : 'PUT';
+      const response = await fetch('/api/calendar-data', {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!response.ok) throw new Error('Failed to save reservation');
+      await loadData();
+      setIsFormOpen(false);
+      setToastMessage('予約が保存されました');
+    } catch (error) {
+      setToastMessage('予約の保存に失敗しました');
     }
   };
 
-  const handleNext = () => {
-    switch (view) {
-      case 'day':
-        onDateChange(addDays(selectedDate, 1));
-        break;
-      case 'week':
-        onDateChange(addWeeks(selectedDate, 1));
-        break;
-      case 'month':
-        onDateChange(addMonths(selectedDate, 1));
-        break;
+  const handleDeleteReservation = async (id: string) => {
+    try {
+      const response = await fetch(`/api/calendar-data?id=${id}`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) throw new Error('Failed to delete reservation');
+      await loadData();
+      setIsFormOpen(false);
+      setToastMessage('予約が削除されました');
+    } catch (error) {
+      setToastMessage('予約の削除に失敗しました');
     }
   };
 
-  const handleToday = () => {
-    onDateChange(new Date());
-  };
-
-  const renderCalendar = () => {
-    switch (view) {
-      case 'day':
-        return (
-          <DayViewCalendar
-            selectedDate={selectedDate}
-            reservations={reservations}
-            staffList={staffList}
-            onEventClick={handleEventClick}
-          />
-        );
-      case 'week':
-        return (
-          <WeekViewCalendar
-            selectedDate={selectedDate}
-            reservations={reservations}
-            staffList={staffList}
-            onEventClick={handleEventClick}
-          />
-        );
-      case 'month':
-        return (
-          <MonthViewCalendar
-            selectedDate={selectedDate}
-            reservations={reservations}
-            staffList={staffList}
-            onEventClick={handleEventClick}
-          />
-        );
-    }
-  };
-  
-
-  const renderNavigationButtons = () => {
-    return (
-      <div className="flex justify-between items-center mb-4">
-        <Button onClick={handlePrevious}>前へ</Button>
-        <div className="text-lg font-bold">
-          {view === 'day' && format(selectedDate, 'yyyy年M月d日(E)', { locale: ja })}
-          {view === 'week' && `${format(startOfWeek(selectedDate), 'yyyy年M月d日', { locale: ja })} - ${format(endOfWeek(selectedDate), 'M月d日', { locale: ja })}`}
-          {view === 'month' && format(selectedDate, 'yyyy年M月', { locale: ja })}
-        </div>
-        <Button onClick={handleNext}>次へ</Button>
-      </div>
-    );
-  };
-
-  const renderMonthSelector = () => {
-    if (view !== 'month') return null;
-
-    const months = Array.from({ length: 12 }, (_, i) => new Date(selectedDate.getFullYear(), i, 1));
-
-    return (
-      <Select
-        value={selectedDate.getMonth().toString()}
-        onValueChange={(value) => onDateChange(new Date(selectedDate.getFullYear(), parseInt(value), 1))}
-      >
-        <SelectTrigger className="w-[180px]">
-          <SelectValue placeholder="月を選択" />
-        </SelectTrigger>
-        <SelectContent>
-          {months.map((date, index) => (
-            <SelectItem key={index} value={index.toString()}>
-              {format(date, 'M月', { locale: ja })}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    );
-  };
 
   return (
-    <div className="space-y-4">
-      <div className="flex justify-center space-x-2">
-        <Button onClick={() => setView('day')} variant={view === 'day' ? 'default' : 'outline'}>日</Button>
-        <Button onClick={() => setView('week')} variant={view === 'week' ? 'default' : 'outline'}>週</Button>
-        <Button onClick={() => setView('month')} variant={view === 'month' ? 'default' : 'outline'}>月</Button>
-      </div>
-      {renderNavigationButtons()}
-      {renderMonthSelector()}
-      {view === 'day' && <Button onClick={handleToday}>今日</Button>}
-      {renderCalendar()}
-      <Dialog open={!!selectedEvent} onOpenChange={() => setSelectedEvent(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>予約詳細</DialogTitle>
-          </DialogHeader>
-          {selectedEvent && (
-            <div>
-              <p>顧客名: {selectedEvent.title}</p>
-              <p>メニュー: {selectedEvent.extendedProps.menuName}</p>
-              <p>担当スタッフ: {selectedEvent.extendedProps.staffName}</p>
-              <p>開始時間: {selectedEvent.start ? selectedEvent.start.toLocaleString() : 'N/A'}</p>
-              <p>終了時間: {selectedEvent.end ? selectedEvent.end.toLocaleString() : 'N/A'}</p>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-    </div>
-  );
+    <div>
+      <FullCalendar
+        plugins={[resourceTimelinePlugin, interactionPlugin]}
+        initialView="resourceTimelineDay"
+        editable={true}
+        selectable={true}
+        events={reservations.map(reservation => {
+          console.log('Mapping reservation:', reservation);
+          return {
+            id: reservation.id,
+            resourceId: reservation.staff_id,
+            title: `${reservation.customer_name} - ${reservation.menu_name}`,
+            start: reservation.start_time,
+            end: reservation.end_time,
+            extendedProps: reservation
+          };
+        })}
+        resources={staffList.map(staff => ({
+          id: staff.id,
+          title: staff.name
+        }))}
+        eventClick={handleEventClick}
+        select={handleDateSelect}
+        eventDrop={handleEventDrop}
+        slotDuration="00:30:00"
+        slotMinTime="09:00:00"
+        slotMaxTime="21:00:00"
+      />
+     {isFormOpen && selectedReservation && (
+  <ReservationForm
+    reservation={selectedReservation}
+    isNew={isNewReservation}
+    onClose={() => {
+      console.log('Form closed');
+      setIsFormOpen(false);
+    }}
+    onSubmit={handleFormSubmit}
+    onDelete={handleDeleteReservation}
+    staffList={staffList}
+    menuList={menuList}
+  />
+      )}
+     {selectedReservation && !isFormOpen && (
+      <ReservationDetails
+        reservation={selectedReservation}
+        onClose={() => {
+          console.log('Details closed');
+          setSelectedReservation(null);
+        }}
+        onEdit={() => {
+          console.log('Edit clicked');
+          setIsFormOpen(true);
+        }}
+      />
+    )}
+    {isFormOpen && selectedReservation && (
+      <ReservationForm
+        reservation={selectedReservation}
+        isNew={isNewReservation}
+        onClose={() => {
+          console.log('Form closed');
+          setIsFormOpen(false);
+        }}
+        onSubmit={handleFormSubmit}
+        onDelete={handleDeleteReservation}
+        staffList={staffList}
+        menuList={menuList}
+      />
+    )}
+    <CustomToast message={toastMessage} />
+  </div>
+);
 };
 
 export default ReservationCalendar;

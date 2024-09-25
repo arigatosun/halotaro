@@ -4,14 +4,14 @@ import resourceTimelinePlugin from '@fullcalendar/resource-timeline';
 import { EventClickArg, CalendarOptions, EventInput } from '@fullcalendar/core';
 import { Reservation } from '@/app/actions/reservationActions';
 
-interface WeekViewCalendarProps {
+interface DayViewCalendarProps {
   selectedDate: Date;
   reservations: Reservation[];
   staffList: { id: string; name: string }[];
   onEventClick: (clickInfo: EventClickArg) => void; // 修正
 }
 
-const WeekViewCalendar: React.FC<WeekViewCalendarProps> = ({
+const DayViewCalendar: React.FC<DayViewCalendarProps> = ({
   selectedDate,
   reservations,
   staffList,
@@ -32,7 +32,7 @@ const WeekViewCalendar: React.FC<WeekViewCalendarProps> = ({
 
   const calendarOptions: CalendarOptions = {
     plugins: [resourceTimelinePlugin],
-    initialView: "resourceTimelineWeek",
+    initialView: "resourceTimelineDay",
     initialDate: selectedDate,
     resources: staffList.map(staff => ({ id: staff.id, title: staff.name })),
     events: events,
@@ -46,4 +46,4 @@ const WeekViewCalendar: React.FC<WeekViewCalendarProps> = ({
   return <FullCalendar {...calendarOptions} />;
 };
 
-export default WeekViewCalendar;
+export default DayViewCalendar;
