@@ -20,6 +20,16 @@ interface SelectedDateTime {
   end: Date;
 }
 
+// 更新された顧客情報の型定義
+interface CustomerInfo {
+  lastNameKana: string;
+  firstNameKana: string;
+  lastNameKanji: string;
+  firstNameKanji: string;
+  email: string;
+  phone: string;
+}
+
 // 予約コンテキストの型定義
 interface ReservationContextType {
   selectedMenus: SelectedMenuItem[];
@@ -30,18 +40,8 @@ interface ReservationContextType {
   >;
   selectedStaff: SelectedStaff | null;
   setSelectedStaff: React.Dispatch<React.SetStateAction<SelectedStaff | null>>;
-  customerInfo: {
-    name: string;
-    email: string;
-    phone: string;
-  };
-  setCustomerInfo: React.Dispatch<
-    React.SetStateAction<{
-      name: string;
-      email: string;
-      phone: string;
-    }>
-  >;
+  customerInfo: CustomerInfo;
+  setCustomerInfo: React.Dispatch<React.SetStateAction<CustomerInfo>>;
   calculateTotalAmount: (menus: SelectedMenuItem[]) => number;
   paymentInfo: any | null;
   setPaymentInfo: (info: any | null) => void;
@@ -64,8 +64,11 @@ export const ReservationProvider: React.FC<{ children: React.ReactNode }> = ({
     null
   );
   const [paymentInfo, setPaymentInfo] = useState<any | null>(null);
-  const [customerInfo, setCustomerInfo] = useState({
-    name: "",
+  const [customerInfo, setCustomerInfo] = useState<CustomerInfo>({
+    lastNameKana: "",
+    firstNameKana: "",
+    lastNameKanji: "",
+    firstNameKanji: "",
     email: "",
     phone: "",
   });

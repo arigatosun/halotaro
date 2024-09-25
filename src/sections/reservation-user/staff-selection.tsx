@@ -1,21 +1,25 @@
-"use client"
-import React, { useState, useEffect } from "react";
-import { format } from "date-fns";
-import { getReservations, Reservation } from "@/app/actions/reservationActions";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import ReservationCalendar from "@/components/ReservationCalendar";
-import { useStaffManagement } from "@/hooks/useStaffManagement";
-import { useAuth } from "@/contexts/authcontext";  // AuthコンテキストをインポートElse
+import React from "react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { useReservation } from "@/contexts/reservationcontext";
+import { Staff, useStaffManagement } from "@/hooks/useStaffManagement";
+import { ChevronRight } from "lucide-react";
 
-const ReservationView: React.FC = () => {
-  const [reservations, setReservations] = useState<Reservation[]>([]);
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const [selectedStaff, setSelectedStaff] = useState<string>("all");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const { user, loading: authLoading } = useAuth();  // AuthコンテキストからUserとLoadingの状態を取得
-  const { staffList, loading: staffLoading, error: staffError } = useStaffManagement(user?.id || "");
+interface StaffSelectionProps {
+  onSelectStaff: (staff: Staff | null) => void;
+  onBack: () => void;
+  selectedMenuId: string;
+  userId: string;
+}
+
+export default function StaffSelection({
+  onSelectStaff,
+  onBack,
+  selectedMenuId,
+  userId,
+}: StaffSelectionProps) {
+  const { setSelectedStaff } = useReservation();
+  const { staffList, loading, error } = useStaffManagement(userId);
 
   const fetchReservations = async () => {
     setLoading(true);
@@ -48,47 +52,40 @@ const ReservationView: React.FC = () => {
     setSelectedStaff(value);
   };
 
-  if (authLoading) return <div>認証情報を読み込み中...</div>;
-  if (!user) return <div>ログインしてください</div>;
-  if (staffLoading) return <div>スタッフ情報を読み込み中...</div>;
-  if (staffError) return <div className="text-red-500">スタッフ情報の取得に失敗しました。</div>;
+  if (loading) return <div className="p-2 text-center text-sm">読み込み中...</div>;
+  if (error) return <div className="p-2 text-center text-sm text-red-500">エラー: {error.message}</div>;
 
   return (
-    <div className="p-4">
-      <div className="mb-4 flex space-x-4">
-        <Input
-          type="date"
-          value={format(selectedDate, "yyyy-MM-dd")}
-          onChange={(e) => handleDateChange(new Date(e.target.value))}
-        />
-        <Select value={selectedStaff} onValueChange={handleStaffChange}>
-          <SelectTrigger>
-            <SelectValue placeholder="スタッフを選択" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">全てのスタッフ</SelectItem>
-            {staffList.map((staff) => (
-              <SelectItem key={staff.id} value={staff.id}>
-                {staff.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      {loading && <div>予約情報を読み込み中...</div>}
-      {error && <div className="text-red-500">{error}</div>}
-      {!loading && !error && (
-        <ReservationCalendar
-          selectedDate={selectedDate}
-          selectedStaff={selectedStaff}
-          reservations={reservations}
-          onDateChange={handleDateChange}
-          onStaffChange={handleStaffChange}
-        />
-      )}
+    <div className="space-y-3 p-2 md:p-4">
+      <h2 className="text-lg font-bold md:text-xl">スタッフを選択してください</h2>
+      {staffList
+        .filter((staff) => staff.is_published)
+        .map((staff) => (
+          <Card key={staff.id} className="mb-2">
+            <CardContent className="p-3">
+              <div className="flex justify-between items-center">
+                <div>
+                  <h3 className="text-base font-semibold">{staff.name}</h3>
+                  <p className="text-xs text-gray-500">{staff.role}</p>
+                </div>
+                <Button
+                  onClick={() => handleStaffSelect(staff)}
+                  className="bg-orange-500 hover:bg-orange-600 text-white text-xs py-1 px-2 h-auto ml-auto md:text-sm md:py-2 md:px-4"
+                >
+                  選択
+                  <ChevronRight className="ml-1 w-3 h-3 md:w-4 md:h-4" />
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      <Button 
+        onClick={onBack} 
+        variant="outline" 
+        className="text-sm md:text-base"
+      >
+        戻る
+      </Button>
     </div>
   );
-};
-
-export default ReservationView;
+}

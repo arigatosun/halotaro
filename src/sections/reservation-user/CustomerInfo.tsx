@@ -16,28 +16,61 @@ const CustomerInfo: React.FC<CustomerInfoProps> = ({ onNext, onBack }) => {
     setCustomerInfo((prev) => ({ ...prev, [name]: value }));
   };
 
+  const isFormValid = () => {
+    return (
+      customerInfo.lastNameKana &&
+      customerInfo.firstNameKana &&
+      customerInfo.lastNameKanji &&
+      customerInfo.firstNameKanji &&
+      customerInfo.email &&
+      customerInfo.phone
+    );
+  };
+
   return (
     <div className="space-y-6">
       <h2 className="text-2xl font-bold">お客様情報を入力してください</h2>
       <div className="space-y-4">
-        <Input
-          name="name"
-          placeholder="お名前"
-          value={customerInfo.name}
-          onChange={handleInputChange}
-        />
+        <div className="flex space-x-4">
+          <Input
+            name="lastNameKana"
+            placeholder="姓 (カナ)"
+            value={customerInfo.lastNameKana || ""}
+            onChange={handleInputChange}
+          />
+          <Input
+            name="firstNameKana"
+            placeholder="名 (カナ)"
+            value={customerInfo.firstNameKana || ""}
+            onChange={handleInputChange}
+          />
+        </div>
+        <div className="flex space-x-4">
+          <Input
+            name="lastNameKanji"
+            placeholder="姓 (漢字)"
+            value={customerInfo.lastNameKanji || ""}
+            onChange={handleInputChange}
+          />
+          <Input
+            name="firstNameKanji"
+            placeholder="名 (漢字)"
+            value={customerInfo.firstNameKanji || ""}
+            onChange={handleInputChange}
+          />
+        </div>
         <Input
           name="email"
           type="email"
           placeholder="メールアドレス"
-          value={customerInfo.email}
+          value={customerInfo.email || ""}
           onChange={handleInputChange}
         />
         <Input
           name="phone"
           type="tel"
           placeholder="電話番号"
-          value={customerInfo.phone}
+          value={customerInfo.phone || ""}
           onChange={handleInputChange}
         />
       </div>
@@ -47,9 +80,7 @@ const CustomerInfo: React.FC<CustomerInfoProps> = ({ onNext, onBack }) => {
         </Button>
         <Button
           onClick={onNext}
-          disabled={
-            !customerInfo.name || !customerInfo.email || !customerInfo.phone
-          }
+          disabled={!isFormValid()}
         >
           次へ
         </Button>

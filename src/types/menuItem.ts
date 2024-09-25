@@ -1,5 +1,5 @@
 export interface MenuItem {
-  id: number;
+  id: number | string;
   user_id: string;
   name: string;
   category: string;
@@ -7,4 +7,7 @@ export interface MenuItem {
   price: number;
   duration: number;
   is_reservable: boolean;
+  isCoupon?: boolean;
+  coupon_id?: string;
+  image_url?: string;
 }
