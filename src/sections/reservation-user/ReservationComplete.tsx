@@ -12,7 +12,9 @@ interface ReservationCompleteProps {
   userId: string;
 }
 
-const ReservationComplete: React.FC<ReservationCompleteProps> = ({ userId }) => {
+const ReservationComplete: React.FC<ReservationCompleteProps> = ({
+  userId,
+}) => {
   const hasSaved = useRef(false);
   const [status, setStatus] = useState<string>("");
   const [loading, setLoading] = useState(true);
@@ -44,6 +46,8 @@ const ReservationComplete: React.FC<ReservationCompleteProps> = ({ userId }) => 
         paymentInfo,
       };
 
+      console.log("予約情報です。", reservationData);
+
       const response = await fetch("/api/create-reservation", {
         method: "POST",
         headers: {
@@ -57,7 +61,9 @@ const ReservationComplete: React.FC<ReservationCompleteProps> = ({ userId }) => 
         if (response.status === 409) {
           throw new Error("この予約は既に存在します");
         }
-        throw new Error(errorData.error || "予約の保存中にエラーが発生しました");
+        throw new Error(
+          errorData.error || "予約の保存中にエラーが発生しました"
+        );
       }
 
       const result = await response.json();
