@@ -5,10 +5,6 @@ const ENCRYPTION_KEY_HEX = (
   process.env.ENCRYPTION_KEY || "defaultdevkey".repeat(4)
 ).slice(0, 64);
 
-// デバッグ用のログ追加
-console.log("使用される ENCRYPTION_KEY_HEX:", ENCRYPTION_KEY_HEX);
-console.log("ENCRYPTION_KEY_HEX length:", ENCRYPTION_KEY_HEX.length);
-
 // 16進数文字列をバッファに変換
 export const ENCRYPTION_KEY = Buffer.from(ENCRYPTION_KEY_HEX, "hex");
 
