@@ -5,8 +5,7 @@
 import React, { useState } from "react";
 
 const SalonboardAutomation: React.FC = () => {
-  const [userId, setUserId] = useState("CD92702");
-  const [password, setPassword] = useState("lowe@0053");
+  const [userId, setUserId] = useState("422f1a9d-83be-468e-ad6a-bf9b524128f8");
   const [date, setDate] = useState("20241213"); // デフォルト日付
   const [rsvHour, setRsvHour] = useState("10"); // デフォルト開始時間
   const [rsvMinute, setRsvMinute] = useState("00"); // デフォルト開始分
@@ -28,7 +27,7 @@ const SalonboardAutomation: React.FC = () => {
     e.preventDefault();
     setIsLoading(true);
     setResult("");
-    setError(null); // エラーステートをリセット
+    setError(null);
 
     try {
       const response = await fetch("/api/salonboard-automation", {
@@ -38,25 +37,36 @@ const SalonboardAutomation: React.FC = () => {
         },
         body: JSON.stringify({
           user_id: userId,
-          password,
           date,
           rsv_hour: rsvHour,
           rsv_minute: rsvMinute,
-          staff_name: staffName, // スタッフ名を送信
+          staff_name: staffName,
           nm_sei_kana: nmSeiKana,
           nm_mei_kana: nmMeiKana,
           nm_sei: nmSei,
           nm_mei: nmMei,
-          rsv_term_hour: rsvTermHour, // 所要時間の追加
-          rsv_term_minute: rsvTermMinute, // 所要時間の追加
+          rsv_term_hour: rsvTermHour,
+          rsv_term_minute: rsvTermMinute,
         }),
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        // エラーレスポンスの場合
-        setError(data.error || "Automation failed");
+        console.log("Error response data:", data);
+        let errorMessage = "Automation failed";
+        if (data.error) {
+          errorMessage =
+            typeof data.error === "string"
+              ? data.error
+              : JSON.stringify(data.error);
+        } else if (data.detail) {
+          errorMessage =
+            typeof data.detail === "string"
+              ? data.detail
+              : JSON.stringify(data.detail);
+        }
+        setError(errorMessage);
       } else {
         setResult(data.message);
       }
@@ -88,24 +98,6 @@ const SalonboardAutomation: React.FC = () => {
             value={userId}
             onChange={(e) => setUserId(e.target.value)}
             placeholder="ユーザーIDを入力してください"
-            required
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
-          />
-        </div>
-        {/* パスワード */}
-        <div>
-          <label
-            htmlFor="password"
-            className="block text-sm font-medium text-gray-700"
-          >
-            パスワード
-          </label>
-          <input
-            id="password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="パスワードを入力してください"
             required
             className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
           />

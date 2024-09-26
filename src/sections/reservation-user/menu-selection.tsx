@@ -1,67 +1,106 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
+import Image from "next/image";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useReservation } from "@/contexts/reservationcontext";
 import { useMenuItems } from "@/hooks/useMenuItems";
+import { useCoupons } from "@/hooks/useCoupons";
 import { MenuItem } from "@/types/menuItem";
+import { Search, Tag, ChevronRight, ImageOff } from "lucide-react";
+import { Input } from "@/components/ui/input";
 
 interface MenuSelectionProps {
   onSelectMenu: (menuId: string, name: string, price: number) => void;
   userId: string;
 }
 
-const MenuSelection: React.FC<MenuSelectionProps> = ({
-  onSelectMenu,
-  userId,
-}) => {
+export default function MenuSelection({ onSelectMenu, userId }: MenuSelectionProps) {
   const { setSelectedMenus } = useReservation();
-  const { menuItems, loading, error } = useMenuItems(userId);
+  const { menuItems, loading: menuLoading, error: menuError } = useMenuItems(userId);
+  const { coupons, loading: couponLoading, error: couponError } = useCoupons(userId);
   const [activeTab, setActiveTab] = useState("all");
+  const [searchTerm, setSearchTerm] = useState("");
 
-  const handleMenuSelect = (menuId: string) => {
-    const selectedMenu = menuItems.find((menu) => menu.id === Number(menuId));
-    if (selectedMenu) {
-      setSelectedMenus([
-        {
-          id: selectedMenu.id.toString(),
-          name: selectedMenu.name,
-          price: selectedMenu.price,
-        },
-      ]);
-      onSelectMenu(selectedMenu.id.toString(), selectedMenu.name, selectedMenu.price);
-    }
+  const allItems = useMemo(() => [...menuItems, ...coupons], [menuItems, coupons]);
+
+  const handleItemSelect = (item: MenuItem) => {
+    setSelectedMenus([
+      {
+        id: item.id.toString(),
+        name: item.name,
+        price: item.price,
+      },
+    ]);
+    onSelectMenu(item.id.toString(), item.name, item.price);
   };
 
-  if (loading) return <div>Loading...</div>;
-  if (error) return <div>Error: {error.message}</div>;
+  const filteredItems = useMemo(() => {
+    let items = allItems;
+    switch (activeTab) {
+      case "firstVisit":
+        items = coupons.filter(coupon => coupon.category === "new");
+        break;
+      case "repeater":
+        items = coupons.filter(coupon => coupon.category === "repeat");
+        break;
+      case "menu":
+        items = menuItems;
+        break;
+    }
+    return items.filter(item =>
+      item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.description.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [activeTab, allItems, coupons, menuItems, searchTerm]);
 
-  const filteredMenuItems = menuItems.filter((menu) => {
-    if (activeTab === "all") return true;
-    // クーポンテーブルを追加した際に置き換える
-    // if (activeTab === "firstVisit") return menu.isFirstVisitCoupon;
-    // if (activeTab === "repeater") return menu.isRepeaterCoupon;
-    // return !menu.isFirstVisitCoupon && !menu.isRepeaterCoupon;
-  });
+  if (menuLoading || couponLoading) return <div className="p-2 text-center text-sm">読み込み中...</div>;
+  if (menuError || couponError) return <div className="p-2 text-center text-sm text-red-500">エラー: {(menuError || couponError)?.message}</div>;
 
-  const renderMenuItem = (menu: MenuItem) => (
-    <Card key={menu.id} className="mb-4">
-      <CardContent className="p-4">
-        <div className="flex items-start justify-between">
-          <div>
-            <h3 className="text-lg font-semibold">{menu.name}</h3>
-            <p className="text-sm text-gray-500">{menu.description}</p>
+  const renderItem = (item: MenuItem) => (
+    <Card key={item.id} className="mb-4">
+      <CardContent className="p-0 overflow-hidden">
+        <div className="flex flex-col md:flex-row">
+          <div className="relative w-full md:w-1/3 h-48 md:h-auto bg-gray-100">
+            {item.image_url ? (
+              <Image
+                src={item.image_url}
+                alt={item.name}
+                layout="fill"
+                objectFit="cover"
+                loading="lazy"
+              />
+            ) : (
+              <div className="flex items-center justify-center w-full h-full">
+                <ImageOff className="w-16 h-16 text-gray-400" />
+              </div>
+            )}
           </div>
-          <div className="text-right">
-            <p className="text-lg font-bold mb-2">
-              ¥{menu.price.toLocaleString()}
-            </p>
-            <Button
-              onClick={() => handleMenuSelect(menu.id.toString())}
-              className="bg-orange-500 hover:bg-orange-600 text-white"
-            >
-              選択する
-            </Button>
+          <div className="flex flex-col justify-between p-4 md:w-2/3">
+            <div>
+              <h3 className="text-lg font-semibold mb-2">{item.name}</h3>
+              <p className="text-sm text-gray-600 mb-2">{item.description}</p>
+            </div>
+            <div className="flex justify-between items-center mt-2">
+              <p className="text-lg font-bold">
+                ¥{item.price.toLocaleString()}
+              </p>
+              <div className="flex items-center">
+                {item.isCoupon && (
+                  <span className="inline-flex items-center px-2 py-1 mr-2 text-xs font-medium text-blue-700 bg-blue-100 rounded-full">
+                    <Tag className="w-3 h-3 mr-1" />
+                    クーポン
+                  </span>
+                )}
+                <Button
+                  onClick={() => handleItemSelect(item)}
+                  className="bg-orange-500 hover:bg-orange-600 text-white text-xs py-1 px-2 h-auto md:text-sm md:py-2 md:px-4"
+                >
+                  選択
+                  <ChevronRight className="ml-1 w-3 h-3 md:w-4 md:h-4" />
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
       </CardContent>
@@ -69,32 +108,39 @@ const MenuSelection: React.FC<MenuSelectionProps> = ({
   );
 
   return (
-    <div className="space-y-6">
-      <h2 className="text-2xl font-bold">
+    <div className="space-y-4 p-2 md:p-4">
+      <h2 className="text-2xl font-bold mb-4">
         クーポン・メニューを選択してください
       </h2>
-      <Tabs defaultValue="all" onValueChange={setActiveTab}>
-        <TabsList>
-          <TabsTrigger value="all">すべて</TabsTrigger>
-          <TabsTrigger value="firstVisit">初来店時クーポン</TabsTrigger>
-          <TabsTrigger value="repeater">2回目以降クーポン</TabsTrigger>
-          <TabsTrigger value="menu">メニュー</TabsTrigger>
+      <div className="mb-4">
+        <Input
+          type="text"
+          placeholder="メニューを検索..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="w-full"
+        />
+      </div>
+      <Tabs defaultValue="all" onValueChange={setActiveTab} className="w-full">
+        <TabsList className="grid grid-cols-4 w-full mb-4">
+          <TabsTrigger value="all" className="text-xs py-2 px-1 md:text-sm">すべて</TabsTrigger>
+          <TabsTrigger value="firstVisit" className="text-xs py-2 px-1 md:text-sm">初来店</TabsTrigger>
+          <TabsTrigger value="repeater" className="text-xs py-2 px-1 md:text-sm">2回目以降</TabsTrigger>
+          <TabsTrigger value="menu" className="text-xs py-2 px-1 md:text-sm">メニュー</TabsTrigger>
         </TabsList>
-        <TabsContent value="all">
-          {filteredMenuItems.map(renderMenuItem)}
+        <TabsContent value="all" className="mt-2 md:mt-4">
+          {filteredItems.map(renderItem)}
         </TabsContent>
-        <TabsContent value="firstVisit">
-          {filteredMenuItems.map(renderMenuItem)}
+        <TabsContent value="firstVisit" className="mt-2 md:mt-4">
+          {filteredItems.map(renderItem)}
         </TabsContent>
-        <TabsContent value="repeater">
-          {filteredMenuItems.map(renderMenuItem)}
+        <TabsContent value="repeater" className="mt-2 md:mt-4">
+          {filteredItems.map(renderItem)}
         </TabsContent>
-        <TabsContent value="menu">
-          {filteredMenuItems.map(renderMenuItem)}
+        <TabsContent value="menu" className="mt-2 md:mt-4">
+          {filteredItems.map(renderItem)}
         </TabsContent>
       </Tabs>
     </div>
   );
-};
-
-export default MenuSelection;
+}

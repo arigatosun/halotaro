@@ -19,7 +19,7 @@ export async function GET(request: Request) {
       .from("salonboard_credentials")
       .select("username, updated_at")
       .eq("user_id", userId)
-      .single();
+      .maybeSingle();
 
     if (error) {
       throw error;

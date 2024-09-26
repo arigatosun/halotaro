@@ -18,7 +18,7 @@ const steps = [
   "スタッフ選択",
   "日時選択",
   "お客様情報入力",
-  "予約内容確認",
+  "事前決済",
   "予約完了",
 ];
 
@@ -121,7 +121,7 @@ function ReservationContent({ userId }: ReservationRootProps) {
     <Layout>
       <Box sx={{ padding: '0 16px' }}>
         <ReservationHeader currentStep={activeStep} />
-        <h1>{steps[activeStep]}</h1>
+       
         {getStepContent(activeStep)}
       </Box>
     </Layout>

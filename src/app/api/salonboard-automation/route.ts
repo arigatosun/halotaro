@@ -8,7 +8,6 @@ export async function POST(request: NextRequest) {
   try {
     const {
       user_id,
-      password,
       date,
       rsv_hour,
       rsv_minute,
@@ -31,7 +30,6 @@ export async function POST(request: NextRequest) {
       },
       body: JSON.stringify({
         user_id,
-        password,
         date,
         rsv_hour,
         rsv_minute,

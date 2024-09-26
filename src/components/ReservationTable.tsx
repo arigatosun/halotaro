@@ -100,7 +100,7 @@ const ReservationTable: React.FC<ReservationTableProps> = ({
               <TableCell>{reservation.staff_name}</TableCell>
               <TableCell>¥{reservation.total_price.toLocaleString()}</TableCell>
               <TableCell>
-                <Link href={`/reservations/${reservation.id}`}>
+                <Link href={`/reservations/${reservation.id}/accounting`}>
                   <Button variant="outline">詳細</Button>
                 </Link>
               </TableCell>
