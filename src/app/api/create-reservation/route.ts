@@ -3,12 +3,14 @@ import { createClient } from "@supabase/supabase-js";
 import { Resend } from 'resend';
 import { ReservationConfirmation } from '../../../emails/ReservationConfirmation';
 import { NewReservationNotification } from '../../../emails/NewReservationNotification';
+import { generateCancelUrl } from '../../../utils/url';
 
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 export async function POST(request: Request) {
   try {
+    // リクエストボディからデータを取得
     const {
       userId,
       menuId,
@@ -85,7 +87,7 @@ export async function POST(request: Request) {
     }
 
     // RPC関数の呼び出し
-    const { data: reservation, error: reservationError } = await supabase.rpc(
+    const { data, error: reservationError } = await supabase.rpc(
       "create_reservation",
       {
         p_user_id: userId,
@@ -110,6 +112,14 @@ export async function POST(request: Request) {
       console.error("Reservation creation error:", reservationError);
       throw reservationError;
     }
+
+    if (!data || data.length === 0 || !data[0].id) {
+      console.error("Reservation created but ID is missing", data);
+      throw new Error("予約IDの取得に失敗しました");
+    }
+
+    const reservationId = data[0].id;
+    console.log("Created reservation ID:", reservationId);
 
     // スタッフ名とメニュー/クーポン名を取得
     let staffName = '';
@@ -153,13 +163,20 @@ export async function POST(request: Request) {
       }
     }
 
-    // メール送信処理の追加
+    // メール送信処理
     try {
       console.log('Attempting to send emails...');
 
+      // ベースURLの設定
+      const baseUrl = process.env.NODE_ENV === 'development' 
+        ? 'http://localhost:3000' 
+        : process.env.NEXT_PUBLIC_BASE_URL || 'https://www.harotalo.com';
+      
+      const cancelUrl = generateCancelUrl(baseUrl, reservationId);
+
       // 顧客へのメール送信
       const customerEmailResult = await resend.emails.send({
-        from: 'Harotalo運営 <noreply@harotalo.com>', // 検証済みドメインに変更
+        from: 'Harotalo運営 <noreply@harotalo.com>',
         to: customerInfo.email,
         subject: '予約完了のお知らせ',
         react: ReservationConfirmation({ 
@@ -168,14 +185,15 @@ export async function POST(request: Request) {
           endTime: new Date(endTime).toLocaleString('ja-JP'),
           staffName: staffName,
           serviceName: serviceName,
-          totalPrice: totalPrice
+          totalPrice: totalPrice,
+          reservationId: reservationId,
+          cancelUrl: cancelUrl
         })
       });
 
       console.log('Customer email result:', customerEmailResult);
 
       // サロン運営者へのメール送信
-      // user_viewテーブルからメールアドレスを取得
       const { data: userData, error: userError } = await supabase
         .from('user_view')
         .select('email')
@@ -193,7 +211,7 @@ export async function POST(request: Request) {
       }
 
       const ownerEmailResult = await resend.emails.send({
-        from: 'Harotalo運営 <noreply@harotalo.com>', // 検証済みドメインに変更
+        from: 'Harotalo運営 <noreply@harotalo.com>',
         to: userData.email,
         subject: '新規予約のお知らせ',
         react: NewReservationNotification({ 
@@ -243,7 +261,7 @@ export async function POST(request: Request) {
       // メール送信エラーはログに記録するが、予約プロセス自体は中断しない
     }
 
-    return NextResponse.json({ success: true, reservationId: reservation.id });
+    return NextResponse.json({ success: true, reservationId: reservationId });
   } catch (error: any) {
     console.error("Error saving reservation:", error);
     return NextResponse.json({ error: error.message }, { status: 400 });

@@ -5,6 +5,7 @@ import { Preview } from '@react-email/preview';
 import { Container } from '@react-email/container';
 import { Section } from '@react-email/section';
 import { Text } from '@react-email/text';
+import { Button } from '@react-email/button';
 
 interface ReservationConfirmationProps {
   customerName: string;
@@ -13,6 +14,8 @@ interface ReservationConfirmationProps {
   staffName: string;
   serviceName: string;
   totalPrice: number;
+  reservationId: string; // 新しく追加
+  cancelUrl: string; // 新しく追加
 }
 
 export const ReservationConfirmation: React.FC<ReservationConfirmationProps> = ({
@@ -22,6 +25,8 @@ export const ReservationConfirmation: React.FC<ReservationConfirmationProps> = (
   staffName,
   serviceName,
   totalPrice,
+  reservationId,
+  cancelUrl,
 }) => (
   <Html>
     <Head />
@@ -62,7 +67,13 @@ export const ReservationConfirmation: React.FC<ReservationConfirmationProps> = (
         <Text style={textStyle}>
           ご来店を心よりお待ちしております。ご質問やご要望がございましたら、お気軽にお問い合わせください。
         </Text>
-      </Section>
+        <Text style={textStyle}>
+        ご予約をキャンセルされる場合は、以下のリンクからお手続きください：
+      </Text>
+      <Button href={cancelUrl} style={buttonStyle}>
+        予約をキャンセル
+      </Button>
+    </Section>
       <Section style={footerStyle}>
         <Text style={footerTextStyle}>
           ©2023 Harotalo. All rights reserved.
@@ -71,6 +82,20 @@ export const ReservationConfirmation: React.FC<ReservationConfirmationProps> = (
     </Container>
   </Html>
 );
+
+const buttonStyle: React.CSSProperties = {
+  backgroundColor: '#F97316',
+  borderRadius: '4px',
+  color: '#ffffff',
+  fontSize: '16px',
+  fontWeight: 'bold',
+  textDecoration: 'none',
+  textAlign: 'center',
+  display: 'block',
+  width: '200px',
+  padding: '12px',
+  margin: '16px auto',
+};
 
 const containerStyle: React.CSSProperties = {
   margin: '0 auto',
