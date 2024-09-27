@@ -5,10 +5,10 @@ import getStripe from "@/lib/stripe";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import Image from "next/image";
 import { LockIcon, CreditCardIcon, ShieldCheckIcon, AlertCircleIcon } from "lucide-react";
+import { CircularProgress } from "@mui/material";
 
 interface PaymentFormProps {
   onBack: () => void;
@@ -140,12 +140,12 @@ const Payment: React.FC<PaymentProps> = ({
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [connectedAccountId, setConnectedAccountId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [progress, setProgress] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
   const { setPaymentInfo, selectedMenus } = useReservation();
 
   const fetchPaymentIntent = useCallback(async () => {
     try {
-      setProgress(25);
+      setIsLoading(true);
       console.log("Sending request with:", { userId, selectedMenus });
       const response = await fetch("/api/create-payment-intent", {
         method: "POST",
@@ -156,8 +156,6 @@ const Payment: React.FC<PaymentProps> = ({
         }),
       });
       
-      setProgress(50);
-
       if (!response.ok) {
         const errorData = await response.json();
         console.error("Server response:", errorData);
@@ -168,13 +166,13 @@ const Payment: React.FC<PaymentProps> = ({
       console.log("Received PaymentIntent data:", data);
       setClientSecret(data.clientSecret);
       setConnectedAccountId(data.connectedAccountId);
-      setProgress(100);
     } catch (err: any) {
       console.error("Error fetching PaymentIntent:", err);
       setError(
         "決済の準備中にエラーが発生しました。もう一度お試しください。"
       );
-      setProgress(0);
+    } finally {
+      setIsLoading(false);
     }
   }, [userId, selectedMenus]);
 
@@ -194,23 +192,28 @@ const Payment: React.FC<PaymentProps> = ({
     onPaymentComplete(status, paymentIntent);
   };
 
-  if (!clientSecret) {
+  if (isLoading) {
     return (
       <div className="w-full max-w-md mx-auto mt-8 space-y-4">
-        <Progress value={progress} className="w-full" />
-        <p className="text-center text-gray-600">決済の準備中...</p>
-        <div className="flex justify-center space-x-2">
-          {[1, 2, 3].map((step) => (
-            <div
-              key={step}
-              className={`w-3 h-3 rounded-full ${
-                progress >= step * 33 ? 'bg-blue-500' : 'bg-gray-300'
-              }`}
-            />
-          ))}
+        <div className="flex flex-col items-center justify-center space-y-4">
+          <CircularProgress size={60} style={{ color: "#F9802D" }} />
+          <p className="text-lg font-semibold text-[#F9802D]">決済の準備中...</p>
         </div>
       </div>
     );
+  }
+
+  if (error) {
+    return (
+      <Alert variant="destructive" className="mt-4">
+        <AlertCircleIcon className="h-4 w-4" />
+        <AlertDescription>{error}</AlertDescription>
+      </Alert>
+    );
+  }
+
+  if (!clientSecret) {
+    return null;
   }
 
   return (
