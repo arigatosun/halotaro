@@ -7,11 +7,12 @@ import { useReservation } from "@/contexts/reservationcontext";
 import { useMenuItems } from "@/hooks/useMenuItems";
 import { useCoupons } from "@/hooks/useCoupons";
 import { MenuItem } from "@/types/menuItem";
-import { Search, Tag, ChevronRight, ImageOff } from "lucide-react";
+import { Search, Tag, ChevronRight, ImageOff, Clock } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { CircularProgress } from "@mui/material";
 
 interface MenuSelectionProps {
-  onSelectMenu: (menuId: string, name: string, price: number) => void;
+  onSelectMenu: (menuId: string, name: string, price: number, duration: number) => void;
   userId: string;
 }
 
@@ -25,14 +26,16 @@ export default function MenuSelection({ onSelectMenu, userId }: MenuSelectionPro
   const allItems = useMemo(() => [...menuItems, ...coupons], [menuItems, coupons]);
 
   const handleItemSelect = (item: MenuItem) => {
+    console.log('Selected item:', item);
     setSelectedMenus([
       {
         id: item.id.toString(),
         name: item.name,
         price: item.price,
+        duration: item.duration,
       },
     ]);
-    onSelectMenu(item.id.toString(), item.name, item.price);
+    onSelectMenu(item.id.toString(), item.name, item.price, item.duration);
   };
 
   const filteredItems = useMemo(() => {
@@ -54,7 +57,17 @@ export default function MenuSelection({ onSelectMenu, userId }: MenuSelectionPro
     );
   }, [activeTab, allItems, coupons, menuItems, searchTerm]);
 
-  if (menuLoading || couponLoading) return <div className="p-2 text-center text-sm">読み込み中...</div>;
+  if (menuLoading || couponLoading) {
+    return (
+      <div className="w-full max-w-md mx-auto mt-8 space-y-4">
+        <div className="flex flex-col items-center justify-center space-y-4">
+          <CircularProgress size={60} style={{ color: "#F9802D" }} />
+          <p className="text-lg font-semibold text-[#F9802D]">メニューを読み込み中...</p>
+        </div>
+      </div>
+    );
+  }
+
   if (menuError || couponError) return <div className="p-2 text-center text-sm text-red-500">エラー: {(menuError || couponError)?.message}</div>;
 
   const renderItem = (item: MenuItem) => (
@@ -80,6 +93,10 @@ export default function MenuSelection({ onSelectMenu, userId }: MenuSelectionPro
             <div>
               <h3 className="text-lg font-semibold mb-2">{item.name}</h3>
               <p className="text-sm text-gray-600 mb-2">{item.description}</p>
+              <div className="flex items-center text-sm text-gray-500 mb-2">
+                <Clock className="w-4 h-4 mr-1" />
+                <span>想定所要時間: {item.duration}分</span>
+              </div>
             </div>
             <div className="flex justify-between items-center mt-2">
               <p className="text-lg font-bold">

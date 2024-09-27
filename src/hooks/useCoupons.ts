@@ -20,6 +20,7 @@ export function useCoupons(userId: string) {
         throw new Error("Failed to fetch coupons");
       }
       const data = await response.json();
+      console.log('Fetched coupons:', data); // 追加
       const formattedCoupons: MenuItem[] = data.map((coupon: any) => ({
         id: coupon.id,
         user_id: coupon.user_id,
