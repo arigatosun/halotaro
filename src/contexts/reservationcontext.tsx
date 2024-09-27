@@ -6,6 +6,7 @@ interface SelectedMenuItem {
   id: string;
   name: string;
   price: number;
+  duration:number;
 }
 
 // 選択されたスタッフの型定義
@@ -15,19 +16,20 @@ interface SelectedStaff {
 }
 
 // 予約日時の型定義（開始時間と終了時間）
-interface SelectedDateTime {
+export interface SelectedDateTime {
   start: Date;
   end: Date;
 }
 
 // 更新された顧客情報の型定義
-interface CustomerInfo {
+export interface CustomerInfo {
   lastNameKana: string;
   firstNameKana: string;
   lastNameKanji: string;
   firstNameKanji: string;
   email: string;
   phone: string;
+  [key: string]: string;
 }
 
 // 予約コンテキストの型定義

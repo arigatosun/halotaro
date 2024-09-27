@@ -22,6 +22,7 @@ import {
   CheckCircleIcon,
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
+import { CircularProgress } from "@mui/material";
 
 interface ReservationCompleteProps {
   userId: string;
@@ -119,9 +120,10 @@ export default function ReservationComplete({
   if (loading) {
     return (
       <div className="w-full max-w-2xl mx-auto mt-8 space-y-4">
-        <Skeleton className="h-8 w-3/4 mx-auto" />
-        <Skeleton className="h-64 w-full" />
-        <Skeleton className="h-10 w-full" />
+        <div className="flex flex-col items-center justify-center space-y-4">
+          <CircularProgress size={60} style={{ color: "#F9802D" }} />
+          <p className="text-lg font-semibold text-[#F9802D]">予約を作成中...</p>
+        </div>
       </div>
     );
   }
@@ -143,7 +145,7 @@ export default function ReservationComplete({
     <Card className="w-full max-w-2xl mx-auto">
       <CardHeader>
         <CardTitle className="text-2xl font-bold text-center flex items-center justify-center">
-          <CheckCircleIcon className="mr-2 text-primary" />
+          <CheckCircleIcon className="mr-2 text-[#F9802D]" />
           {status}
         </CardTitle>
       </CardHeader>
@@ -153,7 +155,7 @@ export default function ReservationComplete({
         </p>
         <div className="space-y-4">
           <div className="flex items-start space-x-3">
-            <CalendarIcon className="w-5 h-5 mt-1 text-primary" />
+            <CalendarIcon className="w-5 h-5 mt-1 text-[#F9802D]" />
             <div>
               <h3 className="font-semibold">予約日時</h3>
               <p className="text-sm text-muted-foreground">
@@ -164,7 +166,7 @@ export default function ReservationComplete({
             </div>
           </div>
           <div className="flex items-start space-x-3">
-            <ClockIcon className="w-5 h-5 mt-1 text-primary" />
+            <ClockIcon className="w-5 h-5 mt-1 text-[#F9802D]" />
             <div>
               <h3 className="font-semibold">予約時間</h3>
               <p className="text-sm text-muted-foreground">
@@ -182,7 +184,7 @@ export default function ReservationComplete({
           </div>
           <Separator />
           <div className="flex items-start space-x-3">
-            <UserIcon className="w-5 h-5 mt-1 text-primary" />
+            <UserIcon className="w-5 h-5 mt-1 text-[#F9802D]" />
             <div>
               <h3 className="font-semibold">担当スタッフ</h3>
               <p className="text-sm text-muted-foreground">
@@ -191,7 +193,7 @@ export default function ReservationComplete({
             </div>
           </div>
           <div className="flex items-start space-x-3">
-            <UserIcon className="w-5 h-5 mt-1 text-primary" />
+            <UserIcon className="w-5 h-5 mt-1 text-[#F9802D]" />
             <div>
               <h3 className="font-semibold">お客様名</h3>
               <p className="text-sm text-muted-foreground">{fullName}</p>
@@ -199,7 +201,7 @@ export default function ReservationComplete({
           </div>
           <Separator />
           <div className="flex items-start space-x-3">
-            <ScissorsIcon className="w-5 h-5 mt-1 text-primary" />
+            <ScissorsIcon className="w-5 h-5 mt-1 text-[#F9802D]" />
             <div>
               <h3 className="font-semibold">選択したメニュー</h3>
               <ul className="text-sm text-muted-foreground list-disc list-inside">
@@ -211,12 +213,15 @@ export default function ReservationComplete({
           </div>
         </div>
         <p className="text-sm text-muted-foreground flex items-center justify-center">
-          <MailIcon className="w-4 h-4 mr-2 text-primary" />
+          <MailIcon className="w-4 h-4 mr-2 text-[#F9802D]" />
           予約の詳細は、{customerInfo.email} に送信されます。
         </p>
       </CardContent>
       <CardFooter className="flex justify-center pt-6">
-        <Button onClick={() => router.push("/")} className="w-full sm:w-auto">
+        <Button 
+          onClick={() => router.push("/")}
+          className="w-full sm:w-auto bg-[#F9802D] hover:bg-[#E67321] text-white"
+        >
           トップページに戻る
         </Button>
       </CardFooter>

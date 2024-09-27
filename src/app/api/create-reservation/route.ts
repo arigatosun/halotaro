@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { Resend } from 'resend';
+import { ReservationConfirmation } from '../../../emails/ReservationConfirmation';
+import { NewReservationNotification } from '../../../emails/NewReservationNotification';
+import { generateCancelUrl } from '../../../utils/url';
 
 // Supabase クライアントの初期化
 const supabase = createClient(
@@ -7,8 +11,12 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+// Resend クライアントの初期化（メール送信用）
+const resend = new Resend(process.env.RESEND_API_KEY!);
+
 export async function POST(request: Request) {
   try {
+    // リクエストボディからデータを取得
     const {
       userId,
       menuId,
@@ -86,25 +94,57 @@ export async function POST(request: Request) {
 
     const staffName = staffData.name;
 
-    // メニューの所要時間の取得
-    const { data: menuData, error: menuError } = await supabase
-      .from("menu_items")
-      .select("duration")
-      .eq("id", menuId)
-      .single();
+    // メニューの所要時間とサービス名の取得
+    let duration = 0;
+    let serviceName = '';
 
-    if (menuError || !menuData) {
-      throw new Error("メニュー情報の取得に失敗しました");
+    if (p_menu_id) {
+      // メニュー情報の取得
+      const { data: menuData, error: menuError } = await supabase
+        .from('menu_items')
+        .select('duration, name')
+        .eq('id', p_menu_id)
+        .single();
+
+      if (menuError || !menuData) {
+        throw new Error("メニュー情報の取得に失敗しました");
+      }
+
+      duration = menuData.duration; // 単位は分と仮定
+      serviceName = menuData.name;
+    } else if (p_coupon_id) {
+      // クーポン情報の取得
+      const { data: couponData, error: couponError } = await supabase
+        .from('coupons')
+        .select('name')
+        .eq('id', p_coupon_id)
+        .single();
+
+      if (couponError || !couponData) {
+        throw new Error("クーポン情報の取得に失敗しました");
+      }
+
+      duration = 60; // デフォルトの所要時間（必要に応じて修正）
+      serviceName = couponData.name;
     }
 
-    const duration = menuData.duration; // 単位は分と仮定
-
-    // 所要時間を時間と分に分割
+    // 予約時間の計算
     const rsvTermHour = Math.floor(duration / 60).toString();
     const rsvTermMinute = (duration % 60).toString();
 
+    // スタッフ用通知メールアドレスの取得
+    const { data: staffNotificationEmails, error: staffEmailsError } = await supabase
+      .from('staff_notification_emails')
+      .select('email_addresses')
+      .eq('user_id', userId)
+      .single();
+
+    if (staffEmailsError) {
+      console.error('Error fetching staff notification emails:', staffEmailsError);
+    }
+
     // RPC関数の呼び出し
-    const { data: reservation, error: reservationError } = await supabase.rpc(
+    const { data, error: reservationError } = await supabase.rpc(
       "create_reservation",
       {
         p_user_id: userId,
@@ -130,10 +170,116 @@ export async function POST(request: Request) {
       throw reservationError;
     }
 
+    if (!data || data.length === 0 || !data[0].id) {
+      console.error("Reservation created but ID is missing", data);
+      throw new Error("予約IDの取得に失敗しました");
+    }
+
+    const reservationId = data[0].id;
+    console.log("Created reservation ID:", reservationId);
+
+    // メール送信処理
+    try {
+      console.log('Attempting to send emails...');
+
+      // ベースURLの設定
+      const baseUrl = process.env.NODE_ENV === 'development' 
+        ? 'http://localhost:3000' 
+        : process.env.NEXT_PUBLIC_BASE_URL || 'https://www.harotalo.com';
+      
+      const cancelUrl = generateCancelUrl(baseUrl, reservationId);
+
+      // 顧客へのメール送信
+      const customerEmailResult = await resend.emails.send({
+        from: 'Harotalo運営 <noreply@harotalo.com>',
+        to: customerInfo.email,
+        subject: '予約完了のお知らせ',
+        react: ReservationConfirmation({ 
+          customerName: customerFullName, 
+          dateTime: new Date(startTime).toLocaleString('ja-JP'),
+          endTime: new Date(endTime).toLocaleString('ja-JP'),
+          staffName: staffName,
+          serviceName: serviceName,
+          totalPrice: totalPrice,
+          reservationId: reservationId,
+          cancelUrl: cancelUrl
+        })
+      });
+
+      console.log('Customer email result:', customerEmailResult);
+
+      // サロン運営者へのメール送信
+      const { data: userData, error: userError } = await supabase
+        .from('user_view')
+        .select('email')
+        .eq('id', userId)
+        .single();
+
+      if (userError) {
+        console.error('Error fetching user email:', userError);
+        throw userError;
+      }
+
+      if (!userData || !userData.email) {
+        console.error('Salon owner email not found');
+        throw new Error('サロン運営者のメールアドレスが見つかりません');
+      }
+
+      const ownerEmailResult = await resend.emails.send({
+        from: 'Harotalo運営 <noreply@harotalo.com>',
+        to: userData.email,
+        subject: '新規予約のお知らせ',
+        react: NewReservationNotification({ 
+          customerName: customerFullName,
+          customerEmail: customerInfo.email,
+          customerPhone: customerInfo.phone,
+          dateTime: new Date(startTime).toLocaleString('ja-JP'),
+          endTime: new Date(endTime).toLocaleString('ja-JP'),
+          staffName: staffName,
+          serviceName: serviceName,
+          totalPrice: totalPrice
+        })
+      });
+
+      console.log('Salon owner email result:', ownerEmailResult);
+
+      // スタッフへのメール送信
+      if (staffNotificationEmails && staffNotificationEmails.email_addresses) {
+        for (const staffEmail of staffNotificationEmails.email_addresses) {
+          const staffEmailResult = await resend.emails.send({
+            from: 'Harotalo運営 <noreply@harotalo.com>',
+            to: staffEmail,
+            subject: '新規予約のお知らせ',
+            react: NewReservationNotification({ 
+              customerName: customerFullName,
+              customerEmail: customerInfo.email,
+              customerPhone: customerInfo.phone,
+              dateTime: new Date(startTime).toLocaleString('ja-JP'),
+              endTime: new Date(endTime).toLocaleString('ja-JP'),
+              staffName: staffName,
+              serviceName: serviceName,
+              totalPrice: totalPrice
+            })
+          });
+
+          console.log(`Staff email result for ${staffEmail}:`, staffEmailResult);
+        }
+      }
+
+      console.log('Emails sent successfully');
+    } catch (emailError) {
+      console.error('Error sending emails:', emailError);
+      if (emailError instanceof Error) {
+        console.error('Error message:', emailError.message);
+        console.error('Error stack:', emailError.stack);
+      }
+      // メール送信エラーはログに記録するが、予約プロセス自体は中断しない
+    }
+
     // 予約情報の保存が成功したので、内部APIにリクエストを送信（非同期）
     sendReservationToAutomation({
       userId,
-      reservationId: reservation.id,
+      reservationId: reservationId,
       startTime,
       endTime,
       staffName,
@@ -153,7 +299,7 @@ export async function POST(request: Request) {
       });
 
     // クライアントへのレスポンスを即座に返す
-    return NextResponse.json({ success: true, reservationId: reservation.id });
+    return NextResponse.json({ success: true, reservationId: reservationId });
   } catch (error: any) {
     console.error("Error saving reservation:", error);
     return NextResponse.json({ error: error.message }, { status: 400 });

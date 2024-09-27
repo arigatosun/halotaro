@@ -49,8 +49,8 @@ function ReservationContent({ userId }: ReservationRootProps) {
     }
   };
 
-  const handleMenuSelect = (menuId: string, name: string, price: number) => {
-    setSelectedMenus([{ id: menuId, name, price }]);
+  const handleMenuSelect = (menuId: string, name: string, price: number, duration: number) => {
+    setSelectedMenus([{ id: menuId, name, price, duration }]);
     setMenuSelectionCompleted(true);
     handleNext();
   };
@@ -76,7 +76,10 @@ function ReservationContent({ userId }: ReservationRootProps) {
     switch (step) {
       case 0:
         return (
-          <MenuSelection onSelectMenu={handleMenuSelect} userId={userId} />
+          <MenuSelection 
+          onSelectMenu={(menuId, name, price, duration) => handleMenuSelect(menuId, name, price, duration)} 
+          userId={userId} 
+        />
         );
       case 1:
         return (
@@ -87,17 +90,17 @@ function ReservationContent({ userId }: ReservationRootProps) {
             userId={userId}
           />
         );
-        case 2:
-          return (
-            <Box sx={{ width: '100%', overflowX: 'auto', margin: '0 -16px' }}>
-              <DateSelection
-                onDateTimeSelect={handleDateTimeSelect}
-                onBack={handleBack}
-                selectedStaff={selectedStaff}
-                selectedMenuId={selectedMenus[0]?.id || ""}
-              />
-            </Box>
-          );
+      case 2:
+        return (
+          <Box sx={{ width: '100%', overflowX: 'auto', margin: '0 -16px' }}>
+            <DateSelection
+              onDateTimeSelect={handleDateTimeSelect}
+              onBack={handleBack}
+              selectedStaff={selectedStaff}
+              selectedMenuId={selectedMenus[0]?.id || ""}
+            />
+          </Box>
+        );
       case 3:
         return <CustomerInfo onNext={handleNext} onBack={handleBack} />;
       case 4:
@@ -121,7 +124,6 @@ function ReservationContent({ userId }: ReservationRootProps) {
     <Layout>
       <Box sx={{ padding: '0 16px' }}>
         <ReservationHeader currentStep={activeStep} />
-       
         {getStepContent(activeStep)}
       </Box>
     </Layout>

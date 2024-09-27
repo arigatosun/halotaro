@@ -21,7 +21,8 @@ export async function POST(request: NextRequest) {
     } = await request.json();
 
     // FastAPIサーバーのURL
-    const apiUrl = process.env.PYTHON_API_URL || "http://localhost:8000";
+    // const apiUrl = process.env.PYTHON_API_URL || "http://localhost:8000";
+    const apiUrl = "http://localhost:8000";
 
     const response = await fetch(`${apiUrl}/run-automation`, {
       method: "POST",
