@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { Resend } from 'resend';
-import { ReservationConfirmation } from '../../../emails/ReservationConfirmation';
-import { NewReservationNotification } from '../../../emails/NewReservationNotification';
-import { generateCancelUrl } from '../../../utils/url';
+import { Resend } from "resend";
+import { ReservationConfirmation } from "../../../emails/ReservationConfirmation";
+import { NewReservationNotification } from "../../../emails/NewReservationNotification";
+import { generateCancelUrl } from "../../../utils/url";
 
 // Supabase クライアントの初期化
 const supabase = createClient(
@@ -96,14 +96,14 @@ export async function POST(request: Request) {
 
     // メニューの所要時間とサービス名の取得
     let duration = 0;
-    let serviceName = '';
+    let serviceName = "";
 
     if (p_menu_id) {
       // メニュー情報の取得
       const { data: menuData, error: menuError } = await supabase
-        .from('menu_items')
-        .select('duration, name')
-        .eq('id', p_menu_id)
+        .from("menu_items")
+        .select("duration, name")
+        .eq("id", p_menu_id)
         .single();
 
       if (menuError || !menuData) {
@@ -115,16 +115,15 @@ export async function POST(request: Request) {
     } else if (p_coupon_id) {
       // クーポン情報の取得
       const { data: couponData, error: couponError } = await supabase
-        .from('coupons')
-        .select('name')
-        .eq('id', p_coupon_id)
+        .from("coupons")
+        .select("name")
+        .eq("id", p_coupon_id)
         .single();
 
       if (couponError || !couponData) {
         throw new Error("クーポン情報の取得に失敗しました");
       }
 
-      duration = 60; // デフォルトの所要時間（必要に応じて修正）
       serviceName = couponData.name;
     }
 
@@ -133,14 +132,18 @@ export async function POST(request: Request) {
     const rsvTermMinute = (duration % 60).toString();
 
     // スタッフ用通知メールアドレスの取得
-    const { data: staffNotificationEmails, error: staffEmailsError } = await supabase
-      .from('staff_notification_emails')
-      .select('email_addresses')
-      .eq('user_id', userId)
-      .single();
+    const { data: staffNotificationEmails, error: staffEmailsError } =
+      await supabase
+        .from("staff_notification_emails")
+        .select("email_addresses")
+        .eq("user_id", userId)
+        .single();
 
     if (staffEmailsError) {
-      console.error('Error fetching staff notification emails:', staffEmailsError);
+      console.error(
+        "Error fetching staff notification emails:",
+        staffEmailsError
+      );
     }
 
     // RPC関数の呼び出し
@@ -180,98 +183,102 @@ export async function POST(request: Request) {
 
     // メール送信処理
     try {
-      console.log('Attempting to send emails...');
+      console.log("Attempting to send emails...");
 
       // ベースURLの設定
-      const baseUrl = process.env.NODE_ENV === 'development' 
-        ? 'http://localhost:3000' 
-        : process.env.NEXT_PUBLIC_BASE_URL || 'https://www.harotalo.com';
-      
+      const baseUrl =
+        process.env.NODE_ENV === "development"
+          ? "http://localhost:3000"
+          : process.env.NEXT_PUBLIC_BASE_URL || "https://www.harotalo.com";
+
       const cancelUrl = generateCancelUrl(baseUrl, reservationId);
 
       // 顧客へのメール送信
       const customerEmailResult = await resend.emails.send({
-        from: 'Harotalo運営 <noreply@harotalo.com>',
+        from: "Harotalo運営 <noreply@harotalo.com>",
         to: customerInfo.email,
-        subject: '予約完了のお知らせ',
-        react: ReservationConfirmation({ 
-          customerName: customerFullName, 
-          dateTime: new Date(startTime).toLocaleString('ja-JP'),
-          endTime: new Date(endTime).toLocaleString('ja-JP'),
+        subject: "予約完了のお知らせ",
+        react: ReservationConfirmation({
+          customerName: customerFullName,
+          dateTime: new Date(startTime).toLocaleString("ja-JP"),
+          endTime: new Date(endTime).toLocaleString("ja-JP"),
           staffName: staffName,
           serviceName: serviceName,
           totalPrice: totalPrice,
           reservationId: reservationId,
-          cancelUrl: cancelUrl
-        })
+          cancelUrl: cancelUrl,
+        }),
       });
 
-      console.log('Customer email result:', customerEmailResult);
+      console.log("Customer email result:", customerEmailResult);
 
       // サロン運営者へのメール送信
       const { data: userData, error: userError } = await supabase
-        .from('user_view')
-        .select('email')
-        .eq('id', userId)
+        .from("user_view")
+        .select("email")
+        .eq("id", userId)
         .single();
 
       if (userError) {
-        console.error('Error fetching user email:', userError);
+        console.error("Error fetching user email:", userError);
         throw userError;
       }
 
       if (!userData || !userData.email) {
-        console.error('Salon owner email not found');
-        throw new Error('サロン運営者のメールアドレスが見つかりません');
+        console.error("Salon owner email not found");
+        throw new Error("サロン運営者のメールアドレスが見つかりません");
       }
 
       const ownerEmailResult = await resend.emails.send({
-        from: 'Harotalo運営 <noreply@harotalo.com>',
+        from: "Harotalo運営 <noreply@harotalo.com>",
         to: userData.email,
-        subject: '新規予約のお知らせ',
-        react: NewReservationNotification({ 
+        subject: "新規予約のお知らせ",
+        react: NewReservationNotification({
           customerName: customerFullName,
           customerEmail: customerInfo.email,
           customerPhone: customerInfo.phone,
-          dateTime: new Date(startTime).toLocaleString('ja-JP'),
-          endTime: new Date(endTime).toLocaleString('ja-JP'),
+          dateTime: new Date(startTime).toLocaleString("ja-JP"),
+          endTime: new Date(endTime).toLocaleString("ja-JP"),
           staffName: staffName,
           serviceName: serviceName,
-          totalPrice: totalPrice
-        })
+          totalPrice: totalPrice,
+        }),
       });
 
-      console.log('Salon owner email result:', ownerEmailResult);
+      console.log("Salon owner email result:", ownerEmailResult);
 
       // スタッフへのメール送信
       if (staffNotificationEmails && staffNotificationEmails.email_addresses) {
         for (const staffEmail of staffNotificationEmails.email_addresses) {
           const staffEmailResult = await resend.emails.send({
-            from: 'Harotalo運営 <noreply@harotalo.com>',
+            from: "Harotalo運営 <noreply@harotalo.com>",
             to: staffEmail,
-            subject: '新規予約のお知らせ',
-            react: NewReservationNotification({ 
+            subject: "新規予約のお知らせ",
+            react: NewReservationNotification({
               customerName: customerFullName,
               customerEmail: customerInfo.email,
               customerPhone: customerInfo.phone,
-              dateTime: new Date(startTime).toLocaleString('ja-JP'),
-              endTime: new Date(endTime).toLocaleString('ja-JP'),
+              dateTime: new Date(startTime).toLocaleString("ja-JP"),
+              endTime: new Date(endTime).toLocaleString("ja-JP"),
               staffName: staffName,
               serviceName: serviceName,
-              totalPrice: totalPrice
-            })
+              totalPrice: totalPrice,
+            }),
           });
 
-          console.log(`Staff email result for ${staffEmail}:`, staffEmailResult);
+          console.log(
+            `Staff email result for ${staffEmail}:`,
+            staffEmailResult
+          );
         }
       }
 
-      console.log('Emails sent successfully');
+      console.log("Emails sent successfully");
     } catch (emailError) {
-      console.error('Error sending emails:', emailError);
+      console.error("Error sending emails:", emailError);
       if (emailError instanceof Error) {
-        console.error('Error message:', emailError.message);
-        console.error('Error stack:', emailError.stack);
+        console.error("Error message:", emailError.message);
+        console.error("Error stack:", emailError.stack);
       }
       // メール送信エラーはログに記録するが、予約プロセス自体は中断しない
     }
