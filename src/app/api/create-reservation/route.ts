@@ -1,5 +1,3 @@
-// /api/create-reservation/route.ts
-
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
@@ -132,8 +130,8 @@ export async function POST(request: Request) {
       throw reservationError;
     }
 
-    // 予約情報の保存が成功したので、内部APIにリクエストを送信
-    const automationResponse = await sendReservationToAutomation({
+    // 予約情報の保存が成功したので、内部APIにリクエストを送信（非同期）
+    sendReservationToAutomation({
       userId,
       reservationId: reservation.id,
       startTime,
@@ -142,13 +140,19 @@ export async function POST(request: Request) {
       customerInfo,
       rsvTermHour,
       rsvTermMinute,
-    });
+    })
+      .then((automationResponse) => {
+        if (!automationResponse.success) {
+          console.error("Automation sync failed:", automationResponse.error);
+          // TODO: 必要に応じてエラー内容をサロンオーナーに通知
+        }
+      })
+      .catch((error) => {
+        console.error("Error in sendReservationToAutomation:", error);
+        // TODO: 必要に応じてエラー内容をサロンオーナーに通知
+      });
 
-    if (!automationResponse.success) {
-      console.error("Automation sync failed:", automationResponse.error);
-      // TODO: 必要に応じてエラー処理を追加
-    }
-
+    // クライアントへのレスポンスを即座に返す
     return NextResponse.json({ success: true, reservationId: reservation.id });
   } catch (error: any) {
     console.error("Error saving reservation:", error);
