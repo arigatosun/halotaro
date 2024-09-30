@@ -11,8 +11,11 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-// Resend クライアントの初期化（メール送信用）
-const resend = new Resend(process.env.RESEND_API_KEY!);
+const resendApiKey = process.env.RESEND_API_KEY;
+if (!resendApiKey) {
+  throw new Error("RESEND_API_KEY is not set in the environment variables");
+}
+const resend = new Resend(resendApiKey);
 
 // キャンセルポリシーの最長日数を取得する関数
 async function getMaxCancelPolicyDays(userId: string): Promise<number> {
@@ -237,6 +240,10 @@ export async function POST(request: Request) {
     try {
       console.log("Attempting to send emails...");
 
+      if (!resend) {
+        throw new Error("Resend client is not initialized");
+      }
+
       // ベースURLの設定
       const baseUrl =
         process.env.NODE_ENV === "development"
@@ -327,13 +334,13 @@ export async function POST(request: Request) {
 
       console.log("Emails sent successfully");
     } catch (emailError) {
-      console.error("Error sending emails:", emailError);
-      if (emailError instanceof Error) {
-        console.error("Error message:", emailError.message);
-        console.error("Error stack:", emailError.stack);
-      }
-      // メール送信エラーはログに記録するが、予約プロセス自体は中断しない
-    }
+  console.error("Error sending emails:", emailError);
+  if (emailError instanceof Error) {
+    console.error("Error message:", emailError.message);
+    console.error("Error stack:", emailError.stack);
+  }
+  // メール送信エラーはログに記録するが、予約プロセス自体は中断しない
+}
 
     // 予約情報の保存が成功したので、内部APIにリクエストを送信（非同期）
     sendReservationToAutomation({
