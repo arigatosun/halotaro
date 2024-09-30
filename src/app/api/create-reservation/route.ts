@@ -14,6 +14,30 @@ const supabase = createClient(
 // Resend クライアントの初期化（メール送信用）
 const resend = new Resend(process.env.RESEND_API_KEY!);
 
+// キャンセルポリシーの最長日数を取得する関数
+async function getMaxCancelPolicyDays(userId: string): Promise<number> {
+  const { data, error } = await supabase
+    .from('cancel_policies')
+    .select('policies')
+    .eq('user_id', userId)
+    .single();
+
+  if (error) {
+    if (error.code === 'PGRST116') { // 'PGRST116' は行が見つからないエラー
+      console.log('No cancel policies found for user, using default of 7 days.');
+      return 7; // デフォルトで7日
+    } else {
+      throw new Error('キャンセルポリシーの取得に失敗しました');
+    }
+  }
+
+  // policies は JSON 配列として保存されていると仮定
+  const policies = data.policies as Array<{ days: number }>;
+  const maxDays = Math.max(...policies.map(policy => policy.days));
+
+  return maxDays;
+}
+
 export async function POST(request: Request) {
   try {
     // リクエストボディからデータを取得
@@ -61,7 +85,7 @@ export async function POST(request: Request) {
       .eq("start_time", startTime)
       .single();
 
-    if (checkError && checkError.code !== "PGRST116") {
+    if (checkError && checkError.code !== "PGRST116") { // 'PGRST116' は行が見つからないエラー
       throw checkError;
     }
 
@@ -146,7 +170,14 @@ export async function POST(request: Request) {
       );
     }
 
-    // RPC関数の呼び出し
+    // **キャンセルポリシーの最長日数を取得**
+    const maxCancelPolicyDays = await getMaxCancelPolicyDays(userId);
+
+    // **キャプチャ日時を計算**
+    const captureDate = new Date(startTime);
+    captureDate.setDate(captureDate.getDate() - maxCancelPolicyDays);
+
+    // **予約作成処理**
     const { data, error: reservationError } = await supabase.rpc(
       "create_reservation",
       {
@@ -180,6 +211,27 @@ export async function POST(request: Request) {
 
     const reservationId = data[0].id;
     console.log("Created reservation ID:", reservationId);
+
+    // *** payment_intents テーブルを更新して reservation_id と capture_date を設定 ***
+    if (paymentInfo?.stripePaymentIntentId) {
+      const { data: paymentIntentData, error: paymentIntentError } = await supabase
+        .from('payment_intents')
+        .update({
+          reservation_id: reservationId,
+          capture_date: captureDate.toISOString(), // capture_date を追加
+        })
+        .eq('payment_intent_id', paymentInfo.stripePaymentIntentId);
+
+      if (paymentIntentError) {
+        console.error('Error updating payment_intents with reservation_id and capture_date:', paymentIntentError);
+        // エラー処理を行う（必要に応じてレスポンスを返すか、エラーを投げる）
+        throw new Error('Failed to update payment_intents with reservation_id and capture_date');
+      } else {
+        console.log('Updated payment_intents with reservation_id and capture_date:', paymentIntentData);
+      }
+    } else {
+      console.warn('No stripePaymentIntentId provided in paymentInfo.');
+    }
 
     // メール送信処理
     try {

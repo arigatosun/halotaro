@@ -1,4 +1,6 @@
-import React, { useState, useEffect, useCallback } from "react";
+// payments.tsx
+
+import React, { useState, useEffect, useRef } from "react";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import { useReservation } from "@/contexts/reservationcontext";
 import getStripe from "@/lib/stripe";
@@ -31,7 +33,7 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
     setProcessing(true);
 
     if (!stripe || !elements) {
-      setError("Stripe.js has not loaded yet.");
+      setError("Stripe.jsがまだ読み込まれていません。");
       setProcessing(false);
       return;
     }
@@ -46,7 +48,7 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
       });
 
       if (result.error) {
-        setError(result.error.message || "An error occurred during payment");
+        setError(result.error.message || "決済中にエラーが発生しました");
         onPaymentComplete("failed");
       } else if (result.paymentIntent) {
         onPaymentComplete("succeeded", result.paymentIntent);
@@ -142,52 +144,90 @@ const Payment: React.FC<PaymentProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const { setPaymentInfo, selectedMenus } = useReservation();
-
-  const fetchPaymentIntent = useCallback(async () => {
-    try {
-      setIsLoading(true);
-      console.log("Sending request with:", { userId, selectedMenus });
-      const response = await fetch("/api/create-payment-intent", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userId,
-          selectedMenuIds: selectedMenus.map(menu => menu.id.toString()),
-        }),
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error("Server response:", errorData);
-        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
-      }
-      
-      const data = await response.json();
-      console.log("Received PaymentIntent data:", data);
-      setClientSecret(data.clientSecret);
-      setConnectedAccountId(data.connectedAccountId);
-    } catch (err: any) {
-      console.error("Error fetching PaymentIntent:", err);
-      setError(
-        "決済の準備中にエラーが発生しました。もう一度お試しください。"
-      );
-    } finally {
-      setIsLoading(false);
-    }
-  }, [userId, selectedMenus]);
+  const didFetch = useRef(false); // フラグを追加
 
   useEffect(() => {
-    fetchPaymentIntent();
-  }, [fetchPaymentIntent]);
+    if (didFetch.current) return; // 既に呼び出し済みなら終了
+    didFetch.current = true; // フラグをセット
 
-  const handlePaymentComplete = (status: string, paymentIntent?: any) => {
-    if (status === "succeeded" && paymentIntent) {
-      setPaymentInfo({
-        method: "credit_card",
+    const fetchPaymentIntent = async () => {
+      try {
+        setIsLoading(true);
+        console.log("Sending request with:", { userId, selectedMenus });
+        const response = await fetch("/api/create-payment-intent", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            userId,
+            selectedMenuIds: selectedMenus.map(menu => menu.id.toString()),
+          }),
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          console.error("Server response:", errorData);
+          throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        console.log("Received PaymentIntent data:", data);
+        setClientSecret(data.clientSecret);
+        setConnectedAccountId(data.connectedAccountId);
+
+        // paymentIntentIdを保存
+        setPaymentInfo((prev) => ({
+          ...prev!,
+          stripePaymentIntentId: data.paymentIntentId,
+        }));
+      } catch (err: any) {
+        console.error("Error fetching PaymentIntent:", err);
+        setError(
+          "決済の準備中にエラーが発生しました。もう一度お試しください。"
+        );
+      } finally {
+        setIsLoading(false);
+      }
+    };
+  
+    fetchPaymentIntent();
+  }, []); // 依存配列は空にして、一度だけ実行
+
+  async function updatePaymentIntentStatus({
+    paymentIntentId,
+    status,
+  }: {
+    paymentIntentId: string;
+    status: string;
+  }) {
+    const response = await fetch('/api/update-payment-intent-status', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ paymentIntentId, status }),
+    });
+  
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error('Error updating PaymentIntent status:', errorData);
+      throw new Error(errorData.error || 'Failed to update PaymentIntent status');
+    }
+  }
+
+  const handlePaymentComplete = async (status: string, paymentIntent?: any) => {
+    if (paymentIntent) {
+      // サーバーにステータス更新をリクエスト
+      await updatePaymentIntentStatus({
+        paymentIntentId: paymentIntent.id,
         status: paymentIntent.status,
-        stripePaymentIntentId: paymentIntent.id,
-        amount: paymentIntent.amount,
       });
+  
+      if (status === "succeeded") {
+        setPaymentInfo((prev) => ({
+          ...prev!,
+          method: "credit_card",
+          status: paymentIntent.status,
+          amount: paymentIntent.amount,
+        }));
+      }
     }
     onPaymentComplete(status, paymentIntent);
   };
