@@ -1,8 +1,11 @@
 {
   "version": 2,
+  "buildCommand": "next build",
+  "outputDirectory": ".next",
+  "framework": "nextjs",
   "functions": {
     "api/cron-capture-payment-intents/route.ts": {
-      "runtime": "nodejs@18.x"
+      "runtime": "nodejs@20.x"
     }
   },
   "crons": [
