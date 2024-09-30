@@ -8,11 +8,13 @@ import { createClient } from '@supabase/supabase-js';
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY!;
+const CRON_SECRET = process.env.CRON_SECRET!;
 
 // デバッグ用ログ（必要に応じてコメントアウト）
 console.log('SUPABASE_URL:', SUPABASE_URL);
 console.log('SUPABASE_SERVICE_ROLE_KEY:', SUPABASE_SERVICE_ROLE_KEY ? '[SET]' : '[NOT SET]');
 console.log('STRIPE_SECRET_KEY:', STRIPE_SECRET_KEY ? '[SET]' : '[NOT SET]');
+console.log('CRON_SECRET:', CRON_SECRET ? '[SET]' : '[NOT SET]');
 
 // Stripe クライアントの初期化
 const stripe = new Stripe(STRIPE_SECRET_KEY, {
@@ -45,6 +47,12 @@ async function updatePaymentIntentStatusInDatabase({
 
 // サーバーレス関数の実装
 export async function GET(request: NextRequest) {
+  // 認証チェック
+  if (request.headers.get('Authorization') !== `Bearer ${CRON_SECRET}`) {
+    console.error('Unauthorized access attempt');
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   console.log('Scheduler has started.');
   console.log(`[${new Date().toISOString()}] Running scheduled capture task...`);
 

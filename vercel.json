@@ -1,17 +1,6 @@
 {
-  "version": 2,
-  "buildCommand": "next build",
-  "outputDirectory": ".next",
-  "framework": "nextjs",
-  "functions": {
-    "api/**/*.ts": {
-      "runtime": "nodejs20.x"
-    }
-  },
-  "crons": [
-    {
-      "path": "/api/cron-capture-payment-intents",
-      "schedule": "* * * * *"
-    }
-  ]
+  "crons": [{
+    "path": "/api/cron-capture-payment-intents",
+    "schedule": "0 * * * *"
+  }]
 }
