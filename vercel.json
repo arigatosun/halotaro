@@ -1,0 +1,14 @@
+{
+    "functions": {
+      "api/cron-capture-payment-intents/route.ts": {
+        "runtime": "nodejs18.x"
+      }
+    },
+    "crons": [
+      {
+        "path": "/api/cron-capture-payment-intents",
+        "schedule": "* * * * *" 
+      }
+    ]
+  }
+  
