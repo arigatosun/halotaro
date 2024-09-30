@@ -6,9 +6,13 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
-    const userId = request.headers.get("user-id");
+    const { searchParams } = new URL(request.url);
+    const userId = searchParams.get("userId");
+    
     if (!userId) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }

@@ -105,9 +105,15 @@ const CancelConfirmationContent = ({ reservationId }: { reservationId: string })
 const CancelConfirmationPage = () => {
   return (
     <Suspense fallback={<div>Loading...</div>}>
-      <CancelConfirmationContent reservationId={useSearchParams().get('id') || ''} />
+      <ReservationIdWrapper />
     </Suspense>
   );
+};
+
+const ReservationIdWrapper = () => {
+  const searchParams = useSearchParams();
+  const reservationId = searchParams.get('id') || '';
+  return <CancelConfirmationContent reservationId={reservationId} />;
 };
 
 export default CancelConfirmationPage;

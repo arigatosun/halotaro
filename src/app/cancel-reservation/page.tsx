@@ -271,9 +271,15 @@ const CancelReservationContent = ({ reservationId }: { reservationId: string }) 
 const CancelReservationPage = () => {
   return (
     <Suspense fallback={<div>Loading...</div>}>
-      <CancelReservationContent reservationId={useSearchParams().get('id') || ''} />
+      <ReservationIdWrapper />
     </Suspense>
   );
+};
+
+const ReservationIdWrapper = () => {
+  const searchParams = useSearchParams();
+  const reservationId = searchParams.get('id') || '';
+  return <CancelReservationContent reservationId={reservationId} />;
 };
 
 export default CancelReservationPage;
