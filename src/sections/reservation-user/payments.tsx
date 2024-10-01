@@ -11,17 +11,22 @@ import { Separator } from "@/components/ui/separator";
 import Image from "next/image";
 import { LockIcon, CreditCardIcon, ShieldCheckIcon, AlertCircleIcon } from "lucide-react";
 import { CircularProgress } from "@mui/material";
+import { PaymentIntent, SetupIntent } from '@stripe/stripe-js';
 
+// PaymentFormProps の修正
 interface PaymentFormProps {
   onBack: () => void;
-  onPaymentComplete: (status: string, paymentIntent?: any) => void;
+  onPaymentComplete: (status: string, intent?: any) => void;
   clientSecret: string;
+  isSetupIntent: boolean;
 }
 
+// PaymentFormコンポーネントを修正
 const PaymentForm: React.FC<PaymentFormProps> = ({
   onBack,
   onPaymentComplete,
   clientSecret,
+  isSetupIntent,
 }) => {
   const stripe = useStripe();
   const elements = useElements();
@@ -39,25 +44,43 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
     }
 
     try {
-      const result = await stripe.confirmPayment({
-        elements,
-        confirmParams: {
-          return_url: `${window.location.origin}/reservation-complete`,
-        },
-        redirect: "if_required",
-      });
+      let result;
+      if (isSetupIntent) {
+        result = await stripe.confirmSetup({
+          elements,
+          confirmParams: {
+            return_url: `${window.location.origin}/reservation-complete`,
+          },
+          redirect: "if_required",
+        });
+      } else {
+        result = await stripe.confirmPayment({
+          elements,
+          confirmParams: {
+            return_url: `${window.location.origin}/reservation-complete`,
+          },
+          redirect: "if_required",
+        });
+      }
 
       if (result.error) {
         setError(result.error.message || "決済中にエラーが発生しました");
         onPaymentComplete("failed");
-      } else if (result.paymentIntent) {
-        onPaymentComplete("succeeded", result.paymentIntent);
+      } else {
+        // 型ガードを使用して result の型を判別
+        if ('paymentIntent' in result) {
+          onPaymentComplete("succeeded", result.paymentIntent);
+        } else if ('setupIntent' in result) {
+          onPaymentComplete("succeeded", result.setupIntent);
+        } else {
+          // 予期しないケース
+          console.error("Unexpected result type", result);
+          onPaymentComplete("failed");
+        }
       }
     } catch (err: any) {
-      console.error("Error confirming payment:", err);
-      setError(
-        `決済の確認中にエラーが発生しました: ${err.message}. もう一度お試しください。`
-      );
+      console.error("Error confirming payment or setup:", err);
+      setError(`決済の確認中にエラーが発生しました: ${err.message}. もう一度お試しください。`);
     } finally {
       setProcessing(false);
     }
@@ -126,35 +149,40 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
   );
 };
 
+// PaymentProps の修正
 interface PaymentProps {
   onBack: () => void;
-  onPaymentComplete: (status: string, paymentIntent?: any) => void;
+  onPaymentComplete: (status: string, intent?: any) => void;
   userId: string;
   selectedMenuId: string;
+  isOver30Days: boolean;
 }
 
+
+// Paymentコンポーネントを修正
 const Payment: React.FC<PaymentProps> = ({
   onBack,
   onPaymentComplete,
   userId,
   selectedMenuId,
+  isOver30Days, // 新しいprop
 }) => {
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [connectedAccountId, setConnectedAccountId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const { setPaymentInfo, selectedMenus } = useReservation();
-  const didFetch = useRef(false); // フラグを追加
+  const didFetch = useRef(false);
 
   useEffect(() => {
-    if (didFetch.current) return; // 既に呼び出し済みなら終了
-    didFetch.current = true; // フラグをセット
+    if (didFetch.current) return;
+    didFetch.current = true;
 
-    const fetchPaymentIntent = async () => {
+    const fetchIntent = async () => {
       try {
         setIsLoading(true);
-        console.log("Sending request with:", { userId, selectedMenus });
-        const response = await fetch("/api/create-payment-intent", {
+        const endpoint = isOver30Days ? "/api/create-setup-intent" : "/api/create-payment-intent";
+        const response = await fetch(endpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -165,32 +193,29 @@ const Payment: React.FC<PaymentProps> = ({
         
         if (!response.ok) {
           const errorData = await response.json();
-          console.error("Server response:", errorData);
           throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
         }
         
         const data = await response.json();
-        console.log("Received PaymentIntent data:", data);
         setClientSecret(data.clientSecret);
         setConnectedAccountId(data.connectedAccountId);
 
-        // paymentIntentIdを保存
-        setPaymentInfo((prev) => ({
-          ...prev!,
-          stripePaymentIntentId: data.paymentIntentId,
-        }));
+        if (!isOver30Days) {
+          setPaymentInfo((prev) => ({
+            ...prev!,
+            stripePaymentIntentId: data.paymentIntentId,
+          }));
+        }
       } catch (err: any) {
-        console.error("Error fetching PaymentIntent:", err);
-        setError(
-          "決済の準備中にエラーが発生しました。もう一度お試しください。"
-        );
+        console.error("Error fetching intent:", err);
+        setError("決済の準備中にエラーが発生しました。もう一度お試しください。");
       } finally {
         setIsLoading(false);
       }
     };
   
-    fetchPaymentIntent();
-  }, []); // 依存配列は空にして、一度だけ実行
+    fetchIntent();
+  }, [isOver30Days, userId, selectedMenus, setPaymentInfo]);
 
   async function updatePaymentIntentStatus({
     paymentIntentId,
@@ -265,6 +290,7 @@ const Payment: React.FC<PaymentProps> = ({
         onBack={onBack}
         onPaymentComplete={handlePaymentComplete}
         clientSecret={clientSecret}
+        isSetupIntent={isOver30Days}
       />
     </Elements>
   );
