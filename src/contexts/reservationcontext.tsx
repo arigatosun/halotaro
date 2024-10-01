@@ -39,10 +39,12 @@ export interface PaymentInfo {
   status: string;
   stripePaymentIntentId: string;
   amount: number;
-  reservationId?: string; // オプションフィールドとして追加
+  reservationId?: string;
+  isOver30Days: boolean;
+  paymentMethodId?: string; // 追加
 }
 
-// 予約コンテキストの型定義
+// 予約コンテキストの型定義を更新
 interface ReservationContextType {
   selectedMenus: SelectedMenuItem[];
   setSelectedMenus: React.Dispatch<React.SetStateAction<SelectedMenuItem[]>>;
@@ -55,6 +57,8 @@ interface ReservationContextType {
   calculateTotalAmount: (menus: SelectedMenuItem[]) => number;
   paymentInfo: PaymentInfo | null;
   setPaymentInfo: React.Dispatch<React.SetStateAction<PaymentInfo | null>>;
+  reservationCustomerId: string | null;
+  setReservationCustomerId: React.Dispatch<React.SetStateAction<string | null>>;
 }
 
 // 予約コンテキストの作成
@@ -66,7 +70,14 @@ export const ReservationProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const [selectedMenus, setSelectedMenus] = useState<SelectedMenuItem[]>([]);
   const [selectedDateTime, setSelectedDateTime] = useState<SelectedDateTime | null>(null);
   const [selectedStaff, setSelectedStaff] = useState<SelectedStaff | null>(null);
-  const [paymentInfo, setPaymentInfo] = useState<PaymentInfo | null>(null);
+  const [paymentInfo, setPaymentInfo] = useState<PaymentInfo | null>({
+    method: "",
+    status: "",
+    stripePaymentIntentId: "",
+    amount: 0,
+    isOver30Days: false,
+    paymentMethodId: undefined, // 初期値を設定
+  });
   const [customerInfo, setCustomerInfo] = useState<CustomerInfo>({
     lastNameKana: "",
     firstNameKana: "",
@@ -75,6 +86,7 @@ export const ReservationProvider: React.FC<{ children: React.ReactNode }> = ({ c
     email: "",
     phone: "",
   });
+  const [reservationCustomerId, setReservationCustomerId] = useState<string | null>(null);
 
   // 合計金額の計算関数
   const calculateTotalAmount = (menus: SelectedMenuItem[]) => {
@@ -96,6 +108,8 @@ export const ReservationProvider: React.FC<{ children: React.ReactNode }> = ({ c
         paymentInfo,
         setPaymentInfo,
         calculateTotalAmount,
+        reservationCustomerId,
+        setReservationCustomerId,
       }}
     >
       {children}

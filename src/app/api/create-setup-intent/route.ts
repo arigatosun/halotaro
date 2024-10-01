@@ -13,58 +13,58 @@ const supabase = createClient(
 );
 
 export async function POST(request: NextRequest) {
-  try {
-    const { userId } = await request.json();
-
-    if (!userId) {
-      return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
-    }
-
-    // Stripe Customerの取得または作成
-    const { data: customerData, error: customerError } = await supabase
-      .from('stripe_customers')
-      .select('stripe_customer_id')
-      .eq('user_id', userId)
-      .single();
-
-    if (customerError && customerError.code !== 'PGRST116') {
-      return NextResponse.json({ error: 'Error fetching customer data' }, { status: 500 });
-    }
-
-    let customerId = customerData?.stripe_customer_id;
-
-    if (!customerId) {
-      const customer = await stripe.customers.create({
-        metadata: { userId },
-      });
-      customerId = customer.id;
-
-      // Stripe Customer IDをデータベースに保存
-      const { error: insertError } = await supabase
-        .from('stripe_customers')
-        .insert({ 
-          user_id: userId, 
-          stripe_customer_id: customerId
-        });
-
-      if (insertError) {
-        console.error('Error inserting stripe customer:', insertError);
-        return NextResponse.json({ error: 'Error saving customer ID' }, { status: 500 });
+    try {
+      const { customerEmail } = await request.json();
+  
+      if (!customerEmail) {
+        return NextResponse.json({ error: 'Customer Email is required' }, { status: 400 });
       }
+  
+      // Stripe Customer の取得または作成
+      const { data: customerData, error: customerError } = await supabase
+        .from('stripe_customers')
+        .select('stripe_customer_id')
+        .eq('customer_email', customerEmail)
+        .single();
+  
+      if (customerError && customerError.code !== 'PGRST116') {
+        return NextResponse.json({ error: 'Error fetching customer data' }, { status: 500 });
+      }
+  
+      let customerId = customerData?.stripe_customer_id;
+  
+      if (!customerId) {
+        const customer = await stripe.customers.create({
+          email: customerEmail,
+        });
+        customerId = customer.id;
+  
+        // Stripe Customer ID をデータベースに保存
+        const { error: insertError } = await supabase
+          .from('stripe_customers')
+          .insert({ 
+            customer_email: customerEmail, 
+            stripe_customer_id: customerId
+          });
+  
+        if (insertError) {
+          console.error('Error inserting stripe customer:', insertError);
+          return NextResponse.json({ error: 'Error saving customer ID' }, { status: 500 });
+        }
+      }
+  
+      // Setup Intent の作成
+      const setupIntent = await stripe.setupIntents.create({
+        customer: customerId,
+        payment_method_types: ['card'],
+      });
+  
+      return NextResponse.json({
+        clientSecret: setupIntent.client_secret,
+        customerId: customerId,
+      });
+    } catch (err: any) {
+      console.error('Error creating Setup Intent:', err);
+      return NextResponse.json({ error: err.message }, { status: 500 });
     }
-
-    // Setup Intentの作成
-    const setupIntent = await stripe.setupIntents.create({
-      customer: customerId,
-      payment_method_types: ['card'],
-    });
-
-    return NextResponse.json({
-      clientSecret: setupIntent.client_secret,
-      customerId: customerId,
-    });
-  } catch (err: any) {
-    console.error('Error creating Setup Intent:', err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
   }
-}

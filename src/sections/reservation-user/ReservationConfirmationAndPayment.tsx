@@ -1,3 +1,5 @@
+// ReservationConfirmationAndPayment.tsx
+
 import React, { useState } from "react";
 import ReservationConfirmation from "./ReservationConfirmation";
 import Payment from "./payments";
@@ -17,10 +19,10 @@ const ReservationConfirmationAndPayment: React.FC<ReservationConfirmationAndPaym
   onBack,
   onPaymentComplete,
   userId,
-  selectedMenuId
+  selectedMenuId,
 }) => {
   const [showPayment, setShowPayment] = useState(false);
-  const { selectedDateTime } = useReservation();
+  const { selectedDateTime, reservationCustomerId, customerInfo } = useReservation(); // customerInfo を追加
 
   const handleConfirmation = () => {
     setShowPayment(true);
@@ -33,6 +35,12 @@ const ReservationConfirmationAndPayment: React.FC<ReservationConfirmationAndPaym
   const isOver30Days = selectedDateTime
     ? differenceInDays(selectedDateTime.start, new Date()) >= 30
     : false;
+
+  // reservationCustomerId が null でも処理を続行
+  if (!reservationCustomerId) {
+    console.warn('reservationCustomerId is undefined at this stage.');
+    // 必要に応じて追加の処理を行う
+  }
 
   return (
     <div>
@@ -47,6 +55,7 @@ const ReservationConfirmationAndPayment: React.FC<ReservationConfirmationAndPaym
           userId={userId}
           selectedMenuId={selectedMenuId}
           isOver30Days={isOver30Days}
+          reservationCustomerId={reservationCustomerId} // string | null を渡す
         />
       )}
     </div>

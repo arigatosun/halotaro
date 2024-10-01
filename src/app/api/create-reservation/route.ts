@@ -53,6 +53,9 @@ export async function POST(request: Request) {
       totalPrice,
       customerInfo,
       paymentInfo,
+      // 新しく追加
+    paymentMethodId,
+    customerEmail,
     } = await request.json();
 
     console.log("Received reservation data:", {
@@ -211,14 +214,17 @@ if (reservationError) {
   throw reservationError;
 }
 
+if (!data || data.length === 0 || !data[0].id || !data[0].reservation_customer_id) {
+  console.error("Reservation created but ID or reservation_customer_id is missing", data);
+  throw new Error("予約IDまたは予約顧客IDの取得に失敗しました");
+}
 
-    if (!data || data.length === 0 || !data[0].id) {
-      console.error("Reservation created but ID is missing", data);
-      throw new Error("予約IDの取得に失敗しました");
-    }
+const reservationId = data[0].id;
+const reservationCustomerId = data[0].reservation_customer_id;
+console.log("Created reservation ID:", reservationId);
+console.log("Created reservation customer ID:", reservationCustomerId);
 
-    const reservationId = data[0].id;
-    console.log("Created reservation ID:", reservationId);
+
 
     // *** payment_intents テーブルを更新して reservation_id と capture_date を設定 ***
     if (paymentInfo?.stripePaymentIntentId) {
@@ -240,6 +246,26 @@ if (reservationError) {
     } else {
       console.warn('No stripePaymentIntentId provided in paymentInfo.');
     }
+
+// 新しく追加: stripe_customers テーブルを更新
+if (reservationCustomerId && paymentMethodId) {
+  const { error: updateError } = await supabase
+  .from('stripe_customers')
+  .update({
+    reservation_customer_id: reservationCustomerId,
+  })
+  .eq('customer_email', customerEmail);
+
+  if (updateError) {
+    console.error('Error updating stripe_customers:', updateError);
+    // エラーハンドリング: ここではログを出力するだけですが、必要に応じて適切な処理を追加してください
+  } else {
+    console.log('Successfully updated stripe_customers table');
+  }
+} else {
+  console.warn('Missing reservationCustomerId or paymentMethodId, skipping stripe_customers update');
+}
+
 
     // メール送信処理
     try {
@@ -370,7 +396,12 @@ if (reservationError) {
       });
 
     // クライアントへのレスポンスを即座に返す
-    return NextResponse.json({ success: true, reservationId: reservationId });
+    return NextResponse.json({
+      success: true,
+      reservationId: reservationId,
+      reservationCustomerId: reservationCustomerId,
+      stripeCustomerUpdated: !!(reservationCustomerId && paymentMethodId)
+    });
   } catch (error: any) {
     console.error("Error saving reservation:", error);
     return NextResponse.json({ error: error.message }, { status: 400 });
