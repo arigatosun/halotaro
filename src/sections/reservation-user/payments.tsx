@@ -1,17 +1,14 @@
 import React, { useState, useEffect, useCallback } from "react";
-import {
-  Elements,
-  PaymentElement,
-  useStripe,
-  useElements,
-} from "@stripe/react-stripe-js";
+import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import { useReservation } from "@/contexts/reservationcontext";
 import getStripe from "@/lib/stripe";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Progress } from "@/components/ui/progress";
+import { Separator } from "@/components/ui/separator";
 import Image from "next/image";
+import { LockIcon, CreditCardIcon, ShieldCheckIcon, AlertCircleIcon } from "lucide-react";
+import { CircularProgress } from "@mui/material";
 
 interface PaymentFormProps {
   onBack: () => void;
@@ -65,31 +62,61 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
   };
 
   return (
-    <form onSubmit={handleSubmit}>
-      <Card className="w-full max-w-md mx-auto">
-        <CardHeader>
-        <CardTitle className="flex items-center justify-between">
-        <span>Stripeで安全に決済</span>
+    <form onSubmit={handleSubmit} className="w-full max-w-md mx-auto">
+      <Card className="shadow-lg">
+        <CardHeader className="bg-gradient-to-r from-blue-600 to-blue-800 text-white">
+          <CardTitle className="flex items-center justify-between">
+            <span className="text-2xl font-bold">安全な決済</span>
             <Image src="/images/stripe-logo-white-on-blue.png" alt="Stripe" width={70} height={25} quality={100}/>
           </CardTitle>
         </CardHeader>
-        <CardContent>
-        <p className="text-sm text-gray-600 mb-4">
-    Stripeの安全な決済システムを使用しています。カード情報は暗号化され、当社のサーバーには保存されません。
-  </p>
-          <PaymentElement />
+        <CardContent className="pt-6">
+          <div className="flex items-center justify-center space-x-2 mb-6">
+            <LockIcon className="w-5 h-5 text-green-500" />
+            <span className="text-sm text-gray-600">SSL暗号化で保護されています</span>
+          </div>
+          <PaymentElement className="mb-6" />
+          <div className="flex items-center justify-center space-x-4 text-sm text-gray-600">
+            <div className="flex items-center">
+              <ShieldCheckIcon className="w-4 h-4 mr-1 text-green-500" />
+              <span>安全な取引</span>
+            </div>
+            <div className="flex items-center">
+              <CreditCardIcon className="w-4 h-4 mr-1 text-blue-500" />
+              <span>カード情報は保存されません</span>
+            </div>
+          </div>
         </CardContent>
+        <Separator className="my-4" />
         <CardFooter className="flex justify-between">
           <Button variant="outline" onClick={onBack} disabled={processing}>
             戻る
           </Button>
-          <Button type="submit" disabled={!stripe || processing}>
-            {processing ? "処理中..." : "支払う"}
+          <Button 
+            type="submit" 
+            disabled={!stripe || processing}
+            className="bg-green-600 hover:bg-green-700 text-white"
+          >
+            {processing ? (
+              <span className="flex items-center">
+                <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                処理中...
+              </span>
+            ) : (
+              <span className="flex items-center">
+                <LockIcon className="w-4 h-4 mr-2" />
+                安全に支払う
+              </span>
+            )}
           </Button>
         </CardFooter>
       </Card>
       {error && (
         <Alert variant="destructive" className="mt-4">
+          <AlertCircleIcon className="h-4 w-4" />
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
@@ -113,12 +140,12 @@ const Payment: React.FC<PaymentProps> = ({
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [connectedAccountId, setConnectedAccountId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [progress, setProgress] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
   const { setPaymentInfo, selectedMenus } = useReservation();
 
   const fetchPaymentIntent = useCallback(async () => {
     try {
-      setProgress(25);
+      setIsLoading(true);
       console.log("Sending request with:", { userId, selectedMenus });
       const response = await fetch("/api/create-payment-intent", {
         method: "POST",
@@ -129,8 +156,6 @@ const Payment: React.FC<PaymentProps> = ({
         }),
       });
       
-      setProgress(50);
-
       if (!response.ok) {
         const errorData = await response.json();
         console.error("Server response:", errorData);
@@ -141,13 +166,13 @@ const Payment: React.FC<PaymentProps> = ({
       console.log("Received PaymentIntent data:", data);
       setClientSecret(data.clientSecret);
       setConnectedAccountId(data.connectedAccountId);
-      setProgress(100);
     } catch (err: any) {
       console.error("Error fetching PaymentIntent:", err);
       setError(
         "決済の準備中にエラーが発生しました。もう一度お試しください。"
       );
-      setProgress(0);
+    } finally {
+      setIsLoading(false);
     }
   }, [userId, selectedMenus]);
 
@@ -167,13 +192,28 @@ const Payment: React.FC<PaymentProps> = ({
     onPaymentComplete(status, paymentIntent);
   };
 
-  if (!clientSecret) {
+  if (isLoading) {
     return (
-      <div className="w-full max-w-md mx-auto mt-8">
-        <Progress value={progress} className="w-full" />
-        <p className="text-center mt-4">決済の準備中...</p>
+      <div className="w-full max-w-md mx-auto mt-8 space-y-4">
+        <div className="flex flex-col items-center justify-center space-y-4">
+          <CircularProgress size={60} style={{ color: "#F9802D" }} />
+          <p className="text-lg font-semibold text-[#F9802D]">決済の準備中...</p>
+        </div>
       </div>
     );
+  }
+
+  if (error) {
+    return (
+      <Alert variant="destructive" className="mt-4">
+        <AlertCircleIcon className="h-4 w-4" />
+        <AlertDescription>{error}</AlertDescription>
+      </Alert>
+    );
+  }
+
+  if (!clientSecret) {
+    return null;
   }
 
   return (

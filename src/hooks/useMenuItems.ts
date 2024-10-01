@@ -13,6 +13,7 @@ export function useMenuItems(userId: string) {
     try {
       setLoading(true);
       const items = await menuService.getMenuItems(userId);
+      console.log('Fetched menu items:', items); // 追加
       setMenuItems(items);
       setError(null);
     } catch (err) {
