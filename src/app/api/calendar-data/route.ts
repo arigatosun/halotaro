@@ -1,3 +1,4 @@
+// src/app/api/calendar-data/route.ts
 import { NextResponse } from 'next/server';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from "next/headers";
@@ -62,7 +63,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: menuError.message }, { status: 500 });
     }
 
-    // 予約データの取得
+    // 予約データの取得（キャンセルされた予約を除外）
     const { data: reservations, error: reservationError } = await supabase
       .from('reservations')
       .select(`
@@ -74,6 +75,7 @@ export async function GET(request: Request) {
         staff (id, name)
       `)
       .eq('user_id', userId)
+      .in('status', ['confirmed', 'pending']) // ここでキャンセルされた予約を除外
       .gte('start_time', startDate)
       .lte('end_time', endDate)
       .order('start_time', { ascending: true });
@@ -90,6 +92,7 @@ export async function GET(request: Request) {
       staff_name: reservation.staff?.name || 'Unknown',
       start_time: moment.utc(reservation.start_time).local().format(),
       end_time: moment.utc(reservation.end_time).local().format(),
+      is_staff_schedule: reservation.is_staff_schedule || false,
     }));
 
     return NextResponse.json({

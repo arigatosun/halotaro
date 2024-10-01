@@ -13,6 +13,7 @@ import { useAuth } from '@/lib/useAuth';
 import moment from 'moment';
 import { Button } from '@/components/ui/button';
 import { PlusCircle } from 'lucide-react';
+import { Snackbar, Alert } from '@mui/material';
 
 const ReservationCalendar: React.FC = () => {
   // 状態変数の定義
@@ -26,6 +27,7 @@ const ReservationCalendar: React.FC = () => {
   const [isStaffScheduleFormOpen, setIsStaffScheduleFormOpen] = useState(false);
   const [selectedStaffSchedule, setSelectedStaffSchedule] = useState<Reservation | null>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const [snackbar, setSnackbar] = useState<{ message: string; severity: 'success' | 'error' } | null>(null);
 
   const { user, session } = useAuth();
 
@@ -44,11 +46,15 @@ const ReservationCalendar: React.FC = () => {
     const endDate = moment().endOf('month').toISOString();
 
     try {
-      const response = await fetch(`/api/calendar-data?userId=${user.id}&startDate=${startDate}&endDate=${endDate}`, {
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`
+      const response = await fetch(
+        `/api/calendar-data?userId=${user.id}&startDate=${startDate}&endDate=${endDate}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+          cache: 'no-cache', // キャッシュを無効化して最新データを取得
         }
-      });
+      );
       if (!response.ok) {
         const errorData = await response.json();
         console.error('Error fetching data:', errorData);
@@ -61,11 +67,11 @@ const ReservationCalendar: React.FC = () => {
       setMenuList(data.menuList);
     } catch (error) {
       console.error('Error in loadData:', error);
-      setToastMessage('データの取得に失敗しました');
+      setSnackbar({ message: 'データの取得に失敗しました', severity: 'error' });
     }
   };
 
-  // 選択ハンドラ
+  // 日付選択ハンドラ
   const handleDateSelect = (selectInfo: DateSelectArg) => {
     console.log('Date selected:', selectInfo);
     const newReservation: Partial<Reservation> = {
@@ -100,7 +106,7 @@ const ReservationCalendar: React.FC = () => {
     const eventData = dropInfo.event.extendedProps as Reservation;
     if (!eventData.is_staff_schedule) {
       dropInfo.revert();
-      setToastMessage('通常の予約はドラッグで移動できません');
+      setSnackbar({ message: '通常の予約はドラッグで移動できません', severity: 'error' });
       return;
     }
 
@@ -113,24 +119,24 @@ const ReservationCalendar: React.FC = () => {
       };
       const response = await fetch('/api/calendar-data', {
         method: 'PUT',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.access_token}`
+          'Authorization': `Bearer ${session?.access_token}`,
         },
         body: JSON.stringify(updatedReservation),
       });
       if (!response.ok) throw new Error('Failed to update staff schedule');
       await loadData();
-      setToastMessage('スタッフスケジュールが更新されました');
+      setSnackbar({ message: 'スタッフスケジュールが更新されました', severity: 'success' });
     } catch (error) {
-      setToastMessage('スタッフスケジュールの更新に失敗しました');
+      setSnackbar({ message: 'スタッフスケジュールの更新に失敗しました', severity: 'error' });
     }
   };
 
   // フォーム送信ハンドラ
   const handleFormSubmit = async (data: Partial<Reservation>, isNew: boolean) => {
     if (!session || !user) {
-      setToastMessage('セッションが無効です。再度ログインしてください。');
+      setSnackbar({ message: 'セッションが無効です。再度ログインしてください。', severity: 'error' });
       return;
     }
 
@@ -142,13 +148,13 @@ const ReservationCalendar: React.FC = () => {
       };
       const response = await fetch('/api/calendar-data', {
         method: method,
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`
+          'Authorization': `Bearer ${session.access_token}`,
         },
         body: JSON.stringify(reservationData),
       });
-      
+
       if (!response.ok) {
         const errorData = await response.json();
         console.error('API error:', errorData);
@@ -157,50 +163,55 @@ const ReservationCalendar: React.FC = () => {
 
       await loadData();
       setIsFormOpen(false);
-      setToastMessage(`予約が${isNew ? '作成' : '更新'}されました`);
+      setSnackbar({ message: `予約が${isNew ? '作成' : '更新'}されました`, severity: 'success' });
     } catch (error) {
       console.error('Error in handleFormSubmit:', error);
-      setToastMessage(`予約の${isNew ? '作成' : '更新'}に失敗しました`);
+      setSnackbar({ message: `予約の${isNew ? '作成' : '更新'}に失敗しました`, severity: 'error' });
     }
   };
 
-  // 予約削除ハンドラ
+  // 予約削除ハンドラ（キャンセル処理）
   const handleDeleteReservation = async (id: string) => {
     if (!session || !user) {
-      setToastMessage('セッションが無効です。再度ログインしてください。');
+      setSnackbar({ message: 'セッションが無効です。再度ログインしてください。', severity: 'error' });
       return;
     }
 
     try {
-      const response = await fetch(`/api/calendar-data?id=${id}&userId=${user.id}`, {
-        method: 'DELETE',
+      // キャンセルAPIを呼び出す
+      const response = await fetch('/api/cancel-reservation', {
+        method: 'POST',
         headers: {
-          'Authorization': `Bearer ${session.access_token}`
-        }
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ reservationId: id, cancellationType: 'cancelled' }),
       });
       if (!response.ok) {
         const errorData = await response.json();
-        console.error('Error deleting reservation:', errorData);
-        throw new Error('Failed to delete reservation');
+        console.error('Error cancelling reservation:', errorData);
+        throw new Error('Failed to cancel reservation');
       }
       await loadData();
       setIsFormOpen(false);
-      setToastMessage('予約が削除されました');
+      setIsDetailsOpen(false);
+      setSnackbar({ message: '予約がキャンセルされました', severity: 'success' });
     } catch (error) {
       console.error('Error in handleDeleteReservation:', error);
-      setToastMessage('予約の削除に失敗しました');
+      setSnackbar({ message: '予約のキャンセルに失敗しました', severity: 'error' });
     }
   };
 
   // スタッフスケジュール追加ボタンハンドラ
   const handleAddStaffSchedule = () => {
+    setSelectedStaffSchedule(null);
     setIsStaffScheduleFormOpen(true);
   };
 
   // スタッフスケジュールフォーム送信ハンドラ
   const handleStaffScheduleFormSubmit = async (data: Partial<Reservation>, isNew: boolean) => {
     if (!session || !user) {
-      setToastMessage('セッションが無効です。再度ログインしてください。');
+      setSnackbar({ message: 'セッションが無効です。再度ログインしてください。', severity: 'error' });
       return;
     }
 
@@ -213,13 +224,13 @@ const ReservationCalendar: React.FC = () => {
       };
       const response = await fetch('/api/calendar-data', {
         method: method,
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`
+          'Authorization': `Bearer ${session.access_token}`,
         },
         body: JSON.stringify(scheduleData),
       });
-      
+
       if (!response.ok) {
         const errorData = await response.json();
         console.error('API error:', errorData);
@@ -228,17 +239,18 @@ const ReservationCalendar: React.FC = () => {
 
       await loadData();
       setIsStaffScheduleFormOpen(false);
-      setToastMessage(`スタッフスケジュールが${isNew ? '作成' : '更新'}されました`);
+      setSelectedStaffSchedule(null);
+      setSnackbar({ message: `スタッフスケジュールが${isNew ? '作成' : '更新'}されました`, severity: 'success' });
     } catch (error) {
       console.error('Error in handleStaffScheduleFormSubmit:', error);
-      setToastMessage(`スタッフスケジュールの${isNew ? '作成' : '更新'}に失敗しました`);
+      setSnackbar({ message: `スタッフスケジュールの${isNew ? '作成' : '更新'}に失敗しました`, severity: 'error' });
     }
   };
 
   // スタッフスケジュール削除ハンドラ
   const handleDeleteStaffSchedule = async (id: string) => {
     if (!session || !user) {
-      setToastMessage('セッションが無効です。再度ログインしてください。');
+      setSnackbar({ message: 'セッションが無効です。再度ログインしてください。', severity: 'error' });
       return;
     }
 
@@ -246,8 +258,8 @@ const ReservationCalendar: React.FC = () => {
       const response = await fetch(`/api/calendar-data?id=${id}&userId=${user.id}`, {
         method: 'DELETE',
         headers: {
-          'Authorization': `Bearer ${session.access_token}`
-        }
+          'Authorization': `Bearer ${session.access_token}`,
+        },
       });
       if (!response.ok) {
         const errorData = await response.json();
@@ -256,10 +268,11 @@ const ReservationCalendar: React.FC = () => {
       }
       await loadData();
       setSelectedStaffSchedule(null);
-      setToastMessage('スタッフスケジュールが削除されました');
+      setIsStaffScheduleFormOpen(false);
+      setSnackbar({ message: 'スタッフスケジュールが削除されました', severity: 'success' });
     } catch (error) {
       console.error('Error in handleDeleteStaffSchedule:', error);
-      setToastMessage('スタッフスケジュールの削除に失敗しました');
+      setSnackbar({ message: 'スタッフスケジュールの削除に失敗しました', severity: 'error' });
     }
   };
 
@@ -281,18 +294,20 @@ const ReservationCalendar: React.FC = () => {
         editable={true}
         selectable={true}
         select={handleDateSelect}
-        events={reservations.map(reservation => ({
+        events={reservations.map((reservation) => ({
           id: reservation.id,
           resourceId: reservation.staff_id,
-          title: reservation.is_staff_schedule ? reservation.event : `${reservation.customer_name || ''} - ${reservation.menu_name || ''}`,
+          title: reservation.is_staff_schedule
+            ? reservation.event
+            : `${reservation.customer_name || ''} - ${reservation.menu_name || ''}`,
           start: reservation.start_time,
           end: reservation.end_time,
           extendedProps: reservation,
-          classNames: reservation.is_staff_schedule ? ['staff-schedule'] : ['customer-reservation']
+          classNames: reservation.is_staff_schedule ? ['staff-schedule'] : ['customer-reservation'],
         }))}
-        resources={staffList.map(staff => ({
+        resources={staffList.map((staff) => ({
           id: staff.id,
-          title: staff.name
+          title: staff.name,
         }))}
         eventClick={handleEventClick}
         eventDrop={handleEventDrop}
@@ -353,11 +368,21 @@ const ReservationCalendar: React.FC = () => {
             setIsFormOpen(true);
             setIsNewReservation(false);
           }}
+          onDelete={handleDeleteReservation} // 予約削除ハンドラを追加
         />
       )}
 
       {/* トースト通知 */}
-      <CustomToast message={toastMessage} />
+      {/* CustomToastコンポーネントをSnackbarに変更 */}
+      <Snackbar
+        open={!!snackbar}
+        autoHideDuration={6000}
+        onClose={() => setSnackbar(null)}
+      >
+        <Alert onClose={() => setSnackbar(null)} severity={snackbar?.severity} sx={{ width: '100%' }}>
+          {snackbar?.message}
+        </Alert>
+      </Snackbar>
     </div>
   );
 };

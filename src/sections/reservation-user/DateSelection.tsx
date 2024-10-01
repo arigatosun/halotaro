@@ -1,3 +1,5 @@
+// src/sections/reservation-user/DateSelection.tsx
+
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -264,10 +266,16 @@ const DateSelection: React.FC<DateSelectionProps> = ({
   const isMobile = useMediaQuery(theme.breakpoints.down("sm")); // モバイル判定
   const displayDays = isMobile ? 7 : 14; // 表示する日数
 
+  // データのリフレッシュ関数
+  const refreshData = async () => {
+    await Promise.all([fetchAvailableSlots(), fetchReservedSlots(), fetchOperatingHours()]);
+  };
+
+  // useEffect フックをコンポーネントのトップレベルに移動
   useEffect(() => {
     if (selectedStaffProp) {
       setIsLoading(true);
-      Promise.all([fetchAvailableSlots(), fetchReservedSlots(), fetchOperatingHours()])
+      refreshData()
         .then(() => setIsLoading(false))
         .catch((error) => {
           console.error("Error fetching data:", error);
@@ -289,11 +297,12 @@ const DateSelection: React.FC<DateSelectionProps> = ({
       .format("YYYY-MM-DD");
     try {
       const response = await fetch(
-        `/api/staff-availability?staffId=${
-          selectedStaffProp.id
-        }&startDate=${startDate.format(
+        `/api/staff-availability?staffId=${selectedStaffProp.id}&startDate=${startDate.format(
           "YYYY-MM-DD"
-        )}&endDate=${endDate}&menuId=${selectedMenuId}`
+        )}&endDate=${endDate}&menuId=${selectedMenuId}`,
+        {
+          cache: 'no-cache', 
+        }
       );
       if (!response.ok) {
         throw new Error("Failed to fetch staff availability");
@@ -326,7 +335,10 @@ const DateSelection: React.FC<DateSelectionProps> = ({
       const response = await fetch(
         `/api/staff-reservations?staffId=${
           selectedStaffProp.id
-        }&startDate=${startDate.format("YYYY-MM-DD")}&endDate=${endDate}`
+        }&startDate=${startDate.format("YYYY-MM-DD")}&endDate=${endDate}`,
+        {
+          cache: 'no-cache', // キャッシュを無効化
+        }
       );
       if (!response.ok) {
         throw new Error("Failed to fetch staff reservations");
