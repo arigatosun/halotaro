@@ -181,31 +181,36 @@ export async function POST(request: Request) {
     captureDate.setDate(captureDate.getDate() - maxCancelPolicyDays);
 
     // **予約作成処理**
-    const { data, error: reservationError } = await supabase.rpc(
-      "create_reservation",
-      {
-        p_user_id: userId,
-        p_menu_id: p_menu_id,
-        p_coupon_id: p_coupon_id,
-        p_staff_id: staffId,
-        p_start_time: startTime,
-        p_end_time: endTime,
-        p_total_price: totalPrice,
-        p_customer_name: customerFullName,
-        p_customer_name_kana: customerFullNameKana,
-        p_customer_email: customerInfo.email,
-        p_customer_phone: customerInfo.phone,
-        p_payment_method: paymentInfo?.method,
-        p_payment_status: paymentInfo?.status,
-        p_payment_amount: paymentInfo?.amount,
-        p_stripe_payment_intent_id: paymentInfo?.stripePaymentIntentId,
-      }
-    );
+    // 必要なパラメーターを設定
+const rpcParams = {
+  p_user_id: userId,
+  p_start_time: startTime,
+  p_end_time: endTime,
+  p_total_price: totalPrice,
+  p_customer_name: customerFullName,
+  p_customer_name_kana: customerFullNameKana,
+  p_customer_email: customerInfo.email,
+  p_customer_phone: customerInfo.phone,
+  p_menu_id: p_menu_id ?? null,
+  p_coupon_id: p_coupon_id ?? null,
+  p_staff_id: staffId ?? null,
+  p_payment_method: paymentInfo?.method ?? null,
+  p_payment_status: paymentInfo?.status ?? null,
+  p_payment_amount: paymentInfo?.amount ?? null,
+  p_stripe_payment_intent_id: paymentInfo?.stripePaymentIntentId ?? null,
+};
 
-    if (reservationError) {
-      console.error("Reservation creation error:", reservationError);
-      throw reservationError;
-    }
+// RPC 関数の呼び出し
+const { data, error: reservationError } = await supabase.rpc(
+  "create_reservation",
+  rpcParams
+);
+
+if (reservationError) {
+  console.error("Reservation creation error:", reservationError);
+  throw reservationError;
+}
+
 
     if (!data || data.length === 0 || !data[0].id) {
       console.error("Reservation created but ID is missing", data);
