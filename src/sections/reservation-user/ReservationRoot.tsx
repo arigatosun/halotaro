@@ -12,6 +12,7 @@ import Layout from "@/components/layout/reservation-layout";
 import ReservationHeader from "./reservation-header";
 import ReservationConfirmationAndPayment from "./ReservationConfirmationAndPayment";
 import DateSelection from "./DateSelection";
+import { differenceInDays } from 'date-fns';
 
 const steps = [
   "メニュー選択",
@@ -36,6 +37,11 @@ function ReservationContent({ userId }: ReservationRootProps) {
     setSelectedStaff, 
     setSelectedDateTime 
   } = useReservation();
+
+  const isReservationOver30Days = (selectedDate: Date | null) => {
+    if (!selectedDate) return false;
+    return differenceInDays(selectedDate, new Date()) >= 30;
+  };
 
   const handleNext = () => {
     setActiveStep((prevActiveStep) => prevActiveStep + 1);
@@ -62,6 +68,9 @@ function ReservationContent({ userId }: ReservationRootProps) {
 
   const handleDateTimeSelect = (startTime: Date, endTime: Date) => {
     setSelectedDateTime({ start: startTime, end: endTime });
+    const isOver30Days = isReservationOver30Days(startTime);
+    // ここで、isOver30Daysに基づいて異なる処理を行うことができます
+    // 例: setIsOver30Days(isOver30Days);
     handleNext();
   };
 
@@ -103,16 +112,16 @@ function ReservationContent({ userId }: ReservationRootProps) {
         );
       case 3:
         return <CustomerInfo onNext={handleNext} onBack={handleBack} />;
-      case 4:
-        return (
-          <ReservationConfirmationAndPayment
-            onNext={handleNext}
-            onBack={handleBack}
-            onPaymentComplete={handlePaymentComplete}
-            userId={userId}
-            selectedMenuId={selectedMenus[0]?.id || ""}
-          />
-        );
+        case 4:
+          return (
+            <ReservationConfirmationAndPayment
+              onNext={handleNext}
+              onBack={handleBack}
+              onPaymentComplete={handlePaymentComplete}
+              userId={userId}
+              selectedMenuId={selectedMenus[0]?.id || ""}
+            />
+          );
       case 5:
         return <ReservationComplete userId={userId} />;
       default:
