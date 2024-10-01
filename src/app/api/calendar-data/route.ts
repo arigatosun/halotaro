@@ -31,6 +31,15 @@ export async function GET(request: Request) {
   const supabase = createRouteHandlerClient({ cookies });
 
   try {
+    const { searchParams } = new URL(request.url);
+    const userId = searchParams.get('userId');
+    const startDate = searchParams.get('startDate');
+    const endDate = searchParams.get('endDate');
+
+    if (!userId || !startDate || !endDate) {
+      return NextResponse.json({ error: 'Missing required parameters' }, { status: 400 });
+    }
+
     // スタッフリストの取得
     const { data: staffList, error: staffError } = await supabase
       .from('staff')
@@ -55,35 +64,34 @@ export async function GET(request: Request) {
 
     // 予約データの取得
     const { data: reservations, error: reservationError } = await supabase
-    .from('reservations')
-    .select(`
-      *,
-      reservation_customers (
-        id, name, email, phone, name_kana
-      ),
-      menu_items (id, name, duration, price),
-      staff (id, name)
-    `)
-    .order('start_time', { ascending: true });
-  
-    console.log('Reservations data:', reservations);
+      .from('reservations')
+      .select(`
+        *,
+        reservation_customers (
+          id, name, email, phone, name_kana
+        ),
+        menu_items (id, name, duration, price),
+        staff (id, name)
+      `)
+      .eq('user_id', userId)
+      .gte('start_time', startDate)
+      .lte('end_time', endDate)
+      .order('start_time', { ascending: true });
 
-  if (reservationError) {
-    console.error('Error fetching reservations:', reservationError);
-    return NextResponse.json({ error: reservationError.message }, { status: 500 });
-  }
+    if (reservationError) {
+      console.error('Error fetching reservations:', reservationError);
+      return NextResponse.json({ error: reservationError.message }, { status: 500 });
+    }
 
-  const formattedReservations = reservations.map(reservation => ({
-    ...reservation,
-    customer_name: reservation.scraped_customer || reservation.reservation_customers?.[0]?.name || 'Unknown',
-    menu_name: reservation.menu_items?.name || 'Unknown',
-    staff_name: reservation.staff?.name || 'Unknown',
-    start_time: moment.utc(reservation.start_time).local().format(),
-    end_time: moment.utc(reservation.end_time).local().format(),
-  }));
-  
-  
-  
+    const formattedReservations = reservations.map(reservation => ({
+      ...reservation,
+      customer_name: reservation.scraped_customer || reservation.reservation_customers?.[0]?.name || 'Unknown',
+      menu_name: reservation.menu_items?.name || 'Unknown',
+      staff_name: reservation.staff?.name || 'Unknown',
+      start_time: moment.utc(reservation.start_time).local().format(),
+      end_time: moment.utc(reservation.end_time).local().format(),
+    }));
+
     return NextResponse.json({
       staffList,
       menuList,
@@ -114,11 +122,13 @@ export async function POST(request: Request) {
     menu_id,
     start_time,
     end_time,
-    total_price
+    total_price,
+    is_staff_schedule, 
+    event,
   } = data;
 
   try {
-    // Step 1: Create reservation
+    // 予約の作成
     const { data: newReservation, error: reservationError } = await supabase
       .from('reservations')
       .insert({
@@ -128,7 +138,9 @@ export async function POST(request: Request) {
         start_time: moment(start_time).utc().format(),
         end_time: moment(end_time).utc().format(),
         status: 'confirmed',
-        total_price
+        total_price,
+        is_staff_schedule, // この行を追加
+        event, // この行を追加
       })
       .select()
       .single();
@@ -138,23 +150,25 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: reservationError.message }, { status: 500 });
     }
 
-    // Step 2: Create customer information
-    const { error: customerError } = await supabase
-      .from('reservation_customers')
-      .insert({
-        reservation_id: newReservation.id,
-        name: customer_name,
-        email: customer_email,
-        phone: customer_phone,
-        name_kana: customer_name_kana
-      });
+    // スタッフスケジュールでない場合のみ顧客情報を作成
+    if (!is_staff_schedule) {
+      const { error: customerError } = await supabase
+        .from('reservation_customers')
+        .insert({
+          reservation_id: newReservation.id,
+          name: customer_name,
+          email: customer_email,
+          phone: customer_phone,
+          name_kana: customer_name_kana
+        });
 
-    if (customerError) {
-      console.error('Error creating customer:', customerError);
-      return NextResponse.json({ error: customerError.message }, { status: 500 });
+      if (customerError) {
+        console.error('Error creating customer:', customerError);
+        return NextResponse.json({ error: customerError.message }, { status: 500 });
+      }
     }
 
-    console.log('New reservation and customer created:', newReservation);
+    console.log('New reservation created:', newReservation);
     return NextResponse.json(newReservation);
   } catch (error) {
     console.error('Unexpected error during reservation creation:', error);
@@ -172,10 +186,22 @@ export async function PUT(request: Request) {
   const data = await request.json();
   console.log('Received data for update:', data);
 
-  const { id, start_time, end_time, staff_id, menu_id, status, total_price, customer_name, customer_email, customer_phone, customer_name_kana } = data;
+  const {
+    id,
+    start_time,
+    end_time,
+    staff_id,
+    menu_id,
+    status,
+    total_price,
+    customer_name,
+    customer_email,
+    customer_phone,
+    customer_name_kana
+  } = data;
 
   try {
-    // reservations テーブルの更新
+    // 予約の更新
     const { data: updatedReservation, error: updateError } = await supabase
       .from('reservations')
       .update({
@@ -195,7 +221,7 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: updateError.message }, { status: 500 });
     }
 
-    // reservation_customers テーブルの更新
+    // 顧客情報の更新
     const { error: customerUpdateError } = await supabase
       .from('reservation_customers')
       .update({
@@ -211,7 +237,7 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: customerUpdateError.message }, { status: 500 });
     }
 
-    // 更新後のデータを取得（関連テーブルの情報も含む）
+    // 更新後のデータを取得
     const { data: fullReservation, error: fetchError } = await supabase
       .from('reservations')
       .select(`
@@ -252,7 +278,7 @@ export async function DELETE(request: Request) {
   }
 
   try {
-    // まず、関連する顧客情報を削除
+    // 顧客情報の削除
     const { error: customerDeleteError } = await supabase
       .from('reservation_customers')
       .delete()
@@ -263,7 +289,7 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: customerDeleteError.message }, { status: 500 });
     }
 
-    // 次に、予約を削除
+    // 予約の削除
     const { error: reservationDeleteError } = await supabase
       .from('reservations')
       .delete()

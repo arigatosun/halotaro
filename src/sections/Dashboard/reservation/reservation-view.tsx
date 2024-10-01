@@ -1,6 +1,6 @@
 "use client"
 import React from "react";
-import ReservationCalendar from "@/components/ReservationCalendar";
+import ReservationCalendar from "@/sections/Dashboard/reservation/calendar/ReservationCalendar";
 
 const ReservationView: React.FC = () => {
   return (

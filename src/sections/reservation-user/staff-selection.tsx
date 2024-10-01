@@ -22,39 +22,20 @@ export default function StaffSelection({
   const { setSelectedStaff } = useReservation();
   const { staffList, loading, error } = useStaffManagement(userId);
 
-  const fetchReservations = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const { data, count } = await getReservations(
-        format(selectedDate, "yyyy-MM-dd"),
-        selectedStaff
-      );
-      setReservations(data);
-    } catch (error) {
-      console.error("Error fetching reservations:", error);
-      setError("予約の取得中にエラーが発生しました。");
-    } finally {
-      setLoading(false);
-    }
+  // スタッフ選択時の処理
+  const handleStaffSelect = (staff: Staff) => {
+    setSelectedStaff(staff);
+    onSelectStaff(staff);
   };
 
-  useEffect(() => {
-    if (!authLoading && user) {
-      fetchReservations();
-    }
-  }, [selectedDate, selectedStaff, user, authLoading]);
-
-  const handleDateChange = (date: Date) => {
-    setSelectedDate(date);
-  };
-
-  const handleStaffChange = (value: string) => {
-    setSelectedStaff(value);
-  };
-
-  if (loading) return <div className="p-2 text-center text-sm">読み込み中...</div>;
-  if (error) return <div className="p-2 text-center text-sm text-red-500">エラー: {error.message}</div>;
+  if (loading)
+    return <div className="p-2 text-center text-sm">読み込み中...</div>;
+  if (error)
+    return (
+      <div className="p-2 text-center text-sm text-red-500">
+        エラー: {error.message}
+      </div>
+    );
 
   const renderStaff = (staff: Staff) => (
     <Card key={staff.id} className="mb-4">
@@ -64,7 +45,9 @@ export default function StaffSelection({
             <h3 className="text-lg font-semibold mb-1">{staff.name}</h3>
             <p className="text-sm text-gray-600 mb-1">{staff.role}</p>
             {staff.experience && (
-              <p className="text-sm text-gray-600 mb-1">{staff.experience}</p>
+              <p className="text-sm text-gray-600 mb-1">
+                {staff.experience}
+              </p>
             )}
             <p className="text-sm text-gray-700">{staff.description}</p>
           </div>
@@ -104,11 +87,7 @@ export default function StaffSelection({
           .map(renderStaff)}
       </div>
       <div className="text-center mt-8">
-        <Button 
-          onClick={onBack} 
-          variant="outline" 
-          className="text-base"
-        >
+        <Button onClick={onBack} variant="outline" className="text-base">
           戻る
         </Button>
       </div>

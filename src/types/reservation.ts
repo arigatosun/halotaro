@@ -22,6 +22,8 @@ export interface Reservation extends EventInput {
   reservation_route?: string;
   used_points?: string;
   payment_method?: string;
+  is_staff_schedule?: boolean; // スタッフスケジュール用のフラグを追加
+  event?: string; 
 }
 
 export interface Staff {

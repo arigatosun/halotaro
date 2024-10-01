@@ -1,5 +1,7 @@
+//src/app/api/staff-reservations/route.ts
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import moment from 'moment';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -26,6 +28,7 @@ export async function GET(request: Request) {
   }
 
   try {
+    // 予約とスタッフスケジュールを取得（is_staff_schedule に関係なく全て取得）
     const { data, error } = await supabase
       .from("reservations")
       .select("start_time, end_time")
@@ -40,13 +43,13 @@ export async function GET(request: Request) {
 
     // 予約データを日付ごとにグループ化
     const reservationsByDate = (data as ReservationData[]).reduce((acc: ReservationsByDate, reservation) => {
-      const date = new Date(reservation.start_time).toISOString().split('T')[0];
+      const date = moment(reservation.start_time).format('YYYY-MM-DD');
       if (!acc[date]) {
         acc[date] = [];
       }
       acc[date].push({
-        startTime: new Date(reservation.start_time).toISOString(),
-        endTime: new Date(reservation.end_time).toISOString()
+        startTime: reservation.start_time,
+        endTime: reservation.end_time
       });
       return acc;
     }, {});

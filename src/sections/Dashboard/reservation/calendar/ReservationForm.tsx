@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Reservation, Staff, MenuItem } from '@/types/reservation';
 import moment from 'moment';
 
@@ -26,8 +27,10 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
   staffList,
   menuList
 }) => {
+  // フォームデータの状態
   const [formData, setFormData] = useState<Partial<Reservation>>({});
- 
+
+  // 予約データが変更されたときにフォームデータを更新
   useEffect(() => {
     if (reservation) {
       setFormData({
@@ -40,10 +43,12 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
     }
   }, [reservation]);
 
-  const handleChange = (name: string, value: string) => {
+  // フォーム入力値の変更ハンドラ
+  const handleChange = (name: string, value: string | boolean) => {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
+  // フォーム送信ハンドラ
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const selectedMenu = menuList.find(menu => menu.id === formData.menu_id);
@@ -51,7 +56,7 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
       ...formData,
       start_time: moment(formData.start_time).utc().format(),
       end_time: moment(formData.end_time).utc().format(),
-      total_price: selectedMenu ? selectedMenu.price : 0,
+      total_price: formData.is_staff_schedule ? 0 : (selectedMenu ? selectedMenu.price : 0),
     };
     onSubmit(updatedReservation, isNew);
   };
@@ -64,13 +69,43 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
         </DialogHeader>
         <form onSubmit={handleSubmit}>
           <div className="space-y-4">
-            {isNew && (
+            {/* スタッフスケジュールチェックボックス */}
+            <div className="space-y-2">
+              <Label htmlFor="is_staff_schedule">スタッフスケジュール</Label>
+              <Checkbox
+                id="is_staff_schedule"
+                checked={formData.is_staff_schedule || false}
+                onCheckedChange={(checked) => handleChange('is_staff_schedule', checked)}
+              />
+            </div>
+
+            {/* スタッフスケジュールの場合のイベント選択 */}
+            {formData.is_staff_schedule && (
+              <div className="space-y-2">
+                <Label htmlFor="event">イベント</Label>
+                <Select
+                  value={formData.event || ''}
+                  onValueChange={(value) => handleChange('event', value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="イベントを選択" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="休憩">休憩</SelectItem>
+                    <SelectItem value="会議">会議</SelectItem>
+                    <SelectItem value="その他">その他</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {/* 通常の予約の場合の顧客情報入力 */}
+            {!formData.is_staff_schedule && (
               <>
                 <div className="space-y-2">
                   <Label htmlFor="customer_name">顧客名</Label>
                   <Input
                     id="customer_name"
-                    name="customer_name"
                     value={formData.customer_name || ''}
                     onChange={(e) => handleChange('customer_name', e.target.value)}
                     required
@@ -81,11 +116,9 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
                   <Label htmlFor="customer_email">メールアドレス</Label>
                   <Input
                     id="customer_email"
-                    name="customer_email"
                     type="email"
                     value={formData.customer_email || ''}
                     onChange={(e) => handleChange('customer_email', e.target.value)}
-                    required
                   />
                 </div>
 
@@ -93,82 +126,71 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
                   <Label htmlFor="customer_phone">電話番号</Label>
                   <Input
                     id="customer_phone"
-                    name="customer_phone"
                     type="tel"
                     value={formData.customer_phone || ''}
                     onChange={(e) => handleChange('customer_phone', e.target.value)}
-                    required
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="customer_name_kana">顧客名（カナ）</Label>
-                  <Input
-                    id="customer_name_kana"
-                    name="customer_name_kana"
-                    value={formData.customer_name_kana || ''}
-                    onChange={(e) => handleChange('customer_name_kana', e.target.value)}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="staff_id">担当スタッフ</Label>
+                  <Label htmlFor="menu_id">メニュー</Label>
                   <Select
-                    value={formData.staff_id || ''}
-                    onValueChange={(value) => handleChange('staff_id', value)}
+                    value={formData.menu_id || ''}
+                    onValueChange={(value) => handleChange('menu_id', value)}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="スタッフを選択" />
+                      <SelectValue placeholder="メニューを選択" />
                     </SelectTrigger>
                     <SelectContent>
-                      {staffList.map((staff) => (
-                        <SelectItem key={staff.id} value={staff.id}>
-                          {staff.name}
+                      {menuList.map((menu) => (
+                        <SelectItem key={menu.id} value={menu.id}>
+                          {menu.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
-
-                <div>
-        <label htmlFor="menu_id">メニュー</label>
-        <Select
-          value={formData.menu_id || ''}
-          onValueChange={(value) => handleChange('menu_id', value)}
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="メニューを選択" />
-          </SelectTrigger>
-          <SelectContent>
-            {menuList.map((menu) => (
-              <SelectItem key={menu.id} value={menu.id}>
-                {menu.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
               </>
             )}
 
+            {/* スタッフ選択 */}
+            <div className="space-y-2">
+              <Label htmlFor="staff_id">担当スタッフ</Label>
+              <Select
+                value={formData.staff_id || ''}
+                onValueChange={(value) => handleChange('staff_id', value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="スタッフを選択" />
+                </SelectTrigger>
+                <SelectContent>
+                  {staffList.map((staff) => (
+                    <SelectItem key={staff.id} value={staff.id}>
+                      {staff.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* 開始時間 */}
             <div className="space-y-2">
               <Label htmlFor="start_time">開始時間</Label>
               <Input
                 id="start_time"
                 type="datetime-local"
-                name="start_time"
                 value={formData.start_time || ''}
                 onChange={(e) => handleChange('start_time', e.target.value)}
                 required
               />
             </div>
 
+            {/* 終了時間 */}
             <div className="space-y-2">
               <Label htmlFor="end_time">終了時間</Label>
               <Input
                 id="end_time"
                 type="datetime-local"
-                name="end_time"
                 value={formData.end_time || ''}
                 onChange={(e) => handleChange('end_time', e.target.value)}
                 required
