@@ -89,7 +89,6 @@ const ReservationCalendar: React.FC = () => {
     if (user && session) {
       loadData();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, session]);
 
   // データ取得関数
@@ -130,7 +129,7 @@ const ReservationCalendar: React.FC = () => {
     console.log('Date selected:', selectInfo);
     const newReservation: Partial<Reservation> = {
       start_time: selectInfo.startStr,
-      end_time: selectInfo.endStr, // ここは自動計算に変更
+      end_time: selectInfo.endStr,
       staff_id: selectInfo.resource ? selectInfo.resource.id : '',
       is_staff_schedule: false,
     };
@@ -338,31 +337,34 @@ const ReservationCalendar: React.FC = () => {
 
   // 日付ナビゲーションハンドラ
   const handlePrevDay = () => {
-    const newDate = moment(currentDate).subtract(1, 'day');
-    setCurrentDate(newDate);
     if (calendarRef.current) {
       const calendarApi = calendarRef.current.getApi();
-      calendarApi.gotoDate(newDate.toDate());
+      const newDate = moment(currentDate).subtract(1, 'day').toDate();
+      calendarApi.gotoDate(newDate);
     }
   };
 
   const handleNextDay = () => {
-    const newDate = moment(currentDate).add(1, 'day');
-    setCurrentDate(newDate);
     if (calendarRef.current) {
       const calendarApi = calendarRef.current.getApi();
-      calendarApi.gotoDate(newDate.toDate());
+      const newDate = moment(currentDate).add(1, 'day').toDate();
+      calendarApi.gotoDate(newDate);
     }
   };
 
   const handleToday = () => {
-    const today = moment();
-    setCurrentDate(today);
     if (calendarRef.current) {
       const calendarApi = calendarRef.current.getApi();
-      calendarApi.gotoDate(today.toDate());
+      calendarApi.gotoDate(new Date());
     }
   };
+
+  useEffect(() => {
+    if (calendarRef.current) {
+      const calendarApi = calendarRef.current.getApi();
+      calendarApi.gotoDate(currentDate.toDate());
+    }
+  }, [currentDate]);
 
   return (
     <Box sx={{ p: 3, backgroundColor: 'background.default' }}>
@@ -435,17 +437,11 @@ const ReservationCalendar: React.FC = () => {
             { hour: '2-digit', minute: '2-digit', hour12: false },
           ]}
           resourceAreaHeaderContent=""
-          datesSet={(arg) => {
-            const newDate = moment(arg.start);
-            if (!newDate.isSame(currentDate, 'day')) {
-              setCurrentDate(newDate);
-            }
-          }}
         />
       </Box>
 
-      {/* 予約フォームモーダル */}
-      {isFormOpen && selectedReservation && (
+    {/* 予約フォームモーダル */}
+    {isFormOpen && selectedReservation && (
         <ReservationForm
           reservation={selectedReservation}
           isNew={isNewReservation}
@@ -505,17 +501,17 @@ const ReservationCalendar: React.FC = () => {
         />
       )}
 
-      {/* スナックバー（通知） */}
-      <Snackbar
+    {/* スナックバー */}
+    <Snackbar
         open={!!snackbar}
         autoHideDuration={6000}
         onClose={() => setSnackbar(null)}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       >
-        <Alert 
-          onClose={() => setSnackbar(null)} 
-          severity={snackbar?.severity} 
-          sx={{ 
+        <Alert
+          onClose={() => setSnackbar(null)}
+          severity={snackbar?.severity}
+          sx={{
             width: '100%',
             borderRadius: '8px',
             boxShadow: 3,

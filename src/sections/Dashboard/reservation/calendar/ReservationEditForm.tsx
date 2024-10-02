@@ -89,7 +89,7 @@ const ReservationEditForm: React.FC<ReservationEditFormProps> = ({
         />
       </DialogContent>
       <DialogActions>
-        <Button onClick={handleDelete} color="error">キャンセル</Button>
+        <Button onClick={handleDelete} color="error">予約キャンセル</Button>
         <Button onClick={onClose}>閉じる</Button>
         <Button onClick={handleSubmit} color="primary">更新</Button>
       </DialogActions>
