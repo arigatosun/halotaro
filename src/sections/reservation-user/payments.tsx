@@ -13,13 +13,14 @@ import { LockIcon, CreditCardIcon, ShieldCheckIcon, AlertCircleIcon } from "luci
 import { CircularProgress } from "@mui/material";
 import { PaymentMethod } from '@stripe/stripe-js';
 
-// PaymentFormProps の修正
+// PaymentFormProps に stripeCustomerId を追加
 interface PaymentFormProps {
   onBack: () => void;
   onPaymentComplete: (status: string, intent?: any) => void;
   clientSecret: string;
   isSetupIntent: boolean;
-  reservationCustomerId: string | null; // string | null に変更
+  reservationCustomerId: string | null;
+  stripeCustomerId: string; // 追加
 }
 
 // PaymentFormコンポーネントを修正
@@ -29,6 +30,7 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
   clientSecret,
   isSetupIntent,
   reservationCustomerId,
+  stripeCustomerId, // 追加
 }) => {
   const stripe = useStripe();
   const elements = useElements();
@@ -79,11 +81,11 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              customerEmail: customerInfo.email, // reservationCustomerId の代わりに customerEmail を使用
+              customerEmail: customerInfo.email,
               paymentMethodId,
+              stripeCustomerId, // 追加
             }),
           });
-
           if (!response.ok) {
             const errorData = await response.json();
             throw new Error(errorData.error || 'Failed to save payment method');
@@ -204,6 +206,7 @@ const Payment: React.FC<PaymentProps> = ({
   const [isLoading, setIsLoading] = useState(true);
   const { setPaymentInfo, selectedMenus, customerInfo } = useReservation();
   const didFetch = useRef(false);
+  const [stripeCustomerId, setStripeCustomerId] = useState<string | null>(null);
 
   useEffect(() => {
     if (didFetch.current) return;
@@ -232,6 +235,8 @@ const Payment: React.FC<PaymentProps> = ({
         const data = await response.json();
         setClientSecret(data.clientSecret);
         setConnectedAccountId(data.connectedAccountId);
+        setStripeCustomerId(data.customerId); // 追加
+
 
         if (!isOver30Days) {
           setPaymentInfo((prev) => ({
@@ -325,6 +330,7 @@ const Payment: React.FC<PaymentProps> = ({
         clientSecret={clientSecret}
         isSetupIntent={isOver30Days}
         reservationCustomerId={reservationCustomerId} // string | null を渡す
+        stripeCustomerId={stripeCustomerId!} // 追加
       />
     </Elements>
   );

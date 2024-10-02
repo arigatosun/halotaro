@@ -1,12 +1,13 @@
 // /api/save-payment-method/route.ts
+
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
 export async function POST(req: NextRequest) {
   try {
-    const { customerEmail, paymentMethodId } = await req.json();
+    const { customerEmail, paymentMethodId, stripeCustomerId } = await req.json();
 
-    if (!customerEmail || !paymentMethodId) {
+    if (!customerEmail || !paymentMethodId || !stripeCustomerId) {
       return NextResponse.json({ error: 'Invalid parameters' }, { status: 400 });
     }
 
@@ -15,10 +16,14 @@ export async function POST(req: NextRequest) {
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
 
+    // 新しいレコードを挿入
     const { error } = await supabase
       .from('stripe_customers')
-      .update({ payment_method_id: paymentMethodId })
-      .eq('customer_email', customerEmail);
+      .insert({
+        customer_email: customerEmail,
+        stripe_customer_id: stripeCustomerId,
+        payment_method_id: paymentMethodId,
+      });
 
     if (error) {
       throw error;

@@ -254,7 +254,7 @@ const reservationCustomerId = data[0].reservation_customer_id;
       .update({
         reservation_customer_id: reservationCustomerId,
       })
-      .eq('customer_email', customerEmail);
+      .eq('payment_method_id', paymentMethodId); // 修正
 
     if (updateError) {
       console.error('Error updating stripe_customers:', updateError);
