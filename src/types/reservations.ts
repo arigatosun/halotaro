@@ -25,3 +25,5 @@ export interface RawReservation {
     scraped_customer: string;
     scraped_menu: string;
   }
+
+  

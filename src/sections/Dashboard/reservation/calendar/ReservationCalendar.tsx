@@ -1,4 +1,8 @@
-import React, { useState, useEffect } from 'react';
+// src/sections/Dashboard/reservation/calendar/ReservationCalendar.tsx
+
+"use client";
+
+import React, { useState, useEffect, useRef } from 'react';
 import FullCalendar from '@fullcalendar/react';
 import resourceTimelinePlugin from '@fullcalendar/resource-timeline';
 import interactionPlugin from '@fullcalendar/interaction';
@@ -11,9 +15,54 @@ import StaffScheduleDetails from './StaffScheduleDetails';
 import { Reservation, Staff, MenuItem } from '@/types/reservation';
 import { useAuth } from '@/lib/useAuth';
 import moment from 'moment';
+import 'moment/locale/ja';
 import { Button } from '@/components/ui/button';
-import { PlusCircle } from 'lucide-react';
+import { PlusCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Snackbar, Alert } from '@mui/material';
+import { Box, Typography } from '@mui/material';
+import AddIcon from '@mui/icons-material/Add';
+import ReservationEditForm from './ReservationEditForm';
+import { styled } from '@mui/system';
+
+moment.locale('ja'); // 日本語ロケールを設定
+
+const StyledFullCalendar = styled(FullCalendar)(({ theme }) => ({
+  '& .fc-timeline-slot-cushion': {
+    fontWeight: 'bold',
+    color: theme.palette.text.primary,
+  },
+  '& .fc-timeline-event': {
+    borderRadius: '4px',
+    padding: '2px 4px',
+  },
+  '& .staff-schedule': {
+    backgroundColor: theme.palette.primary.light,
+    borderColor: theme.palette.primary.main,
+  },
+  '& .customer-reservation': {
+    backgroundColor: theme.palette.secondary.light,
+    borderColor: theme.palette.secondary.main,
+  },
+  '& .fc-timeline-header': {
+    backgroundColor: theme.palette.background.paper,
+    borderBottom: `1px solid ${theme.palette.divider}`,
+  },
+  '& .fc-timeline-slot': {
+    minWidth: '60px !important',
+  },
+  '& .fc-timeline-header-row-chrono th': {
+    textAlign: 'center',
+  },
+  '& .fc-resource-timeline-divider': {
+    display: 'none',
+  },
+  '& .fc-toolbar': {
+    display: 'none',
+  },
+  '& .fc-timeline-header-row:first-child': {
+    display: 'none',
+  },
+}));
 
 const ReservationCalendar: React.FC = () => {
   // 状態変数の定義
@@ -28,22 +77,27 @@ const ReservationCalendar: React.FC = () => {
   const [selectedStaffSchedule, setSelectedStaffSchedule] = useState<Reservation | null>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [snackbar, setSnackbar] = useState<{ message: string; severity: 'success' | 'error' } | null>(null);
-
+  const [isEditFormOpen, setIsEditFormOpen] = useState(false);
+  const [currentDate, setCurrentDate] = useState(moment());
   const { user, session } = useAuth();
+
+  // Ref for FullCalendar
+  const calendarRef = useRef<FullCalendar>(null);
 
   // データ読み込み
   useEffect(() => {
     if (user && session) {
       loadData();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, session]);
 
   // データ取得関数
   const loadData = async () => {
     if (!session || !user) return;
 
-    const startDate = moment().startOf('month').toISOString();
-    const endDate = moment().endOf('month').toISOString();
+    const startDate = moment(currentDate).startOf('month').toISOString();
+    const endDate = moment(currentDate).endOf('month').toISOString();
 
     try {
       const response = await fetch(
@@ -76,7 +130,7 @@ const ReservationCalendar: React.FC = () => {
     console.log('Date selected:', selectInfo);
     const newReservation: Partial<Reservation> = {
       start_time: selectInfo.startStr,
-      end_time: selectInfo.endStr,
+      end_time: selectInfo.endStr, // ここは自動計算に変更
       staff_id: selectInfo.resource ? selectInfo.resource.id : '',
       is_staff_schedule: false,
     };
@@ -94,7 +148,6 @@ const ReservationCalendar: React.FC = () => {
     } else {
       setSelectedReservation(eventData);
       setIsNewReservation(false);
-      setIsFormOpen(false);
       setIsDetailsOpen(true);
     }
   };
@@ -276,63 +329,136 @@ const ReservationCalendar: React.FC = () => {
     }
   };
 
+  // 予約編集ハンドラ
+  const handleEditReservation = (reservation: Reservation) => {
+    setSelectedReservation(reservation);
+    setIsEditFormOpen(true);
+    setIsDetailsOpen(false);
+  };
+
+  // 日付ナビゲーションハンドラ
+  const handlePrevDay = () => {
+    const newDate = moment(currentDate).subtract(1, 'day');
+    setCurrentDate(newDate);
+    if (calendarRef.current) {
+      const calendarApi = calendarRef.current.getApi();
+      calendarApi.gotoDate(newDate.toDate());
+    }
+  };
+
+  const handleNextDay = () => {
+    const newDate = moment(currentDate).add(1, 'day');
+    setCurrentDate(newDate);
+    if (calendarRef.current) {
+      const calendarApi = calendarRef.current.getApi();
+      calendarApi.gotoDate(newDate.toDate());
+    }
+  };
+
+  const handleToday = () => {
+    const today = moment();
+    setCurrentDate(today);
+    if (calendarRef.current) {
+      const calendarApi = calendarRef.current.getApi();
+      calendarApi.gotoDate(today.toDate());
+    }
+  };
+
   return (
-    <div>
-      {/* ヘッダー部分 */}
-      <div className="mb-4 flex justify-between items-center">
-        <h2 className="text-2xl font-bold">予約カレンダー</h2>
-        <Button onClick={handleAddStaffSchedule} className="flex items-center">
-          <PlusCircle className="mr-2" size={16} />
-          スタッフスケジュール追加
+    <Box sx={{ p: 3, backgroundColor: 'background.default' }}>
+      {/* ナビゲーションセクション */}
+      <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Button variant="outline" size="icon" onClick={handlePrevDay}>
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <Typography variant="h5">
+            {currentDate.format('M月D日（ddd）')}
+          </Typography>
+          <Button variant="outline" size="icon" onClick={handleNextDay}>
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+          <Button variant="outline" onClick={handleToday}>
+            今日
+          </Button>
+        </Box>
+        <Button
+          variant="default"
+          onClick={handleAddStaffSchedule}
+        >
+          <PlusCircle className="mr-2 h-4 w-4" /> スタッフスケジュール追加
         </Button>
-      </div>
+      </Box>
 
-      {/* FullCalendarコンポーネント */}
-      <FullCalendar
-        plugins={[resourceTimelinePlugin, interactionPlugin]}
-        initialView="resourceTimelineDay"
-        editable={true}
-        selectable={true}
-        select={handleDateSelect}
-        events={reservations.map((reservation) => ({
-          id: reservation.id,
-          resourceId: reservation.staff_id,
-          title: reservation.is_staff_schedule
-            ? reservation.event
-            : `${reservation.customer_name || ''} - ${reservation.menu_name || ''}`,
-          start: reservation.start_time,
-          end: reservation.end_time,
-          extendedProps: reservation,
-          classNames: reservation.is_staff_schedule ? ['staff-schedule'] : ['customer-reservation'],
-        }))}
-        resources={staffList.map((staff) => ({
-          id: staff.id,
-          title: staff.name,
-        }))}
-        eventClick={handleEventClick}
-        eventDrop={handleEventDrop}
-        eventClassNames={(arg) => {
-          return arg.event.extendedProps.is_staff_schedule ? ['staff-schedule'] : ['customer-reservation'];
-        }}
-        slotDuration="00:30:00"
-        slotMinTime="09:00:00"
-        slotMaxTime="21:00:00"
-      />
+      {/* カレンダーセクション */}
+      <Box sx={{ 
+        backgroundColor: 'background.paper', 
+        borderRadius: '12px', 
+        overflow: 'hidden',
+        boxShadow: 3,
+      }}>
+        <StyledFullCalendar
+          ref={calendarRef}
+          plugins={[resourceTimelinePlugin, interactionPlugin]}
+          initialView="resourceTimelineDay"
+          editable={true}
+          selectable={true}
+          select={handleDateSelect}
+          schedulerLicenseKey='GPL-My-Project-Is-Open-Source'
+          events={reservations.map((reservation) => ({
+            id: reservation.id,
+            resourceId: reservation.staff_id,
+            title: reservation.is_staff_schedule
+              ? reservation.event
+              : `${reservation.customer_name || ''} - ${reservation.menu_name || ''}`,
+            start: reservation.start_time,
+            end: reservation.end_time,
+            extendedProps: reservation,
+            classNames: reservation.is_staff_schedule ? ['staff-schedule'] : ['customer-reservation'],
+          }))}
+          resources={staffList.map((staff) => ({
+            id: staff.id,
+            title: staff.name,
+          }))}
+          eventClick={handleEventClick}
+          eventDrop={handleEventDrop}
+          eventClassNames={(arg) => {
+            return arg.event.extendedProps.is_staff_schedule ? ['staff-schedule'] : ['customer-reservation'];
+          }}
+          slotDuration="00:30:00"
+          slotMinTime="09:00:00"
+          slotMaxTime="21:00:00"
+          height="auto"
+          headerToolbar={false}
+          dayHeaderFormat={{ hour: '2-digit', minute: '2-digit', hour12: false }}
+          slotLabelFormat={[
+            { hour: '2-digit', minute: '2-digit', hour12: false },
+          ]}
+          resourceAreaHeaderContent=""
+          datesSet={(arg) => {
+            const newDate = moment(arg.start);
+            if (!newDate.isSame(currentDate, 'day')) {
+              setCurrentDate(newDate);
+            }
+          }}
+        />
+      </Box>
 
-      {/* 予約フォーム */}
+      {/* 予約フォームモーダル */}
       {isFormOpen && selectedReservation && (
         <ReservationForm
           reservation={selectedReservation}
           isNew={isNewReservation}
           onClose={() => setIsFormOpen(false)}
           onSubmit={handleFormSubmit}
-          onDelete={handleDeleteReservation}
           staffList={staffList}
           menuList={menuList}
+          onDelete={handleDeleteReservation}
+          reservations={reservations} // 既存の予約データを渡す
         />
       )}
 
-      {/* スタッフスケジュールフォーム */}
+      {/* スタッフスケジュールフォームモーダル */}
       {isStaffScheduleFormOpen && (
         <StaffScheduleForm
           staffSchedule={selectedStaffSchedule}
@@ -347,7 +473,7 @@ const ReservationCalendar: React.FC = () => {
         />
       )}
 
-      {/* スタッフスケジュール詳細 */}
+      {/* スタッフスケジュール詳細モーダル */}
       {selectedStaffSchedule && !isStaffScheduleFormOpen && (
         <StaffScheduleDetails
           staffSchedule={selectedStaffSchedule}
@@ -358,32 +484,47 @@ const ReservationCalendar: React.FC = () => {
         />
       )}
 
-      {/* 予約詳細 */}
+      {/* 予約詳細モーダル */}
       {isDetailsOpen && selectedReservation && (
         <ReservationDetails
           reservation={selectedReservation}
           onClose={() => setIsDetailsOpen(false)}
-          onEdit={() => {
-            setIsDetailsOpen(false);
-            setIsFormOpen(true);
-            setIsNewReservation(false);
-          }}
-          onDelete={handleDeleteReservation} // 予約削除ハンドラを追加
+          onEdit={() => handleEditReservation(selectedReservation)}
         />
       )}
 
-      {/* トースト通知 */}
-      {/* CustomToastコンポーネントをSnackbarに変更 */}
+      {/* 予約編集フォームモーダル */}
+      {isEditFormOpen && selectedReservation && (
+        <ReservationEditForm
+          reservation={selectedReservation}
+          onClose={() => setIsEditFormOpen(false)}
+          onSubmit={handleFormSubmit}
+          onDelete={handleDeleteReservation}
+          staffList={staffList}
+          menuList={menuList}
+        />
+      )}
+
+      {/* スナックバー（通知） */}
       <Snackbar
         open={!!snackbar}
         autoHideDuration={6000}
         onClose={() => setSnackbar(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       >
-        <Alert onClose={() => setSnackbar(null)} severity={snackbar?.severity} sx={{ width: '100%' }}>
+        <Alert 
+          onClose={() => setSnackbar(null)} 
+          severity={snackbar?.severity} 
+          sx={{ 
+            width: '100%',
+            borderRadius: '8px',
+            boxShadow: 3,
+          }}
+        >
           {snackbar?.message}
         </Alert>
       </Snackbar>
-    </div>
+    </Box>
   );
 };
 
