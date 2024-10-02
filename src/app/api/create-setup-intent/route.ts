@@ -1,5 +1,3 @@
-// /api/create-setup-intent/route.ts
-
 import { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
@@ -10,10 +8,10 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 
 export async function POST(request: NextRequest) {
     try {
-      const { customerEmail } = await request.json();
+      const { customerEmail, totalAmount } = await request.json();
   
-      if (!customerEmail) {
-        return NextResponse.json({ error: 'Customer Email is required' }, { status: 400 });
+      if (!customerEmail || totalAmount === undefined) {
+        return NextResponse.json({ error: 'Customer Email and Total Amount are required' }, { status: 400 });
       }
   
       // Stripe Customer の取得または作成
@@ -31,11 +29,13 @@ export async function POST(request: NextRequest) {
       const setupIntent = await stripe.setupIntents.create({
         customer: customerId,
         payment_method_types: ['card'],
+        metadata: { totalAmount: totalAmount.toString() }, // 金額をメタデータとして保存
       });
   
       return NextResponse.json({
         clientSecret: setupIntent.client_secret,
         customerId: customerId,
+        totalAmount: totalAmount, // クライアントに金額を返す
       });
     } catch (err: any) {
       console.error('Error creating Setup Intent:', err);
