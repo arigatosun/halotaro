@@ -203,68 +203,69 @@ const rpcParams = {
   p_stripe_payment_intent_id: paymentInfo?.stripePaymentIntentId ?? null,
 };
 
-// RPC 関数の呼び出し
-const { data, error: reservationError } = await supabase.rpc(
-  "create_reservation",
-  rpcParams
-);
+  // RPC 関数の呼び出し
+  const { data, error: reservationError } = await supabase.rpc(
+    "create_reservation",
+    rpcParams
+  );
 
-if (reservationError) {
-  console.error("Reservation creation error:", reservationError);
-  throw reservationError;
-}
+  if (reservationError) {
+    console.error("Reservation creation error:", reservationError);
+    throw reservationError;
+  }
 
-if (!data || data.length === 0 || !data[0].id || !data[0].reservation_customer_id) {
-  console.error("Reservation created but ID or reservation_customer_id is missing", data);
+  // 予約IDとreservation_customer_idの存在を確認
+if (!data || data.length === 0 || !data[0].reservation_id || !data[0].reservation_customer_id) {
+  console.error("Reservation created but reservation_id or reservation_customer_id is missing", data);
   throw new Error("予約IDまたは予約顧客IDの取得に失敗しました");
 }
 
-const reservationId = data[0].id;
+const reservationId = data[0].reservation_id;
 const reservationCustomerId = data[0].reservation_customer_id;
-console.log("Created reservation ID:", reservationId);
-console.log("Created reservation customer ID:", reservationCustomerId);
 
+  console.log("Created reservation ID:", reservationId);
+  console.log("Created reservation customer ID:", reservationCustomerId);
 
+  // *** payment_intents テーブルを更新して reservation_id と capture_date を設定 ***
+  if (paymentInfo?.stripePaymentIntentId) {
+    const { data: paymentIntentData, error: paymentIntentError } = await supabase
+      .from('payment_intents')
+      .update({
+        reservation_id: reservationId,
+        capture_date: captureDate.toISOString(), // capture_date を追加
+      })
+      .eq('payment_intent_id', paymentInfo.stripePaymentIntentId);
 
-    // *** payment_intents テーブルを更新して reservation_id と capture_date を設定 ***
-    if (paymentInfo?.stripePaymentIntentId) {
-      const { data: paymentIntentData, error: paymentIntentError } = await supabase
-        .from('payment_intents')
-        .update({
-          reservation_id: reservationId,
-          capture_date: captureDate.toISOString(), // capture_date を追加
-        })
-        .eq('payment_intent_id', paymentInfo.stripePaymentIntentId);
-
-      if (paymentIntentError) {
-        console.error('Error updating payment_intents with reservation_id and capture_date:', paymentIntentError);
-        // エラー処理を行う（必要に応じてレスポンスを返すか、エラーを投げる）
-        throw new Error('Failed to update payment_intents with reservation_id and capture_date');
-      } else {
-        console.log('Updated payment_intents with reservation_id and capture_date:', paymentIntentData);
-      }
+    if (paymentIntentError) {
+      console.error('Error updating payment_intents with reservation_id and capture_date:', paymentIntentError);
+      // エラー処理を行う（必要に応じてレスポンスを返すか、エラーを投げる）
+      throw new Error('Failed to update payment_intents with reservation_id and capture_date');
     } else {
-      console.warn('No stripePaymentIntentId provided in paymentInfo.');
+      console.log('Updated payment_intents with reservation_id and capture_date:', paymentIntentData);
     }
-
-// 新しく追加: stripe_customers テーブルを更新
-if (reservationCustomerId && paymentMethodId) {
-  const { error: updateError } = await supabase
-  .from('stripe_customers')
-  .update({
-    reservation_customer_id: reservationCustomerId,
-  })
-  .eq('customer_email', customerEmail);
-
-  if (updateError) {
-    console.error('Error updating stripe_customers:', updateError);
-    // エラーハンドリング: ここではログを出力するだけですが、必要に応じて適切な処理を追加してください
   } else {
-    console.log('Successfully updated stripe_customers table');
+    console.warn('No stripePaymentIntentId provided in paymentInfo.');
   }
-} else {
-  console.warn('Missing reservationCustomerId or paymentMethodId, skipping stripe_customers update');
-}
+
+  // 新しく追加: stripe_customers テーブルを更新
+  if (reservationCustomerId && paymentMethodId) {
+    const { error: updateError } = await supabase
+      .from('stripe_customers')
+      .update({
+        reservation_customer_id: reservationCustomerId,
+      })
+      .eq('customer_email', customerEmail);
+
+    if (updateError) {
+      console.error('Error updating stripe_customers:', updateError);
+      // エラーハンドリング: ここではログを出力するだけですが、必要に応じて適切な処理を追加してください
+      throw new Error('Failed to update stripe_customers with reservation_customer_id');
+    } else {
+      console.log('Successfully updated stripe_customers table');
+    }
+  } else {
+    console.warn('Missing reservationCustomerId or paymentMethodId, skipping stripe_customers update');
+  }
 
 
     // メール送信処理
@@ -395,8 +396,8 @@ if (reservationCustomerId && paymentMethodId) {
         // TODO: 必要に応じてエラー内容をサロンオーナーに通知
       });
 
-    // クライアントへのレスポンスを即座に返す
-    return NextResponse.json({
+     // クライアントへのレスポンスを即座に返す
+     return NextResponse.json({
       success: true,
       reservationId: reservationId,
       reservationCustomerId: reservationCustomerId,

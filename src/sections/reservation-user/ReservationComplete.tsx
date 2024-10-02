@@ -1,3 +1,4 @@
+// ReservationComplete.tsx
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -84,7 +85,7 @@ export default function ReservationComplete({
       }
 
       const result = await response.json();
-      const { reservationId, reservationCustomerId } = result;
+      const { reservation_id: reservationId, reservation_customer_id: reservationCustomerId } = result;
 
       // 30日以上先の予約の場合の処理
       if (paymentInfo?.isOver30Days && reservationCustomerId) {
@@ -112,7 +113,7 @@ export default function ReservationComplete({
         title: "予約が保存されました",
         description: `予約ID: ${reservationId}`,
       });
-    } catch (error) {
+    } catch (error: any) {
       hasSaved.current = false;
       console.error("予約の保存中にエラーが発生しました:", error);
       setStatus("予約の保存中にエラーが発生しました");

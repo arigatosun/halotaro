@@ -1,32 +1,32 @@
-import { NextApiRequest, NextApiResponse } from 'next';
+// /api/save-payment-method/route.ts
+import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+export async function POST(req: NextRequest) {
   try {
-    const { customerEmail, paymentMethodId } = req.body;
+    const { customerEmail, paymentMethodId } = await req.json();
 
-if (!customerEmail || !paymentMethodId) {
-  return res.status(400).json({ error: 'Invalid parameters' });
-}
+    if (!customerEmail || !paymentMethodId) {
+      return NextResponse.json({ error: 'Invalid parameters' }, { status: 400 });
+    }
 
-// stripe_customersテーブルを更新
-const { error } = await supabase
-  .from('stripe_customers')
-  .update({ payment_method_id: paymentMethodId })
-  .eq('customer_email', customerEmail);
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+
+    const { error } = await supabase
+      .from('stripe_customers')
+      .update({ payment_method_id: paymentMethodId })
+      .eq('customer_email', customerEmail);
 
     if (error) {
       throw error;
     }
 
-    res.status(200).json({ success: true });
+    return NextResponse.json({ success: true });
   } catch (err: any) {
     console.error('Error saving payment method:', err);
-    res.status(500).json({ error: err.message });
+    return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
