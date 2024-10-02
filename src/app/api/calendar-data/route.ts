@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from "next/headers";
+import { Reservation } from '@/types/reservation';  // パスは実際の場所に合わせて調整してください
 import moment from 'moment';
 
 // 認証チェック関数
@@ -64,21 +65,24 @@ export async function GET(request: Request) {
     }
 
     // 予約データの取得（キャンセルされた予約を除外）
-    const { data: reservations, error: reservationError } = await supabase
-      .from('reservations')
-      .select(`
-        *,
-        reservation_customers (
-          id, name, email, phone, name_kana
-        ),
-        menu_items (id, name, duration, price),
-        staff (id, name)
-      `)
-      .eq('user_id', userId)
-      .in('status', ['confirmed', 'pending']) // ここでキャンセルされた予約を除外
-      .gte('start_time', startDate)
-      .lte('end_time', endDate)
-      .order('start_time', { ascending: true });
+   // 予約データの取得部分を修正
+const { data: reservations, error: reservationError } = await supabase
+.from('reservations')
+.select(`
+  *,
+  reservation_customers (
+    id, name, email, phone, name_kana
+  ),
+  menu_items (id, name, duration, price),
+  staff (id, name)
+`)
+.eq('user_id', userId)
+// キャンセルされた予約も含める場合は、以下の行を修正または削除
+// .in('status', ['confirmed', 'pending'])
+.gte('start_time', startDate)
+.lte('end_time', endDate)
+.order('start_time', { ascending: true });
+
 
     if (reservationError) {
       console.error('Error fetching reservations:', reservationError);
@@ -133,20 +137,22 @@ export async function POST(request: Request) {
   try {
     // 予約の作成
     const { data: newReservation, error: reservationError } = await supabase
-      .from('reservations')
-      .insert({
-        user_id: authResult.user.id,
-        staff_id,
-        menu_id,
-        start_time: moment(start_time).utc().format(),
-        end_time: moment(end_time).utc().format(),
-        status: 'confirmed',
-        total_price,
-        is_staff_schedule, // この行を追加
-        event, // この行を追加
-      })
-      .select()
-      .single();
+    .from('reservations')
+    .insert({
+      user_id: authResult.user.id,
+      staff_id,
+      menu_id,
+      start_time: moment(start_time).utc().format(),
+      end_time: moment(end_time).utc().format(),
+      status: 'confirmed', // 1回だけ記述
+      total_price,
+      is_staff_schedule,
+      event,
+    })
+    .select()
+    .single();
+  
+  
 
     if (reservationError) {
       console.error('Error creating reservation:', reservationError);
@@ -189,32 +195,41 @@ export async function PUT(request: Request) {
   const data = await request.json();
   console.log('Received data for update:', data);
 
-  const {
-    id,
-    start_time,
-    end_time,
-    staff_id,
-    menu_id,
-    status,
-    total_price,
-    customer_name,
-    customer_email,
-    customer_phone,
-    customer_name_kana
-  } = data;
+  const { id, ...updateFields } = data;
 
   try {
+    // 既存の予約データを取得
+    const { data: existingReservation, error: fetchError } = await supabase
+      .from('reservations')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (fetchError) {
+      console.error('Error fetching existing reservation:', fetchError);
+      return NextResponse.json({ error: fetchError.message }, { status: 500 });
+    }
+
+    // 更新するフィールドを明示的に指定
+    const fieldsToUpdate = [
+      'start_time', 'end_time', 'staff_id', 'menu_id', 'status', 'total_price'
+    ] as const;
+
+    const updatedData: Partial<Reservation> = {};
+    for (const field of fieldsToUpdate) {
+      if (updateFields[field] !== undefined) {
+        if (field === 'start_time' || field === 'end_time') {
+          updatedData[field] = moment(updateFields[field]).utc().format();
+        } else {
+          updatedData[field] = updateFields[field];
+        }
+      }
+    }
+
     // 予約の更新
     const { data: updatedReservation, error: updateError } = await supabase
       .from('reservations')
-      .update({
-        start_time: moment(start_time).utc().format(),
-        end_time: moment(end_time).utc().format(),
-        staff_id,
-        menu_id,
-        status,
-        total_price
-      })
+      .update(updatedData)
       .eq('id', id)
       .select()
       .single();
@@ -224,24 +239,28 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: updateError.message }, { status: 500 });
     }
 
-    // 顧客情報の更新
-    const { error: customerUpdateError } = await supabase
-      .from('reservation_customers')
-      .update({
-        name: customer_name,
-        email: customer_email,
-        phone: customer_phone,
-        name_kana: customer_name_kana
-      })
-      .eq('reservation_id', id);
+    // 顧客情報の更新（もし顧客情報が提供されている場合）
+    if (updateFields.customer_name || updateFields.customer_email || updateFields.customer_phone || updateFields.customer_name_kana) {
+      const customerUpdateData = {
+        name: updateFields.customer_name,
+        email: updateFields.customer_email,
+        phone: updateFields.customer_phone,
+        name_kana: updateFields.customer_name_kana
+      };
 
-    if (customerUpdateError) {
-      console.error('Error updating customer:', customerUpdateError);
-      return NextResponse.json({ error: customerUpdateError.message }, { status: 500 });
+      const { error: customerUpdateError } = await supabase
+        .from('reservation_customers')
+        .update(customerUpdateData)
+        .eq('reservation_id', id);
+
+      if (customerUpdateError) {
+        console.error('Error updating customer:', customerUpdateError);
+        return NextResponse.json({ error: customerUpdateError.message }, { status: 500 });
+      }
     }
 
     // 更新後のデータを取得
-    const { data: fullReservation, error: fetchError } = await supabase
+    const { data: fullReservation, error: finalFetchError } = await supabase
       .from('reservations')
       .select(`
         *,
@@ -252,16 +271,17 @@ export async function PUT(request: Request) {
       .eq('id', id)
       .single();
 
-    if (fetchError) {
-      console.error('Error fetching updated reservation:', fetchError);
-      return NextResponse.json({ error: fetchError.message }, { status: 500 });
+    if (finalFetchError) {
+      console.error('Error fetching updated reservation:', finalFetchError);
+      return NextResponse.json({ error: finalFetchError.message }, { status: 500 });
     }
 
     console.log('Reservation updated:', fullReservation);
     return NextResponse.json(fullReservation);
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Unexpected error during reservation update:', error);
-    return NextResponse.json({ error: 'An unexpected error occurred' }, { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }
 

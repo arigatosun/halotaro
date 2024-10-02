@@ -1,3 +1,3 @@
 export const generateCancelUrl = (baseUrl: string, reservationId: string) => {
-    return `${baseUrl}/cancel-reservation?id=${reservationId}`;
+    return `${baseUrl}/customer-cancel-reservation?id=${reservationId}`;
   };

@@ -94,10 +94,10 @@ const ReservationCalendar: React.FC = () => {
   // データ取得関数
   const loadData = async () => {
     if (!session || !user) return;
-
+  
     const startDate = moment(currentDate).startOf('month').toISOString();
     const endDate = moment(currentDate).endOf('month').toISOString();
-
+  
     try {
       const response = await fetch(
         `/api/calendar-data?userId=${user.id}&startDate=${startDate}&endDate=${endDate}`,
@@ -105,7 +105,7 @@ const ReservationCalendar: React.FC = () => {
           headers: {
             'Authorization': `Bearer ${session.access_token}`,
           },
-          cache: 'no-cache', // キャッシュを無効化して最新データを取得
+          cache: 'no-store', // キャッシュを無効化して最新データを取得
         }
       );
       if (!response.ok) {
@@ -222,6 +222,82 @@ const ReservationCalendar: React.FC = () => {
     }
   };
 
+  const handleEditFormSubmit = async (updatedReservation: Partial<Reservation>) => {
+    console.log('Calendar: Edit form submit received', updatedReservation);
+    if (!session || !user) {
+      console.log('Calendar: No session or user');
+      setSnackbar({ message: 'セッションが無効です。再度ログインしてください。', severity: 'error' });
+      return;
+    }
+
+    try {
+      console.log('Calendar: Sending update request');
+      const response = await fetch('/api/calendar-data', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify(updatedReservation),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('Calendar: API error', errorData);
+        throw new Error('Failed to update reservation');
+      }
+
+      const updatedData = await response.json();
+      console.log('Calendar: Update successful', updatedData);
+      
+      // ローカルの予約データを更新
+      setReservations(prevReservations => 
+        prevReservations.map(res => 
+          res.id === updatedData.id ? { ...res, ...updatedData } : res
+        )
+      );
+
+      setIsEditFormOpen(false);
+      setSnackbar({ message: '予約が更新されました', severity: 'success' });
+    } catch (error) {
+      console.error('Calendar: Error in handleEditFormSubmit', error);
+      setSnackbar({ message: '予約の更新に失敗しました', severity: 'error' });
+    }
+  };
+
+   // 予約キャンセルハンドラの修正
+   const handleCancelReservation = async (reservationId: string, cancellationType: string) => {
+    if (!session || !user) {
+      setSnackbar({ message: 'セッションが無効です。再度ログインしてください。', severity: 'error' });
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/salon-cancel-reservation', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ reservationId, cancellationType }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('Error cancelling reservation:', errorData);
+        throw new Error('予約のキャンセルに失敗しました');
+      }
+
+      await loadData();
+      setIsFormOpen(false);
+      setIsDetailsOpen(false);
+      setSnackbar({ message: '予約がキャンセルされました', severity: 'success' });
+    } catch (error) {
+      console.error('Error in handleCancelReservation:', error);
+      setSnackbar({ message: '予約のキャンセルに失敗しました', severity: 'error' });
+    }
+  };
+
   // 予約削除ハンドラ（キャンセル処理）
   const handleDeleteReservation = async (id: string) => {
     if (!session || !user) {
@@ -335,62 +411,62 @@ const ReservationCalendar: React.FC = () => {
     setIsDetailsOpen(false);
   };
 
-  // 日付ナビゲーションハンドラ
-  const handlePrevDay = () => {
-    if (calendarRef.current) {
-      const calendarApi = calendarRef.current.getApi();
-      const newDate = moment(currentDate).subtract(1, 'day').toDate();
-      calendarApi.gotoDate(newDate);
-    }
-  };
+// 日付ナビゲーションハンドラ
+const handlePrevDay = () => {
+  const newDate = moment(currentDate).subtract(1, 'day'); // 1日引く
+  setCurrentDate(newDate); // 状態を更新
+  if (calendarRef.current) {
+    const calendarApi = calendarRef.current.getApi();
+    calendarApi.gotoDate(newDate.toDate()); // カレンダーの表示を更新
+  }
+};
 
-  const handleNextDay = () => {
-    if (calendarRef.current) {
-      const calendarApi = calendarRef.current.getApi();
-      const newDate = moment(currentDate).add(1, 'day').toDate();
-      calendarApi.gotoDate(newDate);
-    }
-  };
+const handleNextDay = () => {
+  const newDate = moment(currentDate).add(1, 'day'); // 1日足す
+  setCurrentDate(newDate); // 状態を更新
+  if (calendarRef.current) {
+    const calendarApi = calendarRef.current.getApi();
+    calendarApi.gotoDate(newDate.toDate()); // カレンダーの表示を更新
+  }
+};
 
-  const handleToday = () => {
-    if (calendarRef.current) {
-      const calendarApi = calendarRef.current.getApi();
-      calendarApi.gotoDate(new Date());
-    }
-  };
+const handleToday = () => {
+  const today = moment(); // 今日の日付を取得
+  setCurrentDate(today); // 状態を今日の日付に更新
+  if (calendarRef.current) {
+    const calendarApi = calendarRef.current.getApi();
+    calendarApi.gotoDate(today.toDate()); // カレンダーの表示を今日に更新
+  }
+};
 
-  useEffect(() => {
-    if (calendarRef.current) {
-      const calendarApi = calendarRef.current.getApi();
-      calendarApi.gotoDate(currentDate.toDate());
-    }
-  }, [currentDate]);
+useEffect(() => {
+  if (user && session) {
+    loadData();
+  }
+}, [currentDate]);
 
   return (
     <Box sx={{ p: 3, backgroundColor: 'background.default' }}>
       {/* ナビゲーションセクション */}
-      <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <Button variant="outline" size="icon" onClick={handlePrevDay}>
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <Typography variant="h5">
-            {currentDate.format('M月D日（ddd）')}
-          </Typography>
-          <Button variant="outline" size="icon" onClick={handleNextDay}>
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-          <Button variant="outline" onClick={handleToday}>
-            今日
-          </Button>
-        </Box>
-        <Button
-          variant="default"
-          onClick={handleAddStaffSchedule}
-        >
-          <PlusCircle className="mr-2 h-4 w-4" /> スタッフスケジュール追加
-        </Button>
-      </Box>
+<Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+    <Button variant="outline" size="icon" onClick={handlePrevDay}>
+      <ChevronLeft className="h-4 w-4" />
+    </Button>
+    <Typography variant="h5">
+      {currentDate.format('YYYY年M月D日（ddd）')} {/* 表示する日付 */}
+    </Typography>
+    <Button variant="outline" size="icon" onClick={handleNextDay}>
+      <ChevronRight className="h-4 w-4" />
+    </Button>
+    <Button variant="outline" onClick={handleToday}>
+      今日
+    </Button>
+  </Box>
+  <Button variant="default" onClick={handleAddStaffSchedule}>
+    <PlusCircle className="mr-2 h-4 w-4" /> スタッフスケジュール追加
+  </Button>
+</Box>
 
       {/* カレンダーセクション */}
       <Box sx={{ 
@@ -480,26 +556,28 @@ const ReservationCalendar: React.FC = () => {
         />
       )}
 
-      {/* 予約詳細モーダル */}
-      {isDetailsOpen && selectedReservation && (
-        <ReservationDetails
-          reservation={selectedReservation}
-          onClose={() => setIsDetailsOpen(false)}
-          onEdit={() => handleEditReservation(selectedReservation)}
-        />
-      )}
+    {/* 予約詳細モーダル */}
+    {isDetailsOpen && selectedReservation && (
+      <ReservationDetails
+        reservation={selectedReservation}
+        onClose={() => setIsDetailsOpen(false)}
+        onEdit={() => handleEditReservation(selectedReservation)}
+        onCancel={handleCancelReservation} // ここを追加
+      />
+    )}
 
-      {/* 予約編集フォームモーダル */}
-      {isEditFormOpen && selectedReservation && (
-        <ReservationEditForm
-          reservation={selectedReservation}
-          onClose={() => setIsEditFormOpen(false)}
-          onSubmit={handleFormSubmit}
-          onDelete={handleDeleteReservation}
-          staffList={staffList}
-          menuList={menuList}
-        />
-      )}
+    {/* 予約編集フォームモーダル */}
+    {isEditFormOpen && selectedReservation && (
+  <ReservationEditForm
+    reservation={selectedReservation}
+    onClose={() => setIsEditFormOpen(false)}
+    onSubmit={handleEditFormSubmit}
+    onDelete={handleDeleteReservation}
+    staffList={staffList}
+    menuList={menuList}
+    reservations={reservations}
+  />
+)}
 
     {/* スナックバー */}
     <Snackbar
