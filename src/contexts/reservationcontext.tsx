@@ -1,4 +1,5 @@
 // contexts/reservationcontext.tsx
+
 import React, { createContext, useContext, useState } from "react";
 
 // 選択されたメニュー項目の型定義
@@ -6,7 +7,7 @@ interface SelectedMenuItem {
   id: string;
   name: string;
   price: number;
-  duration:number;
+  duration: number;
 }
 
 // 選択されたスタッフの型定義
@@ -32,40 +33,40 @@ export interface CustomerInfo {
   [key: string]: string;
 }
 
+// PaymentInfo の型定義
+export interface PaymentInfo {
+  method: string;
+  status: string;
+  stripePaymentIntentId: string;
+  amount: number;
+  reservationId?: string; // オプションフィールドとして追加
+}
+
 // 予約コンテキストの型定義
 interface ReservationContextType {
   selectedMenus: SelectedMenuItem[];
   setSelectedMenus: React.Dispatch<React.SetStateAction<SelectedMenuItem[]>>;
   selectedDateTime: SelectedDateTime | null;
-  setSelectedDateTime: React.Dispatch<
-    React.SetStateAction<SelectedDateTime | null>
-  >;
+  setSelectedDateTime: React.Dispatch<React.SetStateAction<SelectedDateTime | null>>;
   selectedStaff: SelectedStaff | null;
   setSelectedStaff: React.Dispatch<React.SetStateAction<SelectedStaff | null>>;
   customerInfo: CustomerInfo;
   setCustomerInfo: React.Dispatch<React.SetStateAction<CustomerInfo>>;
   calculateTotalAmount: (menus: SelectedMenuItem[]) => number;
-  paymentInfo: any | null;
-  setPaymentInfo: (info: any | null) => void;
+  paymentInfo: PaymentInfo | null;
+  setPaymentInfo: React.Dispatch<React.SetStateAction<PaymentInfo | null>>;
 }
 
 // 予約コンテキストの作成
-const ReservationContext = createContext<ReservationContextType | undefined>(
-  undefined
-);
+const ReservationContext = createContext<ReservationContextType | undefined>(undefined);
 
 // 予約プロバイダーコンポーネント
-export const ReservationProvider: React.FC<{ children: React.ReactNode }> = ({
-  children,
-}) => {
+export const ReservationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // 各種状態の初期化
   const [selectedMenus, setSelectedMenus] = useState<SelectedMenuItem[]>([]);
-  const [selectedDateTime, setSelectedDateTime] =
-    useState<SelectedDateTime | null>(null);
-  const [selectedStaff, setSelectedStaff] = useState<SelectedStaff | null>(
-    null
-  );
-  const [paymentInfo, setPaymentInfo] = useState<any | null>(null);
+  const [selectedDateTime, setSelectedDateTime] = useState<SelectedDateTime | null>(null);
+  const [selectedStaff, setSelectedStaff] = useState<SelectedStaff | null>(null);
+  const [paymentInfo, setPaymentInfo] = useState<PaymentInfo | null>(null);
   const [customerInfo, setCustomerInfo] = useState<CustomerInfo>({
     lastNameKana: "",
     firstNameKana: "",

@@ -11,35 +11,8 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-const resendApiKey = process.env.RESEND_API_KEY;
-if (!resendApiKey) {
-  throw new Error("RESEND_API_KEY is not set in the environment variables");
-}
-const resend = new Resend(resendApiKey);
-
-// キャンセルポリシーの最長日数を取得する関数
-async function getMaxCancelPolicyDays(userId: string): Promise<number> {
-  const { data, error } = await supabase
-    .from('cancel_policies')
-    .select('policies')
-    .eq('user_id', userId)
-    .single();
-
-  if (error) {
-    if (error.code === 'PGRST116') { // 'PGRST116' は行が見つからないエラー
-      console.log('No cancel policies found for user, using default of 7 days.');
-      return 7; // デフォルトで7日
-    } else {
-      throw new Error('キャンセルポリシーの取得に失敗しました');
-    }
-  }
-
-  // policies は JSON 配列として保存されていると仮定
-  const policies = data.policies as Array<{ days: number }>;
-  const maxDays = Math.max(...policies.map(policy => policy.days));
-
-  return maxDays;
-}
+// Resend クライアントの初期化（メール送信用）
+const resend = new Resend(process.env.RESEND_API_KEY!);
 
 export async function POST(request: Request) {
   try {
@@ -88,7 +61,7 @@ export async function POST(request: Request) {
       .eq("start_time", startTime)
       .single();
 
-    if (checkError && checkError.code !== "PGRST116") { // 'PGRST116' は行が見つからないエラー
+    if (checkError && checkError.code !== "PGRST116") {
       throw checkError;
     }
 
@@ -173,14 +146,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // **キャンセルポリシーの最長日数を取得**
-    const maxCancelPolicyDays = await getMaxCancelPolicyDays(userId);
-
-    // **キャプチャ日時を計算**
-    const captureDate = new Date(startTime);
-    captureDate.setDate(captureDate.getDate() - maxCancelPolicyDays);
-
-    // **予約作成処理**
+    // RPC関数の呼び出し
     const { data, error: reservationError } = await supabase.rpc(
       "create_reservation",
       {
@@ -215,34 +181,9 @@ export async function POST(request: Request) {
     const reservationId = data[0].id;
     console.log("Created reservation ID:", reservationId);
 
-    // *** payment_intents テーブルを更新して reservation_id と capture_date を設定 ***
-    if (paymentInfo?.stripePaymentIntentId) {
-      const { data: paymentIntentData, error: paymentIntentError } = await supabase
-        .from('payment_intents')
-        .update({
-          reservation_id: reservationId,
-          capture_date: captureDate.toISOString(), // capture_date を追加
-        })
-        .eq('payment_intent_id', paymentInfo.stripePaymentIntentId);
-
-      if (paymentIntentError) {
-        console.error('Error updating payment_intents with reservation_id and capture_date:', paymentIntentError);
-        // エラー処理を行う（必要に応じてレスポンスを返すか、エラーを投げる）
-        throw new Error('Failed to update payment_intents with reservation_id and capture_date');
-      } else {
-        console.log('Updated payment_intents with reservation_id and capture_date:', paymentIntentData);
-      }
-    } else {
-      console.warn('No stripePaymentIntentId provided in paymentInfo.');
-    }
-
     // メール送信処理
     try {
       console.log("Attempting to send emails...");
-
-      if (!resend) {
-        throw new Error("Resend client is not initialized");
-      }
 
       // ベースURLの設定
       const baseUrl =
@@ -334,13 +275,13 @@ export async function POST(request: Request) {
 
       console.log("Emails sent successfully");
     } catch (emailError) {
-  console.error("Error sending emails:", emailError);
-  if (emailError instanceof Error) {
-    console.error("Error message:", emailError.message);
-    console.error("Error stack:", emailError.stack);
-  }
-  // メール送信エラーはログに記録するが、予約プロセス自体は中断しない
-}
+      console.error("Error sending emails:", emailError);
+      if (emailError instanceof Error) {
+        console.error("Error message:", emailError.message);
+        console.error("Error stack:", emailError.stack);
+      }
+      // メール送信エラーはログに記録するが、予約プロセス自体は中断しない
+    }
 
     // 予約情報の保存が成功したので、内部APIにリクエストを送信（非同期）
     sendReservationToAutomation({

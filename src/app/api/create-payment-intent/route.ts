@@ -3,6 +3,41 @@ import { getUserStripeConnectId } from "@/app/service/userService";
 import { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
+
+// 関数の実装
+async function savePaymentIntentToDatabase({
+  paymentIntentId,
+  userId,
+  status,
+  amount,
+}: {
+  paymentIntentId: string;
+  userId: string;
+  status: string;
+  amount: number;
+}) {
+  const { data, error } = await supabase.from('payment_intents').insert([
+    {
+      payment_intent_id: paymentIntentId,
+      user_id: userId,
+      status: status,
+      amount: amount,
+    },
+  ]);
+
+  if (error) {
+    console.error('Error saving PaymentIntent to database:', error);
+    throw new Error('Failed to save PaymentIntent to database');
+  }
+
+  return data;
+}
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-06-20",
@@ -47,7 +82,8 @@ export async function POST(request: NextRequest) {
       {
         amount,
         currency: "jpy",
-        automatic_payment_methods: { enabled: true },
+        capture_method: 'manual',
+        payment_method_types: ['card'], // automatic_payment_methodsの代わりに指定
       },
       {
         stripeAccount: stripeConnectId,
@@ -55,6 +91,14 @@ export async function POST(request: NextRequest) {
     );
     console.log("Created PaymentIntent:", paymentIntent.id);
     console.log("Client Secret:", paymentIntent.client_secret);
+
+    // データベースに保存
+await savePaymentIntentToDatabase({
+  paymentIntentId: paymentIntent.id,
+  userId: userId,
+  status: paymentIntent.status,
+  amount: amount,
+});
 
     return NextResponse.json({
       clientSecret: paymentIntent.client_secret,
