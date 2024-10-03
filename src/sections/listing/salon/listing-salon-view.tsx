@@ -1,5 +1,5 @@
 "use client";
-import React from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
@@ -22,11 +22,18 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Label } from "@/components/ui/label";
-
-import { Calendar as CalendarIcon, Upload } from "lucide-react";
+import { Upload, X } from "lucide-react";
+import { useAuth } from "@/contexts/authcontext";
+import { Toaster } from "@/components/ui/toaster";
+import { toast } from "@/components/ui/use-toast";
 
 const formSchema = z.object({
   salonName: z.string().min(1, { message: "サロン名は必須です" }),
@@ -39,11 +46,48 @@ const formSchema = z.object({
   weekendOpen: z.string(),
   weekendClose: z.string(),
   closedDays: z.array(z.string()),
-  services: z.array(z.string()),
-  features: z.array(z.string()),
+  mainImageUrl: z.string().optional(),
+  subImageUrls: z.array(z.string()).optional(),
 });
 
-export default function EnhancedSalonSettings() {
+const ListingSalonView: React.FC = () => {
+  const { user, loading: authLoading, refreshAuthState } = useAuth();
+  const [retryCount, setRetryCount] = useState(0);
+
+  useEffect(() => {
+    if (!authLoading && !user && retryCount < 3) {
+      refreshAuthState();
+      setRetryCount((prev) => prev + 1);
+    }
+  }, [user, authLoading, refreshAuthState, retryCount]);
+
+  if (authLoading) {
+    return <div>認証状態を確認中...</div>;
+  }
+
+  if (!user) {
+    return <div>認証に失敗しました。ページをリロードしてください。</div>;
+  }
+
+  return <AuthenticatedListingSalonView userId={user.id} />;
+};
+
+type ImageObj = 
+  | { type: "new"; data: File }
+  | { type: "existing"; data: string };
+
+
+const AuthenticatedListingSalonView: React.FC<{ userId: string }> = ({
+  userId,
+}) => {
+  // ステートの宣言
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [mainImage, setMainImage] = useState<File | null>(null);
+  const [subImages, setSubImages] = useState<File[]>([]);
+  const [salonId, setSalonId] = useState<string | null>(null);
+
+  // フォームの設定
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -57,18 +101,214 @@ export default function EnhancedSalonSettings() {
       weekendOpen: "",
       weekendClose: "",
       closedDays: [],
-      services: [],
-      features: [],
+      mainImageUrl: "",
+      subImageUrls: [],
     },
   });
 
-  function onSubmit(values: z.infer<typeof formSchema>) {
-    console.log(values);
-    // APIを呼び出してデータを保存
-    // 成功時のフィードバックを表示
-    alert("設定が正常に保存されました。");
+  // サロン情報の取得
+  useEffect(() => {
+    async function fetchSalonData() {
+      try {
+        const response = await fetch("/api/listing-salon", {
+          method: "GET",
+          headers: {
+            "user-id": userId,
+          },
+        });
+        if (!response.ok) throw new Error("Failed to fetch salon data");
+        const data = await response.json();
+
+        setSalonId(data.id);
+        form.reset({
+          salonName: data.salon_name,
+          phone: data.phone,
+          address: data.address,
+          website: data.website || "",
+          description: data.description || "",
+          weekdayOpen: data.weekday_open || "",
+          weekdayClose: data.weekday_close || "",
+          weekendOpen: data.weekend_open || "",
+          weekendClose: data.weekend_close || "",
+          closedDays: data.closed_days || [],
+          mainImageUrl: data.main_image_url || "",
+          subImageUrls: data.sub_image_urls || [],
+        });
+      } catch (error) {
+        console.error("Error fetching salon data:", error);
+        setError("サロン情報の取得に失敗しました");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchSalonData();
+  }, [form, userId]);
+
+  // メイン画像のアップロード処理
+  const handleMainImageUpload = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      if (event.target.files && event.target.files[0]) {
+        setMainImage(event.target.files[0]);
+      }
+    },
+    []
+  );
+
+  // サブ画像のアップロード処理
+  const handleSubImageUpload = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      if (event.target.files) {
+        const fileList = event.target.files;
+        const fileArray = Array.from(fileList);
+        setSubImages((prevImages) => [...prevImages, ...fileArray].slice(0, 5));
+      }
+    },
+    []
+  );
+
+  // 画像リストを統合（新規と既存）
+  const combinedSubImages: ImageObj[] = [
+    ...subImages.map((file): ImageObj => ({ type: "new", data: file })),
+    ...(form.getValues("subImageUrls") || []).map((url): ImageObj => ({
+      type: "existing",
+      data: url,
+    })),
+  ];
+
+  // サブ画像の削除
+  const removeSubImage = useCallback(
+    (index: number, type: "new" | "existing") => {
+      if (type === "new") {
+        setSubImages((prevImages) => prevImages.filter((_, i) => i !== index));
+      } else if (type === "existing") {
+        const currentUrls = form.getValues("subImageUrls") || [];
+        const updatedUrls = currentUrls.filter(
+          (_, i) => i !== index - subImages.length
+        );
+        form.setValue("subImageUrls", updatedUrls);
+      }
+    },
+    [form, subImages.length]
+  );
+
+  // メイン画像の削除
+  const removeMainImage = useCallback(() => {
+    setMainImage(null);
+    form.setValue("mainImageUrl", "");
+  }, [form]);
+
+  // 画像のアップロード処理
+  async function uploadImage(file: File, path: string): Promise<string> {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("path", path);
+
+    const response = await fetch("/api/upload-image", {
+      method: "POST",
+      body: formData,
+      headers: {
+        "user-id": userId,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to upload image");
+    }
+
+    const data = await response.json();
+    return data.publicUrl;
   }
 
+  // フォームの送信処理
+  async function onSubmit(values: z.infer<typeof formSchema>) {
+    setLoading(true);
+    try {
+      let mainImageUrl = values.mainImageUrl;
+      let subImageUrls = values.subImageUrls || [];
+
+      // メイン画像が削除された場合
+      if (!mainImage && !mainImageUrl) {
+        mainImageUrl = "";
+      }
+
+      // 新しいメイン画像をアップロード
+      if (mainImage) {
+        mainImageUrl = await uploadImage(
+          mainImage,
+          `${userId}/main-image-${Date.now()}`
+        );
+      }
+
+      // サブ画像の処理
+      if (subImages.length > 0) {
+        for (const subImage of subImages) {
+          const subImageUrl = await uploadImage(
+            subImage,
+            `${userId}/sub-image-${Date.now()}-${subImages.indexOf(subImage)}`
+          );
+          subImageUrls.push(subImageUrl);
+        }
+      }
+
+      const updatedValues = {
+        id: salonId,
+        user_id: userId,
+        salonName: values.salonName,
+        phone: values.phone,
+        address: values.address,
+        website: values.website,
+        description: values.description,
+        weekdayOpen: values.weekdayOpen,
+        weekdayClose: values.weekdayClose,
+        weekendOpen: values.weekendOpen,
+        weekendClose: values.weekendClose,
+        closedDays: values.closedDays,
+        mainImageUrl: mainImageUrl,
+        subImageUrls: subImageUrls,
+      };
+
+      const response = await fetch("/api/update-salon", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "user-id": userId,
+        },
+        body: JSON.stringify(updatedValues),
+      });
+
+      if (!response.ok) throw new Error("Failed to update salon data");
+
+      toast({
+        title: "更新成功",
+        description: "サロン情報が正常に更新されました。",
+      });
+    } catch (error) {
+      console.error("Error updating salon data:", error);
+      setError(
+        error instanceof Error
+          ? error.message
+          : "サロン情報の更新に失敗しました"
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // ローディングとエラーの表示
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <div>Loading...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return <div className="text-red-500 text-center">{error}</div>;
+  }
+
+  // コンポーネントの描画
   return (
     <div className="container mx-auto py-10">
       <Card className="w-full max-w-4xl mx-auto">
@@ -79,7 +319,11 @@ export default function EnhancedSalonSettings() {
         </CardHeader>
         <CardContent>
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+            <form
+              onSubmit={form.handleSubmit(onSubmit)}
+              className="space-y-8"
+              encType="multipart/form-data"
+            >
               <SectionTitle>基本情報</SectionTitle>
               <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
                 <FormField
@@ -134,7 +378,6 @@ export default function EnhancedSalonSettings() {
                     </FormItem>
                   )}
                 />
-
                 <FormField
                   control={form.control}
                   name="description"
@@ -156,95 +399,91 @@ export default function EnhancedSalonSettings() {
               <SectionTitle>営業時間</SectionTitle>
               <Separator className="my-4" />
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div>
-                  <Label>平日</Label>
-                  <div className="flex items-center space-x-2">
-                    <Select
-                      onValueChange={(value) =>
-                        form.setValue("weekdayOpen", value)
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="開店時間" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {[...Array(24)].map((_, i) => (
-                          <SelectItem
-                            key={i}
-                            value={`${String(i).padStart(2, "0")}:00`}
-                          >
-                            {`${String(i).padStart(2, "0")}:00`}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <span>-</span>
-                    <Select
-                      onValueChange={(value) =>
-                        form.setValue("weekdayClose", value)
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="閉店時間" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {[...Array(24)].map((_, i) => (
-                          <SelectItem
-                            key={i}
-                            value={`${String(i).padStart(2, "0")}:00`}
-                          >
-                            {`${String(i).padStart(2, "0")}:00`}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <div>
-                  <Label>週末</Label>
-                  <div className="flex items-center space-x-2">
-                    <Select
-                      onValueChange={(value) =>
-                        form.setValue("weekendOpen", value)
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="開店時間" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {[...Array(24)].map((_, i) => (
-                          <SelectItem
-                            key={i}
-                            value={`${String(i).padStart(2, "0")}:00`}
-                          >
-                            {`${String(i).padStart(2, "0")}:00`}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <span>-</span>
-                    <Select
-                      onValueChange={(value) =>
-                        form.setValue("weekendClose", value)
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="閉店時間" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {[...Array(24)].map((_, i) => (
-                          <SelectItem
-                            key={i}
-                            value={`${String(i).padStart(2, "0")}:00`}
-                          >
-                            {`${String(i).padStart(2, "0")}:00`}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              </div>
+  <div>
+    <Label>平日</Label>
+    <div className="flex items-center space-x-2">
+      <Select
+        value={form.getValues("weekdayOpen")}
+        onValueChange={(value) => form.setValue("weekdayOpen", value)}
+      >
+        <SelectTrigger>
+          <SelectValue placeholder="開店時間" />
+        </SelectTrigger>
+        <SelectContent>
+          {[...Array(24)].map((_, i) => (
+            <SelectItem
+              key={i}
+              value={`${String(i).padStart(2, "0")}:00:00`}
+            >
+              {`${String(i).padStart(2, "0")}:00`}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <span>-</span>
+      <Select
+        value={form.getValues("weekdayClose")}
+        onValueChange={(value) => form.setValue("weekdayClose", value)}
+      >
+        <SelectTrigger>
+          <SelectValue placeholder="閉店時間" />
+        </SelectTrigger>
+        <SelectContent>
+          {[...Array(24)].map((_, i) => (
+            <SelectItem
+              key={i}
+              value={`${String(i).padStart(2, "0")}:00:00`}
+            >
+              {`${String(i).padStart(2, "0")}:00`}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  </div>
+  <div>
+    <Label>週末</Label>
+    <div className="flex items-center space-x-2">
+      <Select
+        value={form.getValues("weekendOpen")}
+        onValueChange={(value) => form.setValue("weekendOpen", value)}
+      >
+        <SelectTrigger>
+          <SelectValue placeholder="開店時間" />
+        </SelectTrigger>
+        <SelectContent>
+          {[...Array(24)].map((_, i) => (
+            <SelectItem
+              key={i}
+              value={`${String(i).padStart(2, "0")}:00:00`}
+            >
+              {`${String(i).padStart(2, "0")}:00`}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <span>-</span>
+      <Select
+        value={form.getValues("weekendClose")}
+        onValueChange={(value) => form.setValue("weekendClose", value)}
+      >
+        <SelectTrigger>
+          <SelectValue placeholder="閉店時間" />
+        </SelectTrigger>
+        <SelectContent>
+          {[...Array(24)].map((_, i) => (
+            <SelectItem
+              key={i}
+              value={`${String(i).padStart(2, "0")}:00:00`}
+            >
+              {`${String(i).padStart(2, "0")}:00`}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  </div>
+</div>
               <FormField
                 control={form.control}
                 name="closedDays"
@@ -292,52 +531,102 @@ export default function EnhancedSalonSettings() {
                   </FormItem>
                 )}
               />
-
               <div>
                 <h3 className="text-lg font-medium">サロン画像</h3>
                 <Separator className="my-4" />
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  {/* メイン画像 */}
                   <div>
                     <Label>メイン画像</Label>
                     <div className="mt-2 flex items-center gap-4">
-                      <Label
-                        htmlFor="mainImage"
-                        className="flex h-32 w-32 cursor-pointer items-center justify-center rounded-lg border-2 border-dashed"
-                      >
-                        <Upload className="h-8 w-8 text-gray-400" />
-                        <input
-                          id="mainImage"
-                          type="file"
-                          className="hidden"
-                          accept="image/*"
-                        />
-                      </Label>
+                      <div className="relative">
+                        <Label
+                          htmlFor="mainImage"
+                          className="flex h-32 w-32 cursor-pointer items-center justify-center rounded-lg border-2 border-dashed"
+                        >
+                          {mainImage || form.getValues("mainImageUrl") ? (
+                            <img
+                              src={
+                                mainImage
+                                  ? URL.createObjectURL(mainImage)
+                                  : form.getValues("mainImageUrl")
+                              }
+                              alt="Main"
+                              className="h-full w-full object-cover rounded-lg"
+                            />
+                          ) : (
+                            <Upload className="h-8 w-8 text-gray-400" />
+                          )}
+                          <input
+                            id="mainImage"
+                            type="file"
+                            className="hidden"
+                            accept="image/*"
+                            onChange={handleMainImageUpload}
+                          />
+                        </Label>
+                        {(mainImage || form.getValues("mainImageUrl")) && (
+                          <button
+                            type="button"
+                            onClick={removeMainImage}
+                            className="absolute -top-2 -right-2 bg-red-500 rounded-full p-1"
+                          >
+                            <X className="h-4 w-4 text-white" />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
+                  {/* サブ画像 */}
                   <div>
-                    <Label>サブ画像</Label>
-                    <div className="mt-2 flex flex-wrap items-center gap-4">
-                      {[...Array(5)].map((_, i) => (
+        <Label>サブ画像（最大5枚）</Label>
+        <div className="mt-2 flex flex-wrap items-center gap-4">
+          {combinedSubImages.slice(0, 5).map((imageObj, index) => (
+            <div key={index} className="relative">
+              <img
+                src={
+                  imageObj.type === "new"
+                    ? URL.createObjectURL(imageObj.data)
+                    : imageObj.data
+                }
+                alt={`Sub ${index + 1}`}
+                className="h-24 w-24 object-cover rounded-lg"
+              />
+              <button
+                type="button"
+                onClick={() =>
+                  removeSubImage(index, imageObj.type)
+                }
+                className="absolute -top-2 -right-2 bg-red-500 rounded-full p-1"
+              >
+                <X className="h-4 w-4 text-white" />
+              </button>
+            </div>
+          ))}
+                      {combinedSubImages.length < 5 && (
                         <Label
-                          key={i}
-                          htmlFor={`subImage${i}`}
+                          htmlFor="subImages"
                           className="flex h-24 w-24 cursor-pointer items-center justify-center rounded-lg border-2 border-dashed"
                         >
                           <Upload className="h-6 w-6 text-gray-400" />
                           <input
-                            id={`subImage${i}`}
+                            id="subImages"
                             type="file"
                             className="hidden"
                             accept="image/*"
+                            multiple
+                            onChange={handleSubImageUpload}
                           />
                         </Label>
-                      ))}
+                      )}
                     </div>
                   </div>
                 </div>
               </div>
-              <Button type="submit" className="w-full">
-                設定を保存
+
+              {/* 送信ボタン */}
+              <Button type="submit" className="w-full" disabled={loading}>
+                {loading ? "更新中..." : "設定を保存"}
               </Button>
             </form>
           </Form>
@@ -345,7 +634,7 @@ export default function EnhancedSalonSettings() {
       </Card>
     </div>
   );
-}
+};
 
 // 補助コンポーネント
 const SectionTitle = ({ children }: { children: React.ReactNode }) => (
@@ -353,3 +642,5 @@ const SectionTitle = ({ children }: { children: React.ReactNode }) => (
     {children}
   </h2>
 );
+
+export default ListingSalonView;
