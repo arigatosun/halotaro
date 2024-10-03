@@ -7,7 +7,7 @@ export default function DashboardLayout({
 }) {
   return (
     <div className="auth-layout">
-      <Suspense fallback={<div>Loading...</div>}>
+      <Suspense fallback={<div>ロード中</div>}>
         {children}
       </Suspense>
     </div>
