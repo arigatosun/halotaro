@@ -25,7 +25,6 @@ const StaffScheduleDetails: React.FC<StaffScheduleDetailsProps> = ({ staffSchedu
         </div>
         <div className="mt-4 flex justify-end space-x-2">
           <Button onClick={onEdit}>編集</Button>
-          <Button onClick={onClose}>閉じる</Button>
         </div>
       </DialogContent>
     </Dialog>
