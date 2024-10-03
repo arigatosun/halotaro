@@ -16,6 +16,7 @@ import { format } from "date-fns";
 type ReservationStatus =
   | "confirmed"
   | "canceled"
+  | "paid"
   | "completed"
   | "in_progress"
   | "no_show";
@@ -24,6 +25,7 @@ type ReservationStatus =
 const statusMapping: Record<ReservationStatus, string> = {
   confirmed: "予約確定",
   canceled: "キャンセル",
+  paid: "会計済み",
   completed: "完了",
   in_progress: "進行中",
   no_show: "無断キャンセル",
@@ -56,8 +58,6 @@ const ReservationTable: React.FC<ReservationTableProps> = ({
   totalCount,
   onPageChange,
 }) => {
-  console.log("Reservations in ReservationTable:", reservations);
-
   if (loading) {
     return <div>Loading...</div>;
   }
@@ -83,29 +83,40 @@ const ReservationTable: React.FC<ReservationTableProps> = ({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {reservations.map((reservation) => (
-            <TableRow key={reservation.id}>
-              <TableCell>
-                {format(
-                  new Date(reservation.start_time),
-                  "yyyy-MM-dd HH:mm:ss"
-                )}
-              </TableCell>
-              <TableCell>
-                {statusMapping[reservation.status as ReservationStatus] ||
-                  reservation.status}
-              </TableCell>
-              <TableCell>{reservation.customer_name}</TableCell>
-              <TableCell>{reservation.menu_name}</TableCell>
-              <TableCell>{reservation.staff_name}</TableCell>
-              <TableCell>¥{reservation.total_price.toLocaleString()}</TableCell>
-              <TableCell>
-                <Link href={`/reservations/${reservation.id}/accounting`}>
-                  <Button variant="outline">詳細</Button>
-                </Link>
-              </TableCell>
-            </TableRow>
-          ))}
+          {reservations.map((reservation) => {
+            // 予約ステータスが "paid"（支払い済み）の場合、ボタンを無効化しリンクを外す
+            const ispaid = reservation.status === "paid";
+            return (
+              <TableRow key={reservation.id}>
+                <TableCell>
+                  {format(new Date(reservation.start_time), "yyyy-MM-dd HH:mm:ss")}
+                </TableCell>
+                <TableCell>
+                  {statusMapping[reservation.status as ReservationStatus] ||
+                    reservation.status}
+                </TableCell>
+                <TableCell>{reservation.customer_name}</TableCell>
+                <TableCell>{reservation.menu_name}</TableCell>
+                <TableCell>{reservation.staff_name}</TableCell>
+                <TableCell>¥{reservation.total_price.toLocaleString()}</TableCell>
+                <TableCell>
+                  {ispaid ? (
+                    <Button
+                      variant="outline"
+                      disabled
+                      className="bg-gray-300 text-gray-700 cursor-not-allowed"
+                    >
+                      会計
+                    </Button>
+                  ) : (
+                    <Link href={`/dashboard/reservations/${reservation.id}/accounting`}>
+                      <Button variant="outline">会計</Button>
+                    </Link>
+                  )}
+                </TableCell>
+              </TableRow>
+            );
+          })}
         </TableBody>
       </Table>
       <div className="mt-4 flex justify-between items-center">
@@ -115,10 +126,7 @@ const ReservationTable: React.FC<ReservationTableProps> = ({
         <span>
           Page {page} of {totalPages}
         </span>
-        <Button
-          onClick={() => onPageChange(page + 1)}
-          disabled={page >= totalPages}
-        >
+        <Button onClick={() => onPageChange(page + 1)} disabled={page >= totalPages}>
           Next
         </Button>
       </div>
