@@ -1,3 +1,6 @@
+// ReservationTable.tsx
+"use client";
+
 import React from "react";
 import {
   Table,
@@ -11,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Reservation } from "@/app/actions/reservationActions";
 import Link from "next/link";
 import { format } from "date-fns";
+import { ja } from "date-fns/locale";
 
 // ステータスの型を定義
 type ReservationStatus =
@@ -67,6 +71,7 @@ const ReservationTable: React.FC<ReservationTableProps> = ({
   }
 
   const totalPages = Math.ceil(totalCount / limit);
+  const now = new Date();
 
   return (
     <>
@@ -84,12 +89,22 @@ const ReservationTable: React.FC<ReservationTableProps> = ({
         </TableHeader>
         <TableBody>
           {reservations.map((reservation) => {
-            // 予約ステータスが "paid"（支払い済み）の場合、ボタンを無効化しリンクを外す
-            const ispaid = reservation.status === "paid";
+            // 予約ステータスが "paid"（支払い済み）の場合
+            const isPaid = reservation.status === "paid";
+
+            // 予約の開始日時が現在時刻より未来かどうかを判定
+            const reservationStartTime = new Date(reservation.start_time);
+            const isFutureReservation = reservationStartTime > now;
+
+            // 会計ボタンを無効化する条件
+            const disableAccountingButton = isPaid || isFutureReservation;
+
             return (
               <TableRow key={reservation.id}>
                 <TableCell>
-                  {format(new Date(reservation.start_time), "yyyy-MM-dd HH:mm:ss")}
+                  {format(new Date(reservation.start_time), "yyyy-MM-dd HH:mm:ss", {
+                    locale: ja,
+                  })}
                 </TableCell>
                 <TableCell>
                   {statusMapping[reservation.status as ReservationStatus] ||
@@ -100,7 +115,7 @@ const ReservationTable: React.FC<ReservationTableProps> = ({
                 <TableCell>{reservation.staff_name}</TableCell>
                 <TableCell>¥{reservation.total_price.toLocaleString()}</TableCell>
                 <TableCell>
-                  {ispaid ? (
+                  {disableAccountingButton ? (
                     <Button
                       variant="outline"
                       disabled
