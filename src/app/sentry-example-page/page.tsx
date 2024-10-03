@@ -1,104 +1,48 @@
+// app/sentry-debug-test/page.tsx
 "use client";
 
-import Head from "next/head";
-import * as Sentry from "@sentry/nextjs";
-import { logger } from "../../../scripts/logger";
+import { useState } from "react";
 
-export default function Page() {
-  const handleLog = () => {
-    logger.log("これは情報ログです。");
-  };
+export default function SentryDebugTestPage() {
+  const [result, setResult] = useState<string>("");
+  const [error, setError] = useState<string>("");
 
-  const handleError = () => {
+  const testSentryDebug = async () => {
     try {
-      throw new Error("this is a test error");
-    } catch (error) {
-      logger.error("エラーハンドリング中にエラーが発生しました:", error);
+      const response = await fetch("/api/sentry-debug", { method: "GET" });
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const data = await response.json();
+      setResult(JSON.stringify(data, null, 2));
+      setError("");
+    } catch (e) {
+      setError(`Error: ${e instanceof Error ? e.message : String(e)}`);
+      setResult("");
     }
   };
 
-  const handleException = () => {
-    // 未処理の例外を発生させる
-    throw new Error("これは未処理の例外です。");
-  };
-
   return (
-    <div>
-      <Head>
-        <title>Sentry Onboarding</title>
-        <meta name="description" content="Test Sentry for your Next.js app!" />
-      </Head>
-
-      <main
-        style={{
-          minHeight: "100vh",
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "center",
-          alignItems: "center",
-        }}
+    <div className="p-4">
+      <h1 className="text-2xl font-bold mb-4">Sentry Debug Test Page</h1>
+      <button
+        onClick={testSentryDebug}
+        className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
       >
-        <h1 style={{ fontSize: "4rem", margin: "14px 0" }}>
-          {/* ロゴなどの既存のコード */}
-        </h1>
-
-        <p>logger.tsを使ったロギングのテスト:</p>
-
-        <button
-          type="button"
-          style={{
-            padding: "12px",
-            cursor: "pointer",
-            backgroundColor: "#AD6CAA",
-            borderRadius: "4px",
-            border: "none",
-            color: "white",
-            fontSize: "14px",
-            margin: "8px",
-          }}
-          onClick={handleLog}
-        >
-          情報ログを送信
-        </button>
-
-        <button
-          type="button"
-          style={{
-            padding: "12px",
-            cursor: "pointer",
-            backgroundColor: "#E94B35",
-            borderRadius: "4px",
-            border: "none",
-            color: "white",
-            fontSize: "14px",
-            margin: "8px",
-          }}
-          onClick={handleError}
-        >
-          エラーログを送信
-        </button>
-
-        <button
-          type="button"
-          style={{
-            padding: "12px",
-            cursor: "pointer",
-            backgroundColor: "#F2C94C",
-            borderRadius: "4px",
-            border: "none",
-            color: "black",
-            fontSize: "14px",
-            margin: "8px",
-          }}
-          onClick={handleException}
-        >
-          未処理の例外を発生
-        </button>
-
-        <p style={{ marginTop: "24px" }}>
-          Sentryのダッシュボードでログとエラーを確認してください。
-        </p>
-      </main>
+        Test Sentry Debug
+      </button>
+      {result && (
+        <div className="mt-4">
+          <h2 className="text-xl font-semibold">Result:</h2>
+          <pre className="bg-gray-100 p-2 rounded mt-2">{result}</pre>
+        </div>
+      )}
+      {error && (
+        <div className="mt-4 text-red-500">
+          <h2 className="text-xl font-semibold">Error:</h2>
+          <p>{error}</p>
+        </div>
+      )}
     </div>
   );
 }
