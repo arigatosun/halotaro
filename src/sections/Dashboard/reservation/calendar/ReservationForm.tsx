@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Reservation, Staff, MenuItem as MenuItemType } from '@/types/reservation';
+import { BusinessHour, Reservation, Staff, MenuItem as MenuItemType } from '@/types/reservation';
 import moment from 'moment';
 import { Alert, Snackbar } from '@mui/material';
 
@@ -21,6 +21,7 @@ interface ReservationFormProps {
   reservations: Reservation[];
   hideReservationType?: boolean;
   isCreatingFromButton?: boolean;
+  businessHours: BusinessHour[];
 }
 
 const ReservationForm: React.FC<ReservationFormProps> = ({
@@ -32,6 +33,7 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
   staffList,
   menuList,
   reservations,
+  businessHours,
   hideReservationType = false,
   isCreatingFromButton = false,
 }) => {
@@ -97,16 +99,28 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
 
   // 利用可能な時間帯を計算するuseEffect
   useEffect(() => {
-    if (selectedDate && formData.staff_id && formData.menu_id !== undefined) {
+    if (selectedDate && formData.staff_id && formData.menu_id) {
       const selectedMenu = menuList.find(menu => menu.id === formData.menu_id);
       if (selectedMenu) {
         const menuDuration = selectedMenu.duration;
         const staffId = formData.staff_id;
-        const date = moment(selectedDate).format('YYYY-MM-DD');
+        const dateStr = moment(selectedDate).format('YYYY-MM-DD');
 
-        // 営業時間の設定
-        const openingTime = moment(date + ' 09:00', 'YYYY-MM-DD HH:mm');
-        const closingTime = moment(date + ' 21:00', 'YYYY-MM-DD HH:mm');
+        // 選択日の営業時間を取得
+        const businessHourForDate = businessHours.find(bh => bh.date === dateStr);
+
+        let openingTime: moment.Moment;
+      let closingTime: moment.Moment;
+
+        if (businessHourForDate) {
+          openingTime = moment(`${dateStr} ${businessHourForDate.open_time}`, 'YYYY-MM-DD HH:mm:ss');
+          closingTime = moment(`${dateStr} ${businessHourForDate.close_time}`, 'YYYY-MM-DD HH:mm:ss');
+        } else {
+          // 営業時間がない場合は予約不可
+          setAvailableTimes([]);
+        return;
+      }
+
         const timeSlots = [];
 
         let currentTime = openingTime.clone();
@@ -118,7 +132,7 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
         const available: string[] = [];
 
         timeSlots.forEach(time => {
-          const start = moment(date + ' ' + time, 'YYYY-MM-DD HH:mm');
+          const start = moment(`${dateStr} ${time}`, 'YYYY-MM-DD HH:mm');
           const end = start.clone().add(menuDuration, 'minutes');
 
           // 終了時間が営業時間外の場合はスキップ
@@ -141,11 +155,13 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
         });
 
         setAvailableTimes(available);
+      } else {
+        setAvailableTimes([]);
       }
     } else {
       setAvailableTimes([]);
     }
-  }, [selectedDate, formData.staff_id, formData.menu_id, reservations, menuList]);
+  }, [selectedDate, formData.staff_id, formData.menu_id, reservations, menuList, businessHours]);
 
   // 選択した時間帯に基づいて開始時間と終了時間を設定するuseEffect
   useEffect(() => {

@@ -1,7 +1,7 @@
 // src/sections/Dashboard/reservation/calendar/useReservationCalendar.ts
 
 import { useState, useEffect } from 'react';
-import { Reservation, Staff, MenuItem } from '@/types/reservation';
+import { Reservation, Staff, MenuItem,BusinessHour } from '@/types/reservation';
 import { useAuth } from '@/lib/useAuth';
 import moment from 'moment';
 
@@ -10,6 +10,7 @@ interface UseReservationCalendarReturn {
   staffList: Staff[];
   menuList: MenuItem[];
   closedDays: string[];
+  businessHours: BusinessHour[];
   loadData: () => Promise<void>;
   setReservations: React.Dispatch<React.SetStateAction<Reservation[]>>;
   setStaffList: React.Dispatch<React.SetStateAction<Staff[]>>;
@@ -25,6 +26,7 @@ const useReservationCalendar = (currentDate: moment.Moment): UseReservationCalen
   const [menuList, setMenuList] = useState<MenuItem[]>([]);
   const [closedDays, setClosedDays] = useState<string[]>([]);
   const [snackbar, setSnackbar] = useState<{ message: string; severity: 'success' | 'error' } | null>(null);
+  const [businessHours, setBusinessHours] = useState<BusinessHour[]>([]);
   const { user, session } = useAuth();
 
   const loadData = async () => {
@@ -54,6 +56,7 @@ const useReservationCalendar = (currentDate: moment.Moment): UseReservationCalen
       setStaffList(data.staffList);
       setMenuList(data.menuList);
       setClosedDays(data.closedDays || []);
+      setBusinessHours(data.businessHours);
     } catch (error) {
       console.error('Error in loadData:', error);
       setSnackbar({ message: 'データの取得に失敗しました', severity: 'error' });
@@ -71,6 +74,7 @@ const useReservationCalendar = (currentDate: moment.Moment): UseReservationCalen
     staffList,
     menuList,
     closedDays,
+    businessHours,
     loadData,
     setReservations,
     setStaffList,

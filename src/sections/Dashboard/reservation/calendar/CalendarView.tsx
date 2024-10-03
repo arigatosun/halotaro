@@ -11,10 +11,17 @@ import { Box } from '@mui/material';
 
 moment.locale('ja');
 
+interface BusinessHour {
+    date: string;
+    open_time: string;
+    close_time: string;
+  }
+
 interface CalendarViewProps {
   reservations: Reservation[];
   staffList: Staff[];
   closedDays: string[];
+  businessHours: BusinessHour[];
   onDateSelect: (selectInfo: DateSelectArg) => void;
   onEventClick: (clickInfo: EventClickArg) => void;
   onEventDrop: (dropInfo: EventDropArg) => void;
@@ -23,110 +30,117 @@ interface CalendarViewProps {
 
 const StyledFullCalendar = styled(FullCalendar)<CalendarOptions>(({ theme }) => ({
     '& .fc-timeline-event.staff-schedule': {
-        backgroundColor: '#F2884B !important',
-        borderColor: '#F2884B !important',
-        color: 'white !important',
-      },
-      '& .fc-timeline-event.customer-reservation': {
-    backgroundColor: '#F2CA52 !important',
-    borderColor: '#F2CA52 !important',
-    color: 'black !important',
-  },
-  '& .fc-timeline-slot-cushion': {
-    fontWeight: 'bold',
-    color: theme.palette.text.primary,
-  },
-  '& .fc-timeline-event': {
-    borderRadius: '4px',
-    padding: '4px 8px',
-    fontSize: '0.9rem',
-    boxSizing: 'border-box',
-    width: 'calc(100% - 2px) !important', // グリッドの幅に合わせる
-    left: '1px !important', // 左端に1pxの余白を残す
-    right: '1px !important', // 右端に1pxの余白を残す
-  },
-  '& .staff-schedule': {
-    backgroundColor: '#F2884B',
-    borderColor: theme.palette.primary.main,
-    color: 'white !important',
-  },
-  '& .customer-reservation': {
-    backgroundColor: '#F2CA52',
-    borderColor: theme.palette.secondary.main,
-    color: 'black !important',
-  },
-  '& .fc-timeline-header': {
-    backgroundColor: theme.palette.background.paper,
-    borderBottom: `1px solid ${theme.palette.divider}`,
-  },
-  '& .fc-timeline-slot': {
-    minWidth: '120px !important',
-  },
-  '& .fc-timeline-header-row-chrono th': {
-    textAlign: 'center',
-  },
-  '& .fc-resource-timeline-divider': {
-    display: 'none',
-  },
-  '& .fc-toolbar': {
-    display: 'none',
-  },
-  '& .fc-timeline-header-row:first-child': {
-    display: 'none',
-  },
-  '& .fc-resource-area': {
-    maxHeight: 'calc(80vh - 50px)',
-    overflowY: 'auto !important',
-  },
-  '& .fc-resource-area table': {
-    height: '100%',
-  },
-  '& .fc-resource-area tbody': {
-    display: 'flex',
-    flexDirection: 'column',
-    height: '100%',
-  },
-  '& .fc-resource-area tr': {
-    flex: 1,
-    display: 'flex',
-  },
-  '& .fc-resource-area td': {
-    flex: 1,
-    display: 'flex',
-    alignItems: 'center',
-    padding: '10px',
-    boxSizing: 'border-box',
-    minHeight: '60px', // 最小の高さを設定
-  },
-  '& .fc-timeline-body': {
-    maxHeight: 'calc(80vh - 50px)',
-    overflowY: 'auto !important',
-  },
-  '& .fc-event.closed-day': {
-    backgroundColor: '#ff9f89',
-    border: 'none',
-    cursor: 'default',
-  },
-}));
+      backgroundColor: '#F2884B !important',
+      borderColor: '#F2884B !important',
+      color: 'white !important',
+    },
+    '& .fc-timeline-event.customer-reservation': {
+      backgroundColor: '#F2CA52 !important',
+      borderColor: '#F2CA52 !important',
+      color: 'black !important',
+    },
+    '& .fc-timeline-slot-cushion': {
+      fontSize: '0.8rem',
+      color: theme.palette.text.primary,
+    },
+    '& .fc-timeline-event': {
+      borderRadius: '4px',
+      padding: '0 !important', // パディングを0に設定
+      fontSize: '0.8rem',
+      boxSizing: 'border-box',
+      width: '100% !important', // 幅を100%に設定
+      maxWidth: '100% !important', // 最大幅も100%に設定
+      left: '0 !important', // 左端を0に設定
+      right: '0 !important', // 右端を0に設定
+      margin: '0 !important',
+      height: '100% !important', // 高さを100%に設定
+      display: 'flex', // Flexboxを適用
+      alignItems: 'center', // 縦方向の中央揃え
+      justifyContent: 'center', // 横方向の中央揃え
+    },
+    '& .fc-timeline-event *': {
+      height: '100% !important',
+      margin: '0 !important',
+      padding: '0 !important',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    '& .fc-timeline-header': {
+      backgroundColor: theme.palette.background.paper,
+      borderBottom: `1px solid ${theme.palette.divider}`,
+    },
+    '& .fc-timeline-slot': {
+      minWidth: '50px !important',
+    },
+    '& .fc-timeline-header-row-chrono th': {
+      textAlign: 'center',
+    },
+    '& .fc-resource-timeline-divider': {
+      display: 'none',
+    },
+    '& .fc-toolbar': {
+      display: 'none',
+    },
+    '& .fc-timeline-header-row:first-child': {
+      display: 'none',
+    },
+    '& .fc-resource-area': {
+      maxHeight: 'calc(80vh - 50px)',
+      overflowY: 'auto !important',
+    },
+    '& .fc-resource-area table': {
+      height: '100%',
+    },
+    '& .fc-resource-area tbody': {
+      display: 'flex',
+      flexDirection: 'column',
+      height: '100%',
+    },
+    '& .fc-resource-area tr': {
+      flex: 1,
+      display: 'flex',
+    },
+    '& .fc-resource-area td': {
+      flex: 1,
+      display: 'flex',
+      alignItems: 'center',
+      padding: '10px',
+      boxSizing: 'border-box',
+      minHeight: '60px', // 最小の高さを設定
+      height: '100px', // 固定高さ
+    },
+    '& .fc-timeline-body': {
+      maxHeight: 'calc(80vh - 50px)',
+      overflowY: 'auto !important',
+    },
+    '& .fc-event.closed-day': {
+      backgroundColor: '#ff9f89',
+      border: 'none',
+      cursor: 'default',
+    },
+  }));
+  
 
-function hasValidStartAndEnd(
-  reservation: Reservation
-): reservation is Reservation & { start_time: string; end_time: string } {
-  return (
-    typeof reservation.start_time === 'string' &&
-    typeof reservation.end_time === 'string'
-  );
-}
+  function hasValidStartAndEnd(
+    reservation: Reservation
+  ): reservation is Reservation & { start_time: string; end_time: string } {
+    return (
+      typeof reservation.start_time === 'string' &&
+      typeof reservation.end_time === 'string'
+    );
+  }
 
-const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(({
-  reservations,
-  staffList,
-  closedDays,
-  onDateSelect,
-  onEventClick,
-  onEventDrop,
-  handleDatesSet,
-}, ref) => {
+  const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(({
+    reservations,
+    staffList,
+    closedDays,
+    businessHours,
+    onDateSelect,
+    onEventClick,
+    onEventDrop,
+    handleDatesSet,
+  }, ref) => {
   const resourceAreaRef = useRef<HTMLDivElement | null>(null);
   const timelineBodyRef = useRef<HTMLDivElement | null>(null);
 
@@ -159,6 +173,9 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(({
     }
   }, []);
 
+  const earliestOpenTime = moment.min(businessHours.map(bh => moment(bh.open_time, 'HH:mm:ss'))).format('HH:mm:ss');
+  const latestCloseTime = moment.max(businessHours.map(bh => moment(bh.close_time, 'HH:mm:ss'))).format('HH:mm:ss');
+
   return (
     <Box
       sx={{
@@ -172,6 +189,7 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(({
       }}
     >
       <StyledFullCalendar
+      expandRows={true}
         ref={ref}
         plugins={[resourceTimelinePlugin, interactionPlugin]}
         initialView="resourceTimelineDay"
@@ -181,17 +199,17 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(({
         schedulerLicenseKey="GPL-My-Project-Is-Open-Source"
         events={
             reservations
-              .filter((reservation) => hasValidStartAndEnd(reservation) && reservation.staff_id)
-              .map((reservation) => ({
-                id: reservation.id,
-                resourceId: reservation.staff_id,
-                title: reservation.is_staff_schedule
-                  ? reservation.event
-                  : `${reservation.customer_name || ''} - ${reservation.menu_name || ''}`,
-                start: reservation.start_time,
-                end: reservation.end_time,
-                className: reservation.is_staff_schedule ? 'staff-schedule' : 'customer-reservation',
-                extendedProps: reservation,
+            .filter((reservation) => hasValidStartAndEnd(reservation) && reservation.staff_id)
+            .map((reservation) => ({
+              id: reservation.id,
+              resourceId: reservation.staff_id,
+              title: reservation.is_staff_schedule
+                ? reservation.event
+                : `${reservation.customer_name || ''} - ${reservation.menu_name || ''}`,
+              start: reservation.start_time,
+              end: reservation.end_time,
+              className: reservation.is_staff_schedule ? 'staff-schedule' : 'customer-reservation',
+              extendedProps: reservation,
               }))
             }
         resources={staffList.map((staff) => ({
@@ -201,7 +219,7 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(({
         eventClick={onEventClick}
         eventDrop={onEventDrop}
         slotDuration="00:30:00"
-        slotMinWidth={120}
+        slotMinWidth={50}
         slotMinTime="09:00:00"
         slotMaxTime="21:00:00"
         height="100%"
@@ -212,7 +230,7 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(({
         ]}
         resourceAreaHeaderContent=""
         datesSet={handleDatesSet}
-        resourceAreaWidth="150px"
+        resourceAreaWidth="200px"
         resourcesInitiallyExpanded={false}
         scrollTimeReset={false}
         viewDidMount={handleViewDidMount}

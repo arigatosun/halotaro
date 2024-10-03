@@ -34,3 +34,9 @@ export interface MenuItem {
   price: number;
   // その他のプロパティがあれば追加
 }
+
+export interface BusinessHour {
+  date: string; // YYYY-MM-DD形式
+  open_time: string; // HH:mm:ss形式
+  close_time: string; // HH:mm:ss形式
+}

@@ -16,7 +16,7 @@ import StaffScheduleDetails from './StaffScheduleDetails';
 import ReservationEditForm from './ReservationEditForm';
 import useReservationCalendar from './useReservationCalendar';
 import { EventClickArg, EventDropArg, DateSelectArg } from '@fullcalendar/core';
-import { Reservation } from '@/types/reservation';
+import { Reservation, BusinessHour } from '@/types/reservation';
 import { useAuth } from '@/lib/useAuth';
 import FullCalendar from '@fullcalendar/react';
 
@@ -38,6 +38,7 @@ const ReservationCalendar: React.FC = () => {
     staffList,
     menuList,
     closedDays,
+    businessHours, 
     loadData,
     setReservations,
     setStaffList,
@@ -459,6 +460,7 @@ const ReservationCalendar: React.FC = () => {
         reservations={reservations}
         staffList={staffList}
         closedDays={closedDays}
+        businessHours={businessHours}
         onDateSelect={handleDateSelect}
         onEventClick={handleEventClick}
         onEventDrop={handleEventDrop}
@@ -479,6 +481,7 @@ const ReservationCalendar: React.FC = () => {
           reservations={reservations} // 既存の予約データを渡す
           hideReservationType={isCreatingFromButton} // 新規予約時に予約タイプを非表示
           isCreatingFromButton={isCreatingFromButton}
+          businessHours={businessHours}
         />
       )}
 
