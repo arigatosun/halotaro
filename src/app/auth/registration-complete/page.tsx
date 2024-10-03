@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { useAuth } from "@/hooks/useAuth";
 import {
   Card,
   CardContent,
@@ -16,53 +15,36 @@ import { motion } from "framer-motion";
 import confetti from "canvas-confetti";
 import Link from "next/link";
 
-export default function SuccessPage() {
+export default function RegistrationCompletePage() {
   const router = useRouter();
-  const { user, loading } = useAuth();
   const [countdown, setCountdown] = useState(5);
 
   useEffect(() => {
-    if (!loading && !user) {
-      router.push("/");
-    }
-  }, [user, loading, router]);
+    const myConfetti = confetti.create(undefined, {
+      resize: true,
+      useWorker: true,
+    });
 
-  useEffect(() => {
-    if (user) {
-      const myConfetti = confetti.create(undefined, {
-        resize: true,
-        useWorker: true,
-      });
+    myConfetti({
+      particleCount: 100,
+      spread: 70,
+      origin: { y: 0.6 },
+    });
 
-      myConfetti({
-        particleCount: 100,
-        spread: 70,
-        origin: { y: 0.6 },
-      });
+    const timer = setInterval(() => {
+      setCountdown((prevCount) => prevCount - 1);
+    }, 1000);
 
-      const timer = setInterval(() => {
-        setCountdown((prevCount) => prevCount - 1);
-      }, 1000);
+    const redirect = setTimeout(() => {
+      router.push("/auth/login");
+    }, 5000);
 
-      const redirect = setTimeout(() => {
-        router.push("/auth/salon-details");
-      }, 5000);
-
-      return () => {
-        clearInterval(timer);
-        clearTimeout(redirect);
-        myConfetti.reset();
-      };
-    }
-  }, [user, router]);
-
-  if (loading || !user) {
-    return (
-      <div className="container mx-auto py-10 min-h-screen flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-red-500" />
-      </div>
-    );
-  }
+    return () => {
+      clearInterval(timer);
+      clearTimeout(redirect);
+      myConfetti.reset();
+    };
+  }, [router]);
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-yellow-50 to-red-50">
@@ -110,24 +92,24 @@ export default function SuccessPage() {
             <CardHeader className="bg-red-100 rounded-t-lg">
               <CardTitle className="text-3xl font-bold text-center text-red-800 flex items-center justify-center">
                 <CheckCircle className="w-8 h-8 mr-2 text-red-500" />
-                登録完了！
+                新規登録完了！
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-6">
               <p className="text-center text-gray-600 mb-6">
-                ご登録ありがとうございます。アカウントが正常に作成されました。
+                おめでとうございます！新規登録が正常に完了しました。
               </p>
               <p className="text-center text-gray-600 font-semibold">
                 {countdown}秒後にログインページにリダイレクトされます...
               </p>
             </CardContent>
             <CardFooter className="flex justify-center">
-            <Button
-  onClick={() => router.push("/dashboard/salon-details")}
-  className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-full transition-colors duration-200"
->
-  今すぐサロン情報設定へ
-</Button>
+              <Button
+                onClick={() => router.push("/auth/login")}
+                className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-full transition-colors duration-200"
+              >
+                今すぐログインページへ
+              </Button>
             </CardFooter>
           </Card>
         </motion.div>

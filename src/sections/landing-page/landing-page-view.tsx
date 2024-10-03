@@ -8,6 +8,7 @@ import {
   CreditCard,
 } from "lucide-react";
 
+
 const LandingPage: React.FC = () => {
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-yellow-50 to-red-50">
@@ -68,10 +69,10 @@ const LandingPage: React.FC = () => {
               効率的で洗練されたサロン運営を、今すぐ始めましょう。
             </p>
             <Link
-              href="/dashboard"
+              href="auth/signup"
               className="bg-yellow-400 text-gray-800 px-8 py-4 rounded-full text-lg font-semibold hover:bg-yellow-500 transition duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-1"
             >
-              無料でデモを体験する
+              無料でトライアルを体験する
             </Link>
           </div>
         </section>
