@@ -141,7 +141,7 @@ export default function SignUpPage() {
             <CardFooter>
               <p className="text-sm text-gray-500">
                 すでにアカウントをお持ちですか？{" "}
-                <Link href="/login" className="text-red-600 hover:underline">
+                <Link href="/auth/login" className="text-red-600 hover:underline">
                   ログイン
                 </Link>
               </p>
