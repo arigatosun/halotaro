@@ -1,13 +1,34 @@
-// api/sales-details/route.ts
-
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
+import timezone from "dayjs/plugin/timezone";
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
 
 // Supabaseクライアントの作成
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+interface AccountingInformation {
+  customer_name: string;
+  updated_at: string;
+  items: any[]; // itemsの正確な型を後で定義することをお勧めします
+  reservations: {
+    user_id: string;
+    start_time: string;
+  } | {
+    user_id: string;
+    start_time: string;
+  }[];
+  register_closings: {
+    closing_date: string;
+  } | {
+    closing_date: string;
+  }[];
+}
 
 export async function GET(req: NextRequest) {
   try {
@@ -20,7 +41,6 @@ export async function GET(req: NextRequest) {
     const menu = searchParams.get("menu");
     const page = parseInt(searchParams.get("page") || "1");
     const itemsPerPage = parseInt(searchParams.get("itemsPerPage") || "10");
-    const sortBy = searchParams.get("sortBy") || "start_time";
     const sortOrder = searchParams.get("sortOrder") || "desc";
 
     // AuthorizationヘッダーからBearerトークンを取得
@@ -43,35 +63,36 @@ export async function GET(req: NextRequest) {
     // クエリの構築
     let query = supabase
       .from("accounting_information")
-      .select(
-        `
+      .select(`
         customer_name,
         updated_at,
         items,
-        reservation_id,
+        register_closing_id,
         reservations!inner (
           user_id,
           start_time
+        ),
+        register_closings!fk_register_closing_id (
+          closing_date
         )
-      `
-      )
+      `)
       .eq("is_temporary", false)
       .eq("reservations.user_id", userId);
 
     // 検索対象に応じてフィルタリング
     if (searchTarget === "visitDate") {
       if (startDate) {
-        query = query.filter("reservations.start_time", "gte", startDate);
+        query = query.gte("reservations.start_time", startDate);
       }
       if (endDate) {
-        query = query.filter("reservations.start_time", "lte", endDate);
+        query = query.lte("reservations.start_time", endDate);
       }
     } else if (searchTarget === "registrationDate") {
       if (startDate) {
-        query = query.gte("updated_at", startDate);
+        query = query.gte("register_closings.closing_date", startDate);
       }
       if (endDate) {
-        query = query.lte("updated_at", endDate);
+        query = query.lte("register_closings.closing_date", endDate);
       }
     }
 
@@ -80,23 +101,24 @@ export async function GET(req: NextRequest) {
       query = query.ilike("customer_name", `%${customer}%`);
     }
 
-    // スタッフとメニューのフィルタリングは後で行うため、ここでは除外します
-
-    // データの取得（ページネーションとソートは後で適用）
-    const { data: accountingData, error: accountingError } = await query;
+    // データの取得
+    const { data: accountingData, error: accountingError } = await query as { data: AccountingInformation[], error: any };
 
     if (accountingError) {
-      throw accountingError;
+      console.error("Accounting data fetch error:", accountingError);
+      throw new Error(`Failed to fetch accounting data: ${accountingError.message}`);
     }
 
     let resultData: any[] = [];
 
     // データの整形とフラット化
     for (const row of accountingData) {
-      const { customer_name, updated_at, items, reservations } = row;
+      const { customer_name, updated_at, items, reservations, register_closings } = row;
 
       const reservation = Array.isArray(reservations) ? reservations[0] : reservations;
       const start_time = reservation?.start_time;
+
+      const closing_date = register_closings && (Array.isArray(register_closings) ? register_closings[0]?.closing_date : register_closings.closing_date) || null;
 
       for (const item of items) {
         const { category, name, staff: itemStaff, price, quantity } = item;
@@ -112,9 +134,14 @@ export async function GET(req: NextRequest) {
           continue; // このアイテムをスキップ
         }
 
+        // 時間の調整（9時間前）
+        const adjustedStartTime = start_time ? dayjs(start_time).subtract(9, 'hour').format('YYYY/MM/DD HH:mm') : null;
+        const adjustedClosingDate = closing_date ? dayjs(closing_date).subtract(9, 'hour').format('YYYY/MM/DD HH:mm') : null;
+
         resultData.push({
           customer_name,
-          start_time,
+          start_time: adjustedStartTime,
+          closing_date: adjustedClosingDate,
           category,
           name,
           staff: itemStaff,
@@ -125,11 +152,14 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // 来店日時順にソート
+    // ソートキーの動的設定
+    const sortKey = searchTarget === "visitDate" ? "start_time" : "closing_date";
+
+    // ソート（新しいものを上に）
     resultData.sort((a, b) => {
-      const timeA = new Date(a.start_time).getTime();
-      const timeB = new Date(b.start_time).getTime();
-      return sortOrder === 'asc' ? timeA - timeB : timeB - timeA;
+      const timeA = new Date(a[sortKey]).getTime();
+      const timeB = new Date(b[sortKey]).getTime();
+      return timeB - timeA; // 降順（新しいものを上に）
     });
 
     // ページネーションを適用

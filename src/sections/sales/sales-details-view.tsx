@@ -1,3 +1,5 @@
+// sales-details-view.tsx
+
 "use client";
 
 import React, { useEffect, useState } from "react";
@@ -46,6 +48,7 @@ const SalesDetailView: React.FC = () => {
   const itemsPerPage = 10;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [searchTarget, setSearchTarget] = useState<string>("visitDate");
 
   const { session, user } = useAuth();
 
@@ -102,8 +105,9 @@ const SalesDetailView: React.FC = () => {
       const params: any = {
         page: currentPage,
         itemsPerPage,
-        sortBy: "start_time", // 来店日時でソートするパラメータを追加
-        sortOrder: "desc", // 降順（新しい順）にソート
+        sortBy: searchTarget === "visitDate" ? "start_time" : "closing_date",
+        sortOrder: "desc",
+        searchTarget,
       };
 
       if (dateRange?.from) {
@@ -157,6 +161,7 @@ const SalesDetailView: React.FC = () => {
     setStaff("all");
     setCustomer("");
     setMenu("all");
+    setSearchTarget("visitDate");
     setCurrentPage(1);
     fetchSalesData();
   };
@@ -175,7 +180,7 @@ const SalesDetailView: React.FC = () => {
           <div className="grid grid-cols-2 gap-4 mb-4">
             <div className="flex items-center space-x-2">
               <Label>検索対象:</Label>
-              <Select defaultValue="visitDate">
+              <Select value={searchTarget} onValueChange={setSearchTarget}>
                 <SelectTrigger className="w-[180px]">
                   <SelectValue placeholder="検索対象を選択" />
                 </SelectTrigger>
@@ -254,7 +259,7 @@ const SalesDetailView: React.FC = () => {
           {dateRange?.to
             ? ` 〜 ${dayjs(dateRange.to).format("YYYY年MM月DD日")}`
             : ""}{" "}
-          (来店日)
+          ({searchTarget === "visitDate" ? "来店日" : "レジ締め日"})
         </p>
         <div>
           <span className="mr-4">合計件数: {totalItems}</span>
@@ -278,7 +283,7 @@ const SalesDetailView: React.FC = () => {
                   <TableHead>
                     お客様名
                     <br />
-                    来店日時
+                    {searchTarget === "visitDate" ? "来店日時" : "レジ締め日時"}
                   </TableHead>
                   <TableHead>区分</TableHead>
                   <TableHead>
@@ -298,8 +303,12 @@ const SalesDetailView: React.FC = () => {
                     <TableCell>
                       {item.customer_name}
                       <br />
-                      {item.start_time
-                        ? dayjs(item.start_time).format("YYYY/MM/DD HH:mm")
+                      {searchTarget === "visitDate"
+                        ? item.start_time
+                          ? dayjs(item.start_time).format("YYYY/MM/DD HH:mm")
+                          : ""
+                        : item.closing_date
+                        ? dayjs(item.closing_date).format("YYYY/MM/DD HH:mm")
                         : ""}
                     </TableCell>
                     <TableCell>{item.category}</TableCell>
@@ -308,7 +317,9 @@ const SalesDetailView: React.FC = () => {
                     <TableCell className="text-right">
                       ¥{item.price.toLocaleString()}
                     </TableCell>
-                    <TableCell className="text-right">{item.quantity}</TableCell>
+                    <TableCell className="text-right">
+                      {item.quantity}
+                    </TableCell>
                     <TableCell className="text-right">
                       ¥{item.amount.toLocaleString()}
                     </TableCell>

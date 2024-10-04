@@ -1,5 +1,9 @@
+// closing-list-view.tsx
+
 "use client";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useAuth } from "@/contexts/authcontext";
+import axios from "axios";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -17,31 +21,49 @@ import { ChevronLeft, ChevronRight, Search, X } from "lucide-react";
 import Link from "next/link";
 
 const RegisterClosingList: React.FC = () => {
-  const [startDate, setStartDate] = useState("2024/06/01");
-  const [endDate, setEndDate] = useState("2024/07/31");
+  const { session, user } = useAuth();
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   const [isPrinted, setIsPrinted] = useState(true);
   const [isNotPrinted, setIsNotPrinted] = useState(true);
-  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+  const [closingData, setClosingData] = useState<any[]>([]);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const closingData = [
-    {
-      id: "1",
-      date: "2024/07/28",
-      time: "17:50",
-      difference: -16200,
-      printed: false,
-      staff: "鳥山 涼花",
-    },
-    {
-      id: "2",
-      date: "2024/07/27",
-      time: "17:23",
-      difference: -8000,
-      printed: false,
-      staff: "鳥山 涼花",
-    },
-    // ... 他の項目も同様に
-  ];
+  const fetchClosingData = async () => {
+    if (!session || !user) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await axios.get('/api/register-closings', {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        params: {
+          startDate: startDate || undefined,
+          endDate: endDate || undefined,
+        },
+      });
+      setClosingData(response.data.data);
+    } catch (err) {
+      console.error('レジ締めデータの取得エラー:', err);
+      setError('データの取得に失敗しました。');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSearch = () => {
+    fetchClosingData();
+  };
+
+  const handleClearConditions = () => {
+    setStartDate("");
+    setEndDate("");
+    setIsPrinted(true);
+    setIsNotPrinted(true);
+    setClosingData([]);
+  };
 
   return (
     <div className="p-4 max-w-7xl mx-auto">
@@ -75,10 +97,31 @@ const RegisterClosingList: React.FC = () => {
               />
             </div>
             <div className="flex space-x-4">
-              <Button size="sm" variant="outline" className="h-8">
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8"
+                onClick={() => {
+                  const yesterday = new Date();
+                  yesterday.setDate(yesterday.getDate() - 1);
+                  const dateString = yesterday.toISOString().split('T')[0];
+                  setStartDate(dateString);
+                  setEndDate(dateString);
+                }}
+              >
                 昨日
               </Button>
-              <Button size="sm" variant="outline" className="h-8">
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8"
+                onClick={() => {
+                  const today = new Date();
+                  const dateString = today.toISOString().split('T')[0];
+                  setStartDate(dateString);
+                  setEndDate(dateString);
+                }}
+              >
                 今日
               </Button>
             </div>
@@ -109,13 +152,19 @@ const RegisterClosingList: React.FC = () => {
             </div>
           </div>
           <div className="mt-4 flex justify-end space-x-2">
-            <Button variant="outline" size="sm" className="h-8">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8"
+              onClick={handleClearConditions}
+            >
               <X className="mr-2 h-4 w-4" />
               条件をクリア
             </Button>
             <Button
               size="sm"
               className="h-8 bg-orange-500 hover:bg-orange-600 text-white"
+              onClick={handleSearch}
             >
               <Search className="mr-2 h-4 w-4" />
               検索する
@@ -131,42 +180,60 @@ const RegisterClosingList: React.FC = () => {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-[180px]">
-                  レジ締め日
-                  <br />
-                  (レジ締め実施日時)
-                </TableHead>
-                <TableHead className="text-right">レジ過不足金</TableHead>
-                <TableHead>ジャーナル印刷</TableHead>
-                <TableHead>レジ締め担当者</TableHead>
-                <TableHead>レジ締めメモ</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {closingData.map((item) => (
-                <TableRow key={item.id}>
-                  <TableCell className="font-medium">
-                    <Link
-                      href={`/dashboard/sales/closing-list/${item.id}`}
-                      className="text-orange-500 hover:text-orange-600 hover:underline"
-                    >
-                      {item.date}
-                    </Link>
-                    <br />({item.date} {item.time})
-                  </TableCell>
-                  <TableCell className="text-right text-red-500">
-                    {item.difference.toLocaleString()} 円
-                  </TableCell>
-                  <TableCell>{item.printed ? "印刷済み" : "未印刷"}</TableCell>
-                  <TableCell>{item.staff}</TableCell>
-                  <TableCell>-</TableCell>
+          {loading ? (
+            <p>読み込み中...</p>
+          ) : error ? (
+            <p className="text-red-500">{error}</p>
+          ) : closingData.length === 0 ? (
+            <p>データがありません。</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[180px]">
+                    レジ締め日
+                    <br />
+                    (レジ締め実施日時)
+                  </TableHead>
+                  <TableHead className="text-right">レジ過不足金</TableHead>
+                  <TableHead>ジャーナル印刷</TableHead>
+                  <TableHead>レジ締め担当者</TableHead>
+                  <TableHead>レジ締めメモ</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {closingData.map((item) => (
+                  <TableRow key={item.id}>
+                    <TableCell className="font-medium">
+                      <Link
+                        href={`/dashboard/sales/closing-list/${item.id}`}
+                        className="text-orange-500 hover:text-orange-600 hover:underline"
+                      >
+                        {new Date(item.closing_date).toLocaleDateString('ja-JP')}
+                      </Link>
+                      <br />
+                      (
+                      {new Date(item.closing_date).toLocaleDateString('ja-JP')}{' '}
+                      {new Date(item.closing_date).toLocaleTimeString('ja-JP', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                      )
+                    </TableCell>
+                    <TableCell className="text-right text-red-500">
+                      {item.cash_difference.toLocaleString()} 円
+                    </TableCell>
+                    <TableCell>
+                      {/* ジャーナル印刷の状態はテーブルにないため、仮に "未印刷" と表示 */}
+                      未印刷
+                    </TableCell>
+                    <TableCell>{item.closing_staff?.name || '-'}</TableCell>
+                    <TableCell>{item.closing_memo || '-'}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
           <div className="mt-4 flex items-center justify-between">
             <div className="text-sm text-gray-500">1/1ページ</div>
             <div className="flex items-center space-x-2">

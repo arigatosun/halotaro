@@ -251,19 +251,19 @@ const CompactRegisterClosingUI: React.FC = () => {
 
     try {
       const accountingIds = accountingList.map((item) => item.id);
-
+  
       const response = await axios.post(
         "/api/register-closings",
         {
-          closing_date: closingDateUTC, // フルタイムスタンプ（UTC形式）
+          closing_date: closingDateUTC,
           prepared_cash: preparedCash,
-          prepared_cash_details: null, // 必要に応じて実装
+          prepared_cash_details: null,
           actual_cash: actualCash,
           cash_difference: calculateDifference(),
           closing_memo: closingMemo,
           closing_staff_id: selectedStaff,
-          cash_in: 0, // 必要に応じて実装
-          cash_out: 0, // 必要に応じて実装
+          cash_in: 0,
+          cash_out: 0,
           accounting_ids: accountingIds,
         },
         {
@@ -272,7 +272,7 @@ const CompactRegisterClosingUI: React.FC = () => {
           },
         }
       );
-
+  
       // 成功時に会計データを再取得してUIを更新
       await fetchAccountingData();
       await fetchLatestClosingDate(); // 最新の締め日時を再取得
@@ -418,11 +418,11 @@ const CompactRegisterClosingUI: React.FC = () => {
                 }
               }}
             />
-             <Button
-          size="sm"
-          className="bg-orange-500 hover:bg-orange-600 text-white"
-          onClick={handleRegisterClosing}
-        >
+            <Button
+              size="sm"
+              className="ml-2 bg-orange-500 hover:bg-orange-600 text-white"
+              onClick={handleSetToday}
+            >
               本日
             </Button>
           </div>

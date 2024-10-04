@@ -9,6 +9,9 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+// ---------------------------
+// 既存の POST ハンドラー
+// ---------------------------
 export async function POST(req: NextRequest) {
   try {
     // AuthorizationヘッダーからBearerトークンを取得
@@ -51,10 +54,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No accounting IDs provided' }, { status: 400 });
     }
 
-    // closing_dateを6時間減算して保存
+    // closing_dateを調整
     const adjustedClosingDate = dayjs(closing_date).subtract(15, 'hour').toISOString();
 
-    // データベースに保存
+    // レジ締めデータを挿入
     const { data: registerClosingData, error: registerClosingError } = await supabase
       .from('register_closings')
       .insert([
@@ -77,10 +80,12 @@ export async function POST(req: NextRequest) {
       throw registerClosingError;
     }
 
-    // accounting_information の is_closed を更新
+    const registerClosingId = registerClosingData[0].id;
+
+    // accounting_information の is_closed と register_closing_id を更新
     const { error: updateError } = await supabase
       .from('accounting_information')
-      .update({ is_closed: true })
+      .update({ is_closed: true, register_closing_id: registerClosingId })
       .in('id', accounting_ids)
       .eq('user_id', userId); // ユーザーIDでフィルタリング
 
@@ -94,6 +99,84 @@ export async function POST(req: NextRequest) {
     console.error('レジ締めの保存エラー:', error);
     return NextResponse.json(
       { error: error.message || 'レジ締めの保存に失敗しました' },
+      { status: 500 }
+    );
+  }
+}
+
+// ---------------------------
+// 新規追加の GET ハンドラー
+// ---------------------------
+export async function GET(req: NextRequest) {
+  try {
+    // AuthorizationヘッダーからBearerトークンを取得
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const token = authHeader.split('Bearer ')[1];
+
+    // トークンからユーザー情報を取得
+    const { data: userData, error: authError } = await supabase.auth.getUser(token);
+
+    if (authError || !userData.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const userId = userData.user.id;
+
+    // クエリパラメータの取得
+    const { searchParams } = new URL(req.url);
+    const startDate = searchParams.get('startDate');
+    const endDate = searchParams.get('endDate');
+    const isPrinted = searchParams.get('isPrinted'); // 追加: 印刷済みフィルタ
+    const isNotPrinted = searchParams.get('isNotPrinted'); // 追加: 未印刷フィルタ
+
+    // クエリの構築
+    let query = supabase
+      .from('register_closings')
+      .select(`
+        id,
+        closing_date,
+        cash_difference,
+        closing_staff:staff ( id, name ),
+        closing_memo
+      `)
+      .eq('user_id', userId);
+
+    // 日付フィルタの適用
+    if (startDate) {
+      query = query.gte('closing_date', startDate);
+    }
+    if (endDate) {
+      // 終了日の翌日の0時0分までを含めるために1日を追加
+      const endDatePlusOne = new Date(endDate);
+      endDatePlusOne.setDate(endDatePlusOne.getDate() + 1);
+      query = query.lt('closing_date', endDatePlusOne.toISOString().split('T')[0]);
+    }
+
+    // ジャーナル印刷フィルタの適用
+    if (isPrinted === 'true') {
+      query = query.eq('is_printed', true);
+    }
+    if (isNotPrinted === 'true') {
+      query = query.eq('is_printed', false);
+    }
+
+    // 結果を締め日で降順にソート
+    const { data, error } = await query.order('closing_date', { ascending: false });
+
+    if (error) {
+      throw error;
+    }
+
+    // 成功レスポンスを返す
+    return NextResponse.json({ data });
+  } catch (error: any) {
+    console.error('レジ締めデータの取得エラー:', error.message || error);
+    return NextResponse.json(
+      { error: 'レジ締めデータの取得に失敗しました。' },
       { status: 500 }
     );
   }
