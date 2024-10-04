@@ -233,6 +233,7 @@ export async function POST(request: Request) {
         .update({
           reservation_id: reservationId,
           capture_date: captureDate.toISOString(),
+          status: paymentInfo.status, // ステータスを更新
         })
         .eq('payment_intent_id', paymentInfo.stripePaymentIntentId);
 

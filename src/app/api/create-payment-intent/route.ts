@@ -12,23 +12,20 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-// 関数の実装
 async function savePaymentIntentToDatabase({
   paymentIntentId,
   userId,
-  status,
   amount,
 }: {
   paymentIntentId: string;
   userId: string;
-  status: string;
   amount: number;
 }) {
   const { data, error } = await supabase.from('payment_intents').insert([
     {
       payment_intent_id: paymentIntentId,
       user_id: userId,
-      status: status,
+      status: 'requires_capture', // ステータスを手動で設定
       amount: amount,
     },
   ]);
@@ -45,9 +42,12 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-06-20",
 });
 
+
+
 export async function POST(request: NextRequest) {
   try {
     const { userId, selectedMenuIds } = await request.json();
+
     console.log("Received request for userId:", userId);
     console.log("Selected menu IDs:", selectedMenuIds);
 
@@ -85,22 +85,19 @@ export async function POST(request: NextRequest) {
         amount,
         currency: "jpy",
         capture_method: 'manual',
-        payment_method_types: ['card'], // automatic_payment_methodsの代わりに指定
+        payment_method_types: ['card'],
       },
       {
         stripeAccount: stripeConnectId,
       }
     );
-    console.log("Created PaymentIntent:", paymentIntent.id);
-    console.log("Client Secret:", paymentIntent.client_secret);
 
     // データベースに保存
-await savePaymentIntentToDatabase({
-  paymentIntentId: paymentIntent.id,
-  userId: userId,
-  status: paymentIntent.status,
-  amount: amount,
-});
+    await savePaymentIntentToDatabase({
+      paymentIntentId: paymentIntent.id,
+      userId: userId,
+      amount: amount,
+    });
 
     return NextResponse.json({
       clientSecret: paymentIntent.client_secret,
