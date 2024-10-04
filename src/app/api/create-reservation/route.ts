@@ -1,3 +1,4 @@
+//api/create-reservation/route.ts
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { Resend } from "resend";
@@ -248,24 +249,23 @@ const reservationCustomerId = data[0].reservation_customer_id;
   }
 
   // 新しく追加: stripe_customers テーブルを更新
-  if (reservationCustomerId && paymentMethodId) {
-    const { error: updateError } = await supabase
-      .from('stripe_customers')
-      .update({
-        reservation_customer_id: reservationCustomerId,
-      })
-      .eq('payment_method_id', paymentMethodId); // 修正
+if (reservationCustomerId && paymentMethodId) {
+  const { error: updateError } = await supabase
+    .from('stripe_customers')
+    .update({
+      reservation_customer_id: reservationCustomerId,
+    })
+    .eq('payment_method_id', paymentMethodId);
 
-    if (updateError) {
-      console.error('Error updating stripe_customers:', updateError);
-      // エラーハンドリング: ここではログを出力するだけですが、必要に応じて適切な処理を追加してください
-      throw new Error('Failed to update stripe_customers with reservation_customer_id');
-    } else {
-      console.log('Successfully updated stripe_customers table');
-    }
+  if (updateError) {
+    console.error('Error updating stripe_customers:', updateError);
+    throw new Error('Failed to update stripe_customers with reservation_customer_id');
   } else {
-    console.warn('Missing reservationCustomerId or paymentMethodId, skipping stripe_customers update');
+    console.log('Successfully updated stripe_customers table');
   }
+} else {
+  console.warn('Missing reservationCustomerId or paymentMethodId, skipping stripe_customers update');
+}
 
 
     // メール送信処理

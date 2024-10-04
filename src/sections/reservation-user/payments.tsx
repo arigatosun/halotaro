@@ -21,6 +21,7 @@ interface PaymentFormProps {
   isSetupIntent: boolean;
   reservationCustomerId: string | null;
   stripeCustomerId: string; // 追加
+  userId: string; // 追加
 }
 
 // PaymentFormコンポーネントを修正
@@ -31,6 +32,7 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
   isSetupIntent,
   reservationCustomerId,
   stripeCustomerId, // 追加
+  userId, // 追加
 }) => {
   const stripe = useStripe();
   const elements = useElements();
@@ -84,6 +86,7 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
               customerEmail: customerInfo.email,
               paymentMethodId,
               stripeCustomerId, // 追加
+              userId, // 追加
             }),
           });
           if (!response.ok) {
@@ -331,6 +334,7 @@ const Payment: React.FC<PaymentProps> = ({
         isSetupIntent={isOver30Days}
         reservationCustomerId={reservationCustomerId} // string | null を渡す
         stripeCustomerId={stripeCustomerId!} // 追加
+        userId={userId} // 追加
       />
     </Elements>
   );

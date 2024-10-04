@@ -16,13 +16,14 @@ export async function POST(req: NextRequest) {
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
 
-    // 新しいレコードを挿入
+    // 既存のテーブル構造を維持し、必要な情報を保存
     const { error } = await supabase
       .from('stripe_customers')
       .insert({
         customer_email: customerEmail,
         stripe_customer_id: stripeCustomerId,
         payment_method_id: paymentMethodId,
+        // reservation_customer_id は後で更新します
       });
 
     if (error) {

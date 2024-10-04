@@ -12,6 +12,7 @@
     "start": "next start",
     "lint": "next lint",
     "start:scheduler": "tsx src/scheduler.ts",
+    "start:create-payment-intents-scheduler": "tsx src/create_payment_intents_scheduler.ts", 
     "login-test": "node --loader ts-node/esm --experimental-specifier-resolution=node scripts/main.ts"
   },
   "dependencies": {
