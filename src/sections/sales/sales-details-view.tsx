@@ -33,7 +33,7 @@ import { DateRange } from "react-day-picker";
 import axios from "axios";
 import dayjs from "dayjs";
 import { useAuth } from "@/contexts/authcontext";
-import { supabase } from "@/lib/supabaseClient"; // Supabaseクライアントをインポート
+import { supabase } from "@/lib/supabaseClient";
 
 const SalesDetailView: React.FC = () => {
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
@@ -45,8 +45,9 @@ const SalesDetailView: React.FC = () => {
   const [totalItems, setTotalItems] = useState(0);
   const itemsPerPage = 10;
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const { session, user } = useAuth(); // ユーザー情報を取得
+  const { session, user } = useAuth();
 
   // スタッフとメニューの状態変数を追加
   const [staffList, setStaffList] = useState<any[]>([]);
@@ -96,10 +97,13 @@ const SalesDetailView: React.FC = () => {
     }
 
     setLoading(true);
+    setError(null);
     try {
       const params: any = {
         page: currentPage,
         itemsPerPage,
+        sortBy: "start_time", // 来店日時でソートするパラメータを追加
+        sortOrder: "desc", // 降順（新しい順）にソート
       };
 
       if (dateRange?.from) {
@@ -130,6 +134,7 @@ const SalesDetailView: React.FC = () => {
       setTotalItems(totalItems);
     } catch (error) {
       console.error("売上データの取得エラー:", error);
+      setError("売上データの取得に失敗しました。");
     } finally {
       setLoading(false);
     }
@@ -161,6 +166,9 @@ const SalesDetailView: React.FC = () => {
   return (
     <div className="p-8 max-w-7xl mx-auto">
       <h2 className="text-2xl font-bold mb-6">売上明細</h2>
+
+      {/* エラーメッセージの表示 */}
+      {error && <p className="text-red-500 mb-4">{error}</p>}
 
       <Card className="mb-6">
         <CardContent className="pt-6">
@@ -270,7 +278,7 @@ const SalesDetailView: React.FC = () => {
                   <TableHead>
                     お客様名
                     <br />
-                    会計日時
+                    来店日時
                   </TableHead>
                   <TableHead>区分</TableHead>
                   <TableHead>
@@ -290,7 +298,9 @@ const SalesDetailView: React.FC = () => {
                     <TableCell>
                       {item.customer_name}
                       <br />
-                      {dayjs(item.updated_at).format("YYYY/MM/DD HH:mm")}
+                      {item.start_time
+                        ? dayjs(item.start_time).format("YYYY/MM/DD HH:mm")
+                        : ""}
                     </TableCell>
                     <TableCell>{item.category}</TableCell>
                     <TableCell>{item.name}</TableCell>

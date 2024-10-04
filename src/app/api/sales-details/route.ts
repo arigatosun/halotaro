@@ -1,4 +1,4 @@
-// app/api/sales-details/route.ts
+// api/sales-details/route.ts
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
@@ -20,6 +20,8 @@ export async function GET(req: NextRequest) {
     const menu = searchParams.get("menu");
     const page = parseInt(searchParams.get("page") || "1");
     const itemsPerPage = parseInt(searchParams.get("itemsPerPage") || "10");
+    const sortBy = searchParams.get("sortBy") || "start_time";
+    const sortOrder = searchParams.get("sortOrder") || "desc";
 
     // AuthorizationヘッダーからBearerトークンを取得
     const authHeader = req.headers.get("Authorization");
@@ -38,42 +40,39 @@ export async function GET(req: NextRequest) {
 
     const userId = userData.user.id;
 
-    // ユーザーの予約IDを取得
-    const { data: reservations, error: reservationsError } = await supabase
-      .from('reservations')
-      .select('id')
-      .eq('user_id', userId);
-
-    if (reservationsError) {
-      throw reservationsError;
-    }
-
-    const reservationIds = reservations.map((res) => res.id);
-
-    // 該当する予約がない場合、空のデータを返す
-    if (reservationIds.length === 0) {
-      return NextResponse.json(
-        {
-          data: [],
-          totalItems: 0,
-        },
-        { status: 200 }
-      );
-    }
-
     // クエリの構築
     let query = supabase
       .from("accounting_information")
-      .select("customer_name, updated_at, items")
+      .select(
+        `
+        customer_name,
+        updated_at,
+        items,
+        reservation_id,
+        reservations!inner (
+          user_id,
+          start_time
+        )
+      `
+      )
       .eq("is_temporary", false)
-      .in("reservation_id", reservationIds);
+      .eq("reservations.user_id", userId);
 
-    // 日付フィルターの適用
-    if (startDate) {
-      query = query.gte("updated_at", startDate);
-    }
-    if (endDate) {
-      query = query.lte("updated_at", endDate);
+    // 検索対象に応じてフィルタリング
+    if (searchTarget === "visitDate") {
+      if (startDate) {
+        query = query.filter("reservations.start_time", "gte", startDate);
+      }
+      if (endDate) {
+        query = query.filter("reservations.start_time", "lte", endDate);
+      }
+    } else if (searchTarget === "registrationDate") {
+      if (startDate) {
+        query = query.gte("updated_at", startDate);
+      }
+      if (endDate) {
+        query = query.lte("updated_at", endDate);
+      }
     }
 
     // お客様名のフィルター
@@ -81,34 +80,41 @@ export async function GET(req: NextRequest) {
       query = query.ilike("customer_name", `%${customer}%`);
     }
 
-    // データの取得
-    const { data, error } = await query;
-    if (error) {
-      throw error;
+    // スタッフとメニューのフィルタリングは後で行うため、ここでは除外します
+
+    // データの取得（ページネーションとソートは後で適用）
+    const { data: accountingData, error: accountingError } = await query;
+
+    if (accountingError) {
+      throw accountingError;
     }
 
-    let resultData = [];
+    let resultData: any[] = [];
 
-    // データの整形とフィルタリング
-    for (const row of data) {
-      const { customer_name, updated_at, items } = row;
+    // データの整形とフラット化
+    for (const row of accountingData) {
+      const { customer_name, updated_at, items, reservations } = row;
+
+      const reservation = Array.isArray(reservations) ? reservations[0] : reservations;
+      const start_time = reservation?.start_time;
+
       for (const item of items) {
         const { category, name, staff: itemStaff, price, quantity } = item;
         const amount = price * quantity;
 
-        // スタッフのフィルター
-        if (staff && staff !== "all") {
-          if (itemStaff !== staff) continue;
+        // スタッフのフィルターをここで適用
+        if (staff && staff !== "all" && itemStaff !== staff) {
+          continue; // このアイテムをスキップ
         }
 
-        // メニューのフィルター
-        if (menu && menu !== "all") {
-          if (name !== menu) continue;
+        // メニューのフィルターをここで適用
+        if (menu && menu !== "all" && name !== menu) {
+          continue; // このアイテムをスキップ
         }
 
         resultData.push({
           customer_name,
-          updated_at,
+          start_time,
           category,
           name,
           staff: itemStaff,
@@ -119,12 +125,17 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // 合計件数
-    const totalItems = resultData.length;
+    // 来店日時順にソート
+    resultData.sort((a, b) => {
+      const timeA = new Date(a.start_time).getTime();
+      const timeB = new Date(b.start_time).getTime();
+      return sortOrder === 'asc' ? timeA - timeB : timeB - timeA;
+    });
 
-    // ページネーションの適用
+    // ページネーションを適用
+    const totalItems = resultData.length;
     const startIndex = (page - 1) * itemsPerPage;
-    const endIndex = startIndex + itemsPerPage;
+    const endIndex = page * itemsPerPage;
     const paginatedData = resultData.slice(startIndex, endIndex);
 
     return NextResponse.json(

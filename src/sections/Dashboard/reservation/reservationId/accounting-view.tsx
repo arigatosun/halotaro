@@ -702,7 +702,7 @@ export const AccountingPage: React.FC<AccountingPageProps> = ({
           <div className="space-y-6">
             <div className="flex justify-between items-center">
               <h3 className="text-2xl font-bold">
-                {customerName || "ダミー予約"} 様
+                {customerName || ""} 様
               </h3>
               <div className="flex items-center space-x-4">
                 <Select value={selectedStaff} onValueChange={setSelectedStaff}>
