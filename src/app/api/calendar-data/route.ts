@@ -129,43 +129,46 @@ export async function GET(request: Request) {
     // 指定された期間内の営業時間データの取得
     const { data: businessHoursData, error: businessHoursError } = await supabase
     .from('salon_business_hours')
-    .select('date, is_holiday, open_time, close_time')
+    .select('*')
     .eq('salon_id', salonId)
-    .gte('date', startDateStr)
-    .lte('date', endDateStr);
+    .gte('date', startDate)
+    .lte('date', endDate);
 
     if (businessHoursError) {
       console.error('Error fetching business hours:', businessHoursError);
       return NextResponse.json({ error: businessHoursError.message }, { status: 500 });
     }
 
+    const businessHours = businessHoursData.map(bh => ({
+      date: bh.date,
+      open_time: bh.open_time,
+      close_time: bh.close_time,
+      is_holiday: bh.is_holiday
+    }));
+
     // 各日付の営業時間を取得またはデフォルト値を設定
     const dateRange = [];
-    let currentDate = moment(startDateStr);
-    const endMoment = moment(endDateStr);
-    
-    while (currentDate.isSameOrBefore(endMoment)) {
-      const dateStr = currentDate.format('YYYY-MM-DD');
-      const businessHourData = businessHoursData.find(bh => bh.date === dateStr);
-    
-      let businessHour: BusinessHour;
-      if (businessHourData) {
-        businessHour = {
-          date: businessHourData.date,
-          open_time: businessHourData.open_time,
-          close_time: businessHourData.close_time,
-        };
-      } else {
-        const isWeekend = [6, 0].includes(currentDate.day());
-        businessHour = {
-          date: dateStr,
-          open_time: isWeekend ? salonData.weekend_open : salonData.weekday_open,
-          close_time: isWeekend ? salonData.weekend_close : salonData.weekday_close,
-        };
-      }
-      dateRange.push(businessHour);
-      currentDate = currentDate.add(1, 'day');
-    }
+let currentDate = moment(startDate);
+const endMoment = moment(endDate);
+
+while (currentDate.isSameOrBefore(endMoment)) {
+  const dateStr = currentDate.format('YYYY-MM-DD');
+  const businessHourForDate = businessHours.find(bh => bh.date === dateStr);
+
+  if (!businessHourForDate) {
+    const isWeekend = [6, 0].includes(currentDate.day());
+    dateRange.push({
+      date: dateStr,
+      open_time: isWeekend ? salonData.weekend_open : salonData.weekday_open,
+      close_time: isWeekend ? salonData.weekend_close : salonData.weekday_close,
+      is_holiday: salonData.closed_days.includes(currentDate.format('dddd').toLowerCase())
+    });
+  } else {
+    dateRange.push(businessHourForDate);
+  }
+
+  currentDate.add(1, 'day');
+}
 
     // 休業日の取得
     const closedDays = dateRange

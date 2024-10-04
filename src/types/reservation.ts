@@ -39,4 +39,5 @@ export interface BusinessHour {
   date: string;
   open_time: string;
   close_time: string;
+  is_holiday: boolean; // この行を追加
 }

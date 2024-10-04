@@ -68,8 +68,15 @@ const ReservationEditForm: React.FC<ReservationEditFormProps> = ({
       businessHourForDate = {
         date: dateStr,
         open_time: isWeekend ? '10:00:00' : '09:00:00',
-        close_time: isWeekend ? '18:00:00' : '20:00:00'
+        close_time: isWeekend ? '18:00:00' : '20:00:00',
+        is_holiday: false
       };
+    }
+
+    if (businessHourForDate.is_holiday) {
+      console.log('This day is a holiday');
+      setAvailableTimeSlots([]);
+      return;
     }
 
     const openingTime = moment(`${dateStr} ${businessHourForDate.open_time}`, 'YYYY-MM-DD HH:mm:ss');
@@ -314,6 +321,9 @@ const ReservationEditForm: React.FC<ReservationEditFormProps> = ({
           <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 4 }}>
             <Button type="submit" disabled={isOverlap || !selectedTime}>
               予約を更新
+            </Button>
+            <Button type="button" variant="destructive" onClick={handleDelete}>
+              予約を削除
             </Button>
           </Box>
         </form>
