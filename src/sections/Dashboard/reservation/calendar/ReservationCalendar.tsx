@@ -2,7 +2,7 @@
 
 "use client";
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Box } from '@mui/material';
 import moment from 'moment';
 import 'moment/locale/ja';
@@ -16,7 +16,7 @@ import StaffScheduleDetails from './StaffScheduleDetails';
 import ReservationEditForm from './ReservationEditForm';
 import useReservationCalendar from './useReservationCalendar';
 import { EventClickArg, EventDropArg, DateSelectArg } from '@fullcalendar/core';
-import { Reservation, BusinessHour } from '@/types/reservation';
+import { Reservation } from '@/types/reservation';
 import { useAuth } from '@/lib/useAuth';
 import FullCalendar from '@fullcalendar/react';
 
@@ -30,24 +30,33 @@ const ReservationCalendar: React.FC = () => {
   const [selectedStaffSchedule, setSelectedStaffSchedule] = useState<Reservation | null>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [isEditFormOpen, setIsEditFormOpen] = useState(false);
-  const [currentDate, setCurrentDate] = useState(moment());
+  const [currentDate, setCurrentDate] = useState(moment()); 
   const [isCreatingFromButton, setIsCreatingFromButton] = useState(false);
 
-  const {
-    reservations,
-    staffList,
-    menuList,
-    closedDays,
-    businessHours, 
-    loadData,
-    setReservations,
-    setStaffList,
-    setMenuList,
-    setClosedDays,
-    snackbar,
-    setSnackbar,
-  } = useReservationCalendar(currentDate);
 
+ // useReservationCalendar を呼び出す
+ const {
+  reservations,
+  staffList,
+  menuList,
+  closedDays,
+  businessHours,
+  loadData,
+  setReservations,
+  setStaffList,
+  setMenuList,
+  setClosedDays,
+  setDateRange, // 追加
+  snackbar,
+  setSnackbar,
+} = useReservationCalendar();
+
+useEffect(() => {
+  const today = moment();
+  const startDate = today.startOf('day').format('YYYY-MM-DD');
+  const endDate = today.add(1, 'months').endOf('day').format('YYYY-MM-DD');
+  setDateRange({ start: startDate, end: endDate });
+}, []);
   const calendarRef = useRef<FullCalendar>(null);
 
   const { user, session } = useAuth();
@@ -394,38 +403,46 @@ const ReservationCalendar: React.FC = () => {
     setIsDetailsOpen(false);
   };
 
-  // 日付ナビゲーションハンドラ
-  const handlePrevDay = () => {
-    const newDate = moment(currentDate).subtract(1, 'day'); // 1日引く
-    setCurrentDate(newDate); // 状態を更新
-    if (calendarRef.current) {
-      const calendarApi = calendarRef.current.getApi();
-      calendarApi.gotoDate(newDate.toDate()); // カレンダーの表示を更新
-    }
-  };
+ // 日付ナビゲーションハンドラ
+ const handlePrevDay = () => {
+  const newDate = moment(currentDate).subtract(1, 'day');
+  setCurrentDate(newDate);
+  if (calendarRef.current) {
+    const calendarApi = calendarRef.current.getApi();
+    calendarApi.prev();
+  }
+};
 
-  const handleNextDay = () => {
-    const newDate = moment(currentDate).add(1, 'day'); // 1日足す
-    setCurrentDate(newDate); // 状態を更新
-    if (calendarRef.current) {
-      const calendarApi = calendarRef.current.getApi();
-      calendarApi.gotoDate(newDate.toDate()); // カレンダーの表示を更新
-    }
-  };
+const handleNextDay = () => {
+  const newDate = moment(currentDate).add(1, 'day');
+  setCurrentDate(newDate);
+  if (calendarRef.current) {
+    const calendarApi = calendarRef.current.getApi();
+    calendarApi.next();
+  }
+};
 
-  const handleToday = () => {
-    const today = moment(); // 今日の日付を取得
-    setCurrentDate(today); // 状態を今日の日付に更新
-    if (calendarRef.current) {
-      const calendarApi = calendarRef.current.getApi();
-      calendarApi.gotoDate(today.toDate()); // カレンダーの表示を今日に更新
-    }
-  };
-
+const handleToday = () => {
+  const today = moment();
+  setCurrentDate(today);
+  if (calendarRef.current) {
+    const calendarApi = calendarRef.current.getApi();
+    calendarApi.today();
+  }
+};
   // カレンダーの日付レンダリング時に休業日をマークする
   const handleDatesSet = (arg: any) => {
     const calendarApi = arg.view.calendar;
-    calendarApi.getEvents().forEach((event: any) => event.remove());
+
+      // 表示範囲の開始日と終了日を取得
+      const startDate = moment(arg.start).format('YYYY-MM-DD');
+      const endDate = moment(arg.end).subtract(1, 'days').format('YYYY-MM-DD'); // FullCalendar の end は翌日を指すため
+
+      // dateRange を更新
+    setDateRange({ start: startDate, end: endDate });
+
+     // currentDate を更新
+     setCurrentDate(moment(arg.start));
 
     // 具体的な日付に基づいて休業日をマーク
     if (closedDays && closedDays.length > 0) {
@@ -443,6 +460,10 @@ const ReservationCalendar: React.FC = () => {
     }
   };
 
+  if (!staffList.length || !businessHours.length) {
+    return <div>データを読み込んでいます...</div>;
+  }
+
   return (
     <Box sx={{ p: 3, backgroundColor: 'background.default' }}>
       {/* ナビゲーションセクション */}
@@ -456,7 +477,9 @@ const ReservationCalendar: React.FC = () => {
       />
 
       {/* カレンダーセクション */}
+      
       <CalendarView
+        key={currentDate.format('YYYY-MM-DD')}
         reservations={reservations}
         staffList={staffList}
         closedDays={closedDays}
@@ -466,6 +489,7 @@ const ReservationCalendar: React.FC = () => {
         onEventDrop={handleEventDrop}
         handleDatesSet={handleDatesSet}
         ref={calendarRef}
+        currentDate={currentDate} // 追加
       />
 
       {/* 予約フォームモーダル */}

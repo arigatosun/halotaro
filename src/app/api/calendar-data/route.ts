@@ -3,7 +3,7 @@
 import { NextResponse } from 'next/server';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from "next/headers";
-import { Reservation, Staff, MenuItem } from '@/types/reservation';
+import { Reservation, Staff, MenuItem, BusinessHour } from '@/types/reservation';
 import moment from 'moment';
 
 // 認証チェック関数
@@ -34,14 +34,17 @@ export async function GET(request: Request) {
   const supabase = createRouteHandlerClient({ cookies });
   const userId = authResult.user.id;
 
- try {
+  try {
     const { searchParams } = new URL(request.url);
-    const startDate = searchParams.get('startDate');
-    const endDate = searchParams.get('endDate');
+    const startDateStr = searchParams.get('startDate');
+    const endDateStr = searchParams.get('endDate');
 
-    if (!startDate || !endDate) {
-      return NextResponse.json({ error: 'Missing required parameters' }, { status: 400 });
+    if (!startDateStr || !endDateStr) {
+      return NextResponse.json({ error: 'Missing required parameters: startDate or endDate' }, { status: 400 });
     }
+
+    const startDate = moment(startDateStr, 'YYYY-MM-DD').startOf('day').toISOString();
+    const endDate = moment(endDateStr, 'YYYY-MM-DD').endOf('day').toISOString();
 
     // スタッフリストの取得
     const { data: staffList, error: staffError } = await supabase
@@ -101,7 +104,7 @@ export async function GET(request: Request) {
       .from('salons')
       .select('*')
       .eq('user_id', userId)
-      .maybeSingle(); // 一意であることを前提
+      .maybeSingle();
 
     if (salonError) {
       console.error('Error fetching salon data:', salonError);
@@ -110,6 +113,7 @@ export async function GET(request: Request) {
 
     if (!salonData) {
       console.warn('No salon data found for user:', userId);
+
       // 休業日がない場合もレスポンスを返す
       return NextResponse.json({
         staffList,
@@ -122,40 +126,58 @@ export async function GET(request: Request) {
 
     const salonId = salonData.id;
 
-      // 特定の日付の営業時間データの取得
-     const { data: businessHoursData, error: businessHoursError } = await supabase
-      .from('salon_business_hours')
-      .select('date, is_holiday, open_time, close_time')
-      .eq('salon_id', salonData.id)
-      .gte('date', startDate)
-      .lte('date', endDate);
+    // 指定された期間内の営業時間データの取得
+    const { data: businessHoursData, error: businessHoursError } = await supabase
+    .from('salon_business_hours')
+    .select('date, is_holiday, open_time, close_time')
+    .eq('salon_id', salonId)
+    .gte('date', startDateStr)
+    .lte('date', endDateStr);
 
     if (businessHoursError) {
       console.error('Error fetching business hours:', businessHoursError);
       return NextResponse.json({ error: businessHoursError.message }, { status: 500 });
     }
 
+    // 各日付の営業時間を取得またはデフォルト値を設定
+    const dateRange = [];
+    let currentDate = moment(startDateStr);
+    const endMoment = moment(endDateStr);
+    
+    while (currentDate.isSameOrBefore(endMoment)) {
+      const dateStr = currentDate.format('YYYY-MM-DD');
+      const businessHourData = businessHoursData.find(bh => bh.date === dateStr);
+    
+      let businessHour: BusinessHour;
+      if (businessHourData) {
+        businessHour = {
+          date: businessHourData.date,
+          open_time: businessHourData.open_time,
+          close_time: businessHourData.close_time,
+        };
+      } else {
+        const isWeekend = [6, 0].includes(currentDate.day());
+        businessHour = {
+          date: dateStr,
+          open_time: isWeekend ? salonData.weekend_open : salonData.weekday_open,
+          close_time: isWeekend ? salonData.weekend_close : salonData.weekday_close,
+        };
+      }
+      dateRange.push(businessHour);
+      currentDate = currentDate.add(1, 'day');
+    }
 
-   // 休業日の抽出
-   const closedDays = businessHoursData
-   .filter(entry => entry.is_holiday)
-   .map(entry => entry.date);
-
- // 営業日の営業時間データ
- const businessHours = businessHoursData
-   .filter(entry => !entry.is_holiday)
-   .map(entry => ({
-     date: entry.date,
-     open_time: entry.open_time,
-     close_time: entry.close_time,
-   }));
+    // 休業日の取得
+    const closedDays = dateRange
+    .filter(bh => bh.open_time === '00:00:00' && bh.close_time === '00:00:00')
+    .map(bh => bh.date);
 
     return NextResponse.json({
       staffList,
       menuList,
       reservations: formattedReservations,
-      closedDays, // 具体的な日付の配列
-      businessHours,
+      closedDays,
+      businessHours: dateRange,
     });
   } catch (error) {
     console.error('Unexpected error:', error);

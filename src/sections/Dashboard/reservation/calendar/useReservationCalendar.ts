@@ -1,7 +1,7 @@
 // src/sections/Dashboard/reservation/calendar/useReservationCalendar.ts
 
 import { useState, useEffect } from 'react';
-import { Reservation, Staff, MenuItem,BusinessHour } from '@/types/reservation';
+import { Reservation, Staff, MenuItem, BusinessHour } from '@/types/reservation';
 import { useAuth } from '@/lib/useAuth';
 import moment from 'moment';
 
@@ -16,28 +16,28 @@ interface UseReservationCalendarReturn {
   setStaffList: React.Dispatch<React.SetStateAction<Staff[]>>;
   setMenuList: React.Dispatch<React.SetStateAction<MenuItem[]>>;
   setClosedDays: React.Dispatch<React.SetStateAction<string[]>>;
+  setBusinessHours: React.Dispatch<React.SetStateAction<BusinessHour[]>>;
+  setDateRange: React.Dispatch<React.SetStateAction<{ start: string; end: string } | null>>;
   snackbar: { message: string; severity: 'success' | 'error' } | null;
   setSnackbar: React.Dispatch<React.SetStateAction<{ message: string; severity: 'success' | 'error' } | null>>;
 }
 
-const useReservationCalendar = (currentDate: moment.Moment): UseReservationCalendarReturn => {
+const useReservationCalendar = (): UseReservationCalendarReturn => {
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const [menuList, setMenuList] = useState<MenuItem[]>([]);
   const [closedDays, setClosedDays] = useState<string[]>([]);
-  const [snackbar, setSnackbar] = useState<{ message: string; severity: 'success' | 'error' } | null>(null);
   const [businessHours, setBusinessHours] = useState<BusinessHour[]>([]);
+  const [snackbar, setSnackbar] = useState<{ message: string; severity: 'success' | 'error' } | null>(null);
+  const [dateRange, setDateRange] = useState<{ start: string; end: string } | null>(null);
   const { user, session } = useAuth();
 
   const loadData = async () => {
-    if (!session || !user) return;
-
-    const startDate = moment(currentDate).startOf('day').subtract(30, 'days').toISOString();
-    const endDate = moment(currentDate).endOf('day').add(30, 'days').toISOString();
-
+    if (!session || !user || !dateRange) return;
+  
     try {
       const response = await fetch(
-        `/api/calendar-data?startDate=${startDate}&endDate=${endDate}`,
+        `/api/calendar-data?startDate=${dateRange.start}&endDate=${dateRange.end}`,
         {
           headers: {
             'Authorization': `Bearer ${session.access_token}`,
@@ -56,7 +56,7 @@ const useReservationCalendar = (currentDate: moment.Moment): UseReservationCalen
       setStaffList(data.staffList);
       setMenuList(data.menuList);
       setClosedDays(data.closedDays || []);
-      setBusinessHours(data.businessHours);
+      setBusinessHours(data.businessHours || []);
     } catch (error) {
       console.error('Error in loadData:', error);
       setSnackbar({ message: 'データの取得に失敗しました', severity: 'error' });
@@ -64,10 +64,10 @@ const useReservationCalendar = (currentDate: moment.Moment): UseReservationCalen
   };
 
   useEffect(() => {
-    if (user && session) {
+    if (user && session && dateRange) {
       loadData();
     }
-  }, [user, session, currentDate]);
+  }, [user, session, dateRange]);
 
   return {
     reservations,
@@ -80,6 +80,8 @@ const useReservationCalendar = (currentDate: moment.Moment): UseReservationCalen
     setStaffList,
     setMenuList,
     setClosedDays,
+    setBusinessHours,
+    setDateRange,
     snackbar,
     setSnackbar,
   };

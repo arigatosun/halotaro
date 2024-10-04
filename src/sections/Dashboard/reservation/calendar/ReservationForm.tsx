@@ -1,5 +1,3 @@
-// src/sections/Dashboard/reservation/calendar/ReservationForm.tsx
-
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -9,6 +7,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { BusinessHour, Reservation, Staff, MenuItem as MenuItemType } from '@/types/reservation';
 import moment from 'moment';
 import { Alert, Snackbar } from '@mui/material';
+
+interface FormDataType {
+  customer_name?: string;
+  customer_email?: string;
+  customer_phone?: string;
+  menu_id?: string;
+  staff_id?: string;
+  start_time?: string;
+  end_time?: string;
+  event?: string;
+  id?: string;
+}
 
 interface ReservationFormProps {
   reservation: Partial<Reservation> | null;
@@ -38,16 +48,16 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
   isCreatingFromButton = false,
 }) => {
   const [formType, setFormType] = useState<'reservation' | 'staffSchedule'>('reservation');
-  const [formData, setFormData] = useState<Partial<Reservation>>({});
+  const [formData, setFormData] = useState<FormDataType>({});
   const [computedEndTime, setComputedEndTime] = useState<string>('');
   const [isOverlap, setIsOverlap] = useState<boolean>(false);
   const [overlapMessage, setOverlapMessage] = useState<string>('');
   const [snackbar, setSnackbar] = useState<{ message: string; severity: 'success' | 'error' } | null>(null);
 
-  // New state variables
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [availableTimes, setAvailableTimes] = useState<string[]>([]);
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<string | null>(null);
+  const [selectedMenuPrice, setSelectedMenuPrice] = useState<number>(0);
 
   useEffect(() => {
     if (reservation?.is_staff_schedule) {
@@ -58,6 +68,12 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
   }, [reservation]);
 
   useEffect(() => {
+    if (isNew && !selectedDate) {
+      setSelectedDate(new Date());
+    }
+  }, [isNew, selectedDate]);
+
+  useEffect(() => {
     if (reservation && !isCreatingFromButton) {
       const startMoment = reservation.start_time ? moment.utc(reservation.start_time).local() : null;
       const endMoment = reservation.end_time ? moment.utc(reservation.end_time).local() : null;
@@ -66,6 +82,8 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
         ...reservation,
         start_time: startMoment ? startMoment.format('YYYY-MM-DDTHH:mm') : '',
         end_time: endMoment ? endMoment.format('YYYY-MM-DDTHH:mm') : '',
+        menu_id: reservation.menu_id?.toString(),
+        staff_id: reservation.staff_id?.toString(),
       });
 
       if (startMoment) {
@@ -78,7 +96,7 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
       setOverlapMessage('');
     } else {
       setFormData({});
-      setSelectedDate(null);
+      setSelectedDate(new Date());
       setSelectedTimeSlot(null);
       setComputedEndTime('');
       setIsOverlap(false);
@@ -86,87 +104,101 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
     }
   }, [reservation, isCreatingFromButton]);
 
-  // handleChange関数の修正
-  const handleChange = (name: string, value: string | boolean) => {
+  const handleChange = (name: string, value: string) => {
+    console.log(`handleChange called with name: ${name}, value: ${value}`);
     setFormData(prev => ({
       ...prev,
-      [name]:
-        name === 'menu_id'
-          ? (value ? parseInt(value as string, 10) : undefined)
-          : value,
+      [name]: value,
     }));
   };
 
-  // 利用可能な時間帯を計算するuseEffect
+  useEffect(() => {
+    if (formData.menu_id) {
+      const selectedMenu = menuList.find(menu => menu.id.toString() === formData.menu_id);
+      if (selectedMenu) {
+        setSelectedMenuPrice(selectedMenu.price);
+      } else {
+        setSelectedMenuPrice(0);
+      }
+    } else {
+      setSelectedMenuPrice(0);
+    }
+  }, [formData.menu_id, menuList]);
+
   useEffect(() => {
     if (selectedDate && formData.staff_id && formData.menu_id) {
-      const selectedMenu = menuList.find(menu => menu.id === formData.menu_id);
+      console.log('Calculating available times:', { selectedDate, staffId: formData.staff_id, menuId: formData.menu_id });
+      const selectedMenu = menuList.find(menu => menu.id.toString() === formData.menu_id);
       if (selectedMenu) {
         const menuDuration = selectedMenu.duration;
         const staffId = formData.staff_id;
         const dateStr = moment(selectedDate).format('YYYY-MM-DD');
 
-        // 選択日の営業時間を取得
-        const businessHourForDate = businessHours.find(bh => bh.date === dateStr);
-
-        let openingTime: moment.Moment;
-      let closingTime: moment.Moment;
-
-        if (businessHourForDate) {
-          openingTime = moment(`${dateStr} ${businessHourForDate.open_time}`, 'YYYY-MM-DD HH:mm:ss');
-          closingTime = moment(`${dateStr} ${businessHourForDate.close_time}`, 'YYYY-MM-DD HH:mm:ss');
-        } else {
-          // 営業時間がない場合は予約不可
-          setAvailableTimes([]);
-        return;
-      }
-
-        const timeSlots = [];
-
-        let currentTime = openingTime.clone();
-        while (currentTime.isBefore(closingTime)) {
-          timeSlots.push(currentTime.format('HH:mm'));
-          currentTime.add(30, 'minutes');
+        let businessHourForDate = businessHours.find(bh => bh.date === dateStr);
+        if (!businessHourForDate) {
+          // デフォルトの営業時間を使用
+          const isWeekend = [0, 6].includes(moment(dateStr).day());
+          businessHourForDate = {
+            date: dateStr,
+            open_time: isWeekend ? '10:00:00' : '09:00:00',
+            close_time: isWeekend ? '18:00:00' : '20:00:00'
+          };
         }
 
-        const available: string[] = [];
+        if (businessHourForDate) {
+          const openingTime = moment(`${dateStr} ${businessHourForDate.open_time}`, 'YYYY-MM-DD HH:mm:ss');
+          const closingTime = moment(`${dateStr} ${businessHourForDate.close_time}`, 'YYYY-MM-DD HH:mm:ss');
 
-        timeSlots.forEach(time => {
-          const start = moment(`${dateStr} ${time}`, 'YYYY-MM-DD HH:mm');
-          const end = start.clone().add(menuDuration, 'minutes');
+          const timeSlots = [];
 
-          // 終了時間が営業時間外の場合はスキップ
-          if (end.isAfter(closingTime)) return;
+          let currentTime = openingTime.clone();
+          while (currentTime.isBefore(closingTime)) {
+            timeSlots.push(currentTime.format('HH:mm'));
+            currentTime.add(30, 'minutes');
+          }
 
-          // 既存の予約との重複チェック
-          const overlapping = reservations.some(res => {
-            if (res.staff_id !== staffId) return false;
-            if (res.status === 'cancelled' || res.status === 'completed') return false;
+          const available: string[] = [];
 
-            const resStart = moment.utc(res.start_time).local();
-            const resEnd = moment.utc(res.end_time).local();
+          timeSlots.forEach(time => {
+            const start = moment(`${dateStr} ${time}`, 'YYYY-MM-DD HH:mm');
+            const end = start.clone().add(menuDuration, 'minutes');
 
-            return start.isBefore(resEnd) && end.isAfter(resStart);
+            if (end.isAfter(closingTime)) return;
+
+            const overlapping = reservations.some(res => {
+              if (res.staff_id !== staffId) return false;
+              if (res.status === 'cancelled' || res.status === 'completed') return false;
+
+              const resStart = moment.utc(res.start_time).local();
+              const resEnd = moment.utc(res.end_time).local();
+
+              return start.isBefore(resEnd) && end.isAfter(resStart);
+            });
+
+            if (!overlapping) {
+              available.push(time);
+            }
           });
 
-          if (!overlapping) {
-            available.push(time);
-          }
-        });
-
-        setAvailableTimes(available);
+          console.log('Available times:', available);
+          setAvailableTimes(available);
+        } else {
+          console.log('No business hours found for the selected date');
+          setAvailableTimes([]);
+        }
       } else {
+        console.log('Selected menu not found');
         setAvailableTimes([]);
       }
     } else {
+      console.log('Not enough data to calculate available times');
       setAvailableTimes([]);
     }
   }, [selectedDate, formData.staff_id, formData.menu_id, reservations, menuList, businessHours]);
 
-  // 選択した時間帯に基づいて開始時間と終了時間を設定するuseEffect
   useEffect(() => {
-    if (selectedTimeSlot && selectedDate && formData.menu_id !== undefined) {
-      const selectedMenu = menuList.find(menu => menu.id === formData.menu_id);
+    if (selectedTimeSlot && selectedDate && formData.menu_id) {
+      const selectedMenu = menuList.find(menu => menu.id.toString() === formData.menu_id);
       if (selectedMenu) {
         const start = moment(`${moment(selectedDate).format('YYYY-MM-DD')}T${selectedTimeSlot}`);
         const end = start.clone().add(selectedMenu.duration, 'minutes');
@@ -181,18 +213,6 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
     }
   }, [selectedTimeSlot, selectedDate, formData.menu_id, menuList]);
 
-  // メニューまたは開始時間が変更されたときに終了時間を再計算するuseEffect
-  useEffect(() => {
-    if (formData.start_time && formData.menu_id !== undefined) {
-      const selectedMenu = menuList.find(menu => menu.id === formData.menu_id);
-      if (selectedMenu) {
-        const start = moment(formData.start_time);
-        const end = start.clone().add(selectedMenu.duration, 'minutes');
-        setComputedEndTime(end.format('YYYY-MM-DDTHH:mm'));
-      }
-    }
-  }, [formData.start_time, formData.menu_id, menuList]);
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (formType === 'reservation' && isOverlap) {
@@ -200,36 +220,24 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
       return;
     }
 
-    let updatedReservation: Partial<Reservation>;
-
-    if (formType === 'reservation') {
-      const selectedMenu = menuList.find(menu => menu.id === formData.menu_id);
-
-      updatedReservation = {
-        ...formData,
-        start_time: formData.start_time ? moment(formData.start_time).utc().format() : '',
-        end_time: computedEndTime ? moment(computedEndTime).utc().format() : '',
-        total_price: selectedMenu ? selectedMenu.price : 0,
-        is_staff_schedule: false,
-      };
-    } else {
-      updatedReservation = {
-        ...formData,
-        start_time: formData.start_time ? moment(formData.start_time).utc().format() : '',
-        end_time: formData.end_time ? moment(formData.end_time).utc().format() : '',
-        is_staff_schedule: true,
-        total_price: 0,
-      };
-    }
+    let updatedReservation: Partial<Reservation> = {
+      ...formData,
+      start_time: formData.start_time ? moment(formData.start_time).utc().format() : undefined,
+      end_time: computedEndTime ? moment(computedEndTime).utc().format() : undefined,
+      total_price: selectedMenuPrice,
+      is_staff_schedule: formType === 'staffSchedule',
+      menu_id: formData.menu_id ? parseInt(formData.menu_id, 10) : undefined,
+      staff_id: formData.staff_id,
+    };
 
     onSubmit(updatedReservation, isNew);
     onClose();
   };
 
-  const handleDelete = async () => {
+  const handleDelete = () => {
     if (window.confirm('この予約をキャンセルしますか？')) {
       if (formData.id) {
-        await onDelete(formData.id);
+        onDelete(formData.id);
         onClose();
       }
     }
@@ -300,7 +308,7 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
                   <div className="space-y-2">
                     <Label htmlFor="menu_id">メニュー</Label>
                     <Select
-                      value={formData.menu_id !== undefined ? formData.menu_id.toString() : ''}
+                      value={formData.menu_id || ''}
                       onValueChange={(value) => handleChange('menu_id', value)}
                       required
                     >
@@ -316,6 +324,14 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
                       </SelectContent>
                     </Select>
                   </div>
+
+                  {/* 選択したメニューの価格表示 */}
+                  {selectedMenuPrice > 0 && (
+                    <div className="space-y-2">
+                      <Label>メニューの価格</Label>
+                      <p>{selectedMenuPrice.toLocaleString()}円</p>
+                    </div>
+                  )}
 
                   {/* スタッフの選択 */}
                   <div className="space-y-2">
@@ -353,149 +369,147 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
                   {availableTimes.length > 0 ? (
                     <div className="space-y-2">
                       <Label>予約可能な時間帯</Label>
-                      <div
-                        className="grid grid-cols-4 gap-2 max-h-[calc(2.5rem*8+1.5rem)] overflow-y-auto"
-                      >
+                      <div className="grid grid-cols-4 gap-2 max-h-[calc(2.5rem*8+1.5rem)] overflow-y-auto">
                         {availableTimes.map((time) => (
                           <Button
-                            type="button"
-                            key={time}
-                            variant={selectedTimeSlot === time ? 'default' : 'outline'}
-                            onClick={() => setSelectedTimeSlot(time)}
-                          >
-                            {time}
-                          </Button>
-                        ))}
-                      </div>
+                          type="button"
+                          key={time}
+                          variant={selectedTimeSlot === time ? 'default' : 'outline'}
+                          onClick={() => setSelectedTimeSlot(time)}
+                        >
+                          {time}
+                        </Button>
+                      ))}
                     </div>
-                  ) : selectedDate && formData.staff_id && formData.menu_id !== undefined ? (
-                    <p>この日に予約可能な時間帯はありません。</p>
-                  ) : null}
-
-                  {/* 選択した時間帯の表示 */}
-                  {selectedTimeSlot && (
-                    <div className="space-y-2">
-                      <Label>選択した時間帯</Label>
-                      <p>
-                        {selectedTimeSlot} ~{' '}
-                        {moment(selectedTimeSlot, 'HH:mm')
-                          .add(menuList.find(menu => menu.id === formData.menu_id)?.duration || 0, 'minutes')
-                          .format('HH:mm')}
-                      </p>
-                    </div>
-                  )}
-
-                  {isOverlap && (
-                    <Alert severity="error">
-                      {overlapMessage}
-                    </Alert>
-                  )}
-                </>
-              ) : (
-                // Staff Schedule Form
-                <>
-                  <div className="space-y-2">
-                    <Label htmlFor="staff_id">スタッフ</Label>
-                    <Select
-                      value={formData.staff_id || ''}
-                      onValueChange={(value) => handleChange('staff_id', value)}
-                      required
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="スタッフを選択" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {staffList.map((staff) => (
-                          <SelectItem key={staff.id} value={staff.id}>
-                            {staff.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
                   </div>
+                ) : selectedDate && formData.staff_id && formData.menu_id ? (
+                  <p>この日に予約可能な時間帯はありません。</p>
+                ) : null}
 
+                {/* 選択した時間帯の表示 */}
+                {selectedTimeSlot && (
                   <div className="space-y-2">
-                    <Label htmlFor="event">イベント</Label>
-                    <Select
-                      value={formData.event || ''}
-                      onValueChange={(value) => handleChange('event', value)}
-                      required
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="イベントを選択" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="休憩">休憩</SelectItem>
-                        <SelectItem value="会議">会議</SelectItem>
-                        <SelectItem value="その他">その他</SelectItem>
-                      </SelectContent>
-                    </Select>
+                   <Label>選択した時間帯</Label>
+                    <p>
+                      {selectedTimeSlot} ~{' '}
+                      {moment(selectedTimeSlot, 'HH:mm')
+                        .add(menuList.find(menu => menu.id.toString() === formData.menu_id)?.duration || 0, 'minutes')
+                        .format('HH:mm')}
+                    </p>
                   </div>
+                )}
 
-                  <div className="space-y-2">
-                    <Label htmlFor="start_time">開始時間</Label>
-                    <Input
-                      id="start_time"
-                      type="datetime-local"
-                      value={formData.start_time || ''}
-                      onChange={(e) => handleChange('start_time', e.target.value)}
-                      required
-                    />
-                  </div>
+                {isOverlap && (
+                  <Alert severity="error">
+                    {overlapMessage}
+                  </Alert>
+                )}
+              </>
+            ) : (
+              // Staff Schedule Form
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="staff_id">担当スタッフ</Label>
+                  <Select
+                    value={formData.staff_id || ''}
+                    onValueChange={(value) => handleChange('staff_id', value)}
+                    required
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="スタッフを選択" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {staffList.map((staff) => (
+                        <SelectItem key={staff.id} value={staff.id}>
+                          {staff.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="end_time">終了時間</Label>
-                    <Input
-                      id="end_time"
-                      type="datetime-local"
-                      value={formData.end_time || ''}
-                      onChange={(e) => handleChange('end_time', e.target.value)}
-                      required
-                    />
-                  </div>
-                </>
-              )}
-            </div>
-            <div className="flex justify-between mt-6">
-              <Button
-                type="submit"
-                disabled={
-                  formType === 'reservation' &&
-                  (isOverlap || (!selectedTimeSlot))
-                }
-              >
-                {isNew ? '予約を作成' : '予約を更新'}
+                <div className="space-y-2">
+                  <Label htmlFor="event">イベント</Label>
+                  <Select
+                    value={formData.event || ''}
+                    onValueChange={(value) => handleChange('event', value)}
+                    required
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="イベントを選択" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="休憩">休憩</SelectItem>
+                      <SelectItem value="会議">会議</SelectItem>
+                      <SelectItem value="その他">その他</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="start_time">開始時間</Label>
+                  <Input
+                    id="start_time"
+                    type="datetime-local"
+                    value={formData.start_time || ''}
+                    onChange={(e) => handleChange('start_time', e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="end_time">終了時間</Label>
+                  <Input
+                    id="end_time"
+                    type="datetime-local"
+                    value={formData.end_time || ''}
+                    onChange={(e) => handleChange('end_time', e.target.value)}
+                    required
+                  />
+                </div>
+              </>
+            )}
+          </div>
+          <div className="flex justify-between mt-6">
+            <Button
+              type="submit"
+              disabled={
+                formType === 'reservation' &&
+                (isOverlap || (!selectedTimeSlot))
+              }
+            >
+              {isNew ? '予約を作成' : '予約を更新'}
+            </Button>
+            {!isNew && formData.id && (
+              <Button type="button" variant="destructive" onClick={handleDelete}>
+                予約を削除
               </Button>
-              {!isNew && formData.id && (
-                <Button type="button" variant="destructive" onClick={handleDelete}>
-                  予約を削除
-                </Button>
-              )}
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
+            )}
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
 
-      <Snackbar
-        open={!!snackbar}
-        autoHideDuration={6000}
+    <Snackbar
+      open={!!snackbar}
+      autoHideDuration={6000}
+      onClose={() => setSnackbar(null)}
+      anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+    >
+      <Alert
         onClose={() => setSnackbar(null)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        severity={snackbar?.severity}
+        sx={{
+          width: '100%',
+          borderRadius: '8px',
+          boxShadow: 3,
+        }}
       >
-        <Alert
-          onClose={() => setSnackbar(null)}
-          severity={snackbar?.severity}
-          sx={{
-            width: '100%',
-            borderRadius: '8px',
-            boxShadow: 3,
-          }}
-        >
-          {snackbar?.message}
-        </Alert>
-      </Snackbar>
-    </>
-  );
+        {snackbar?.message}
+      </Alert>
+    </Snackbar>
+  </>
+);
 };
 
 export default ReservationForm;
