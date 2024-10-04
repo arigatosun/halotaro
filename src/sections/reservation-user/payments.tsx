@@ -88,6 +88,8 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
               paymentMethodId,
               stripeCustomerId, // 追加
               userId, // 追加
+              status: 'request', // 追加
+              
             }),
           });
           if (!response.ok) {

@@ -6,16 +6,35 @@ import cron from 'node-cron';
 import { createClient } from '@supabase/supabase-js';
 import Stripe from 'stripe';
 
-// ESMモジュールで __dirname を定義
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// 環境変数の読み込み
 dotenv.config({
   path: path.resolve(__dirname, '../.env'),
 });
 
-// SupabaseとStripeの初期化
+interface Reservation {
+  id: string;
+  user_id: string;
+  total_price: number;
+  start_time: string;
+  status: string;
+}
+
+interface StripeCustomer {
+  id: string;
+  stripe_customer_id: string;
+  payment_method_id: string;
+  reservation_customer_id: string;
+  customer_email: string;
+  status: string;
+  reservation_customers: {
+    id: string;
+    reservation_id: string;
+    reservations: Reservation;
+  };
+}
+
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -24,118 +43,117 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2024-06-20',
 });
 
-// スケジューラー設定（毎分実行）
 cron.schedule('* * * * *', async () => {
-  console.log(
-    `[${new Date().toISOString()}] Running scheduled PaymentIntent creation task...`
-  );
+  console.log(`[${new Date().toISOString()}] PaymentIntent作成タスクを開始します...`);
 
   try {
-    console.log('Fetching reservations without existing PaymentIntents...');
-
-    // reservations テーブルから PaymentIntent がない予約を取得
-    const { data: reservations, error } = await supabase
-      .from('reservations')
+    const { data: stripeCustomers, error } = await supabase
+      .from('stripe_customers')
       .select(`
         id,
-        user_id,
-        total_price,
-        start_time,
-        reservation_customers (
+        stripe_customer_id,
+        payment_method_id,
+        reservation_customer_id,
+        customer_email,
+        status,
+        reservation_customers!reservation_customer_id (
           id,
-          stripe_customers (
-            stripe_customer_id,
-            payment_method_id
+          reservation_id,
+          reservations!reservation_id (
+            id,
+            user_id,
+            total_price,
+            start_time,
+            status
           )
-        ),
-        payment_intents!left ( reservation_id )
+        )
       `)
-      .gte('start_time', new Date().toISOString())
-      .lte(
-        'start_time',
-        new Date(new Date().setDate(new Date().getDate() + 30)).toISOString()
-      )
-      .eq('status', 'confirmed')
-      .is('payment_intents.reservation_id', null); // PaymentIntent がない予約を取得
+      .eq('status', 'request');
 
     if (error) {
-      console.error('Error fetching reservations:', error);
+      console.error('stripe_customersの取得中にエラーが発生しました:', error);
       return;
     }
 
-    console.log(
-      `Fetched ${reservations.length} reservation(s) without PaymentIntents.`
-    );
+    console.log(`"request"ステータスの stripe_customer を ${stripeCustomers?.length}件 取得しました。`);
 
-    if (!reservations || reservations.length === 0) {
-      console.log('No reservations require PaymentIntent creation at this time.');
+    if (!stripeCustomers || stripeCustomers.length === 0) {
+      console.log('現時点でPaymentIntentの作成が必要なstripe_customersはありません。');
       return;
     }
 
-    for (const reservation of reservations) {
-      console.log(`Processing reservation ID: ${reservation.id}`);
+    let processedCount = 0;
+    let successCount = 0;
+    let successfulIds: string[] = [];
+
+    for (const stripeCustomer of stripeCustomers as unknown as StripeCustomer[]) {
+      const {
+        id: stripeCustomerId,
+        stripe_customer_id: customerId,
+        payment_method_id: paymentMethodId,
+        reservation_customers,
+      } = stripeCustomer;
+
+      const reservationCustomerFromJoin = reservation_customers;
+
+      if (!reservationCustomerFromJoin) {
+        console.error(`stripe_customer ${stripeCustomerId} に関連する reservation_customer がありません。`);
+        continue;
+      }
+
+      const {
+        reservations,
+      } = reservationCustomerFromJoin;
+
+      const reservation = reservations;
+
+      if (!reservation) {
+        console.error(`Reservation customer ${reservationCustomerFromJoin.id} に関連する reservation がありません。`);
+        continue;
+      }
 
       const {
         id: reservationId,
         user_id: userId,
         total_price: amount,
         start_time: startTime,
-        reservation_customers,
+        status: reservationStatus,
       } = reservation;
 
-      // reservation_customers の最初の要素を取得
-      const reservationCustomer = reservation_customers?.[0];
-
-      if (!reservationCustomer || !reservationCustomer.stripe_customers) {
-        console.error(
-          `Reservation ${reservationId} is missing customer or stripe customer information.`
-        );
-        continue; // 次の予約へ
+      if (reservationStatus !== 'confirmed') {
+        continue;
       }
 
-      const stripeCustomer = reservationCustomer.stripe_customers[0];
+      const now = new Date();
+      const reservationDate = new Date(startTime);
+      const daysUntilReservation = (reservationDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
 
-      if (!stripeCustomer) {
-        console.error(
-          `Reservation ${reservationId} has no associated stripe customer.`
-        );
-        continue; // 次の予約へ
+      if (daysUntilReservation > 30) {
+        continue;
       }
 
-      const stripeCustomerId = stripeCustomer.stripe_customer_id;
-      const paymentMethodId = stripeCustomer.payment_method_id;
+      processedCount++;
 
-      // Stripe ConnectアカウントIDの取得
-      console.log(`Fetching Stripe Connect ID for user ${userId}...`);
       const { data: stripeProfile, error: stripeProfileError } = await supabase
         .from('stripe_profiles')
         .select('stripe_connect_id')
         .eq('user_id', userId)
         .single();
 
-      if (
-        stripeProfileError ||
-        !stripeProfile ||
-        !stripeProfile.stripe_connect_id
-      ) {
-        console.error(
-          `Error fetching Stripe Connect ID for user ${userId}:`,
-          stripeProfileError
-        );
+      if (stripeProfileError || !stripeProfile || !stripeProfile.stripe_connect_id) {
+        console.error(`ユーザー ${userId} の Stripe Connect ID 取得中にエラーが発生しました:`, stripeProfileError);
         continue;
       }
 
       const stripeConnectId = stripeProfile.stripe_connect_id;
 
       try {
-        // PaymentIntentの作成
-        console.log(`Creating PaymentIntent for reservation ${reservationId}...`);
         const paymentIntent = await stripe.paymentIntents.create(
           {
             amount,
             currency: 'jpy',
             capture_method: 'manual',
-            customer: stripeCustomerId,
+            customer: customerId,
             payment_method: paymentMethodId,
             confirm: true,
             off_session: true,
@@ -145,17 +163,10 @@ cron.schedule('* * * * *', async () => {
           }
         );
 
-        console.log(
-          `Created PaymentIntent ${paymentIntent.id} for reservation ${reservationId}`
-        );
-
-        // キャンセルポリシー適用日を計算
         const maxCancelPolicyDays = await getMaxCancelPolicyDays(userId);
         const captureDate = new Date(startTime);
         captureDate.setDate(captureDate.getDate() - maxCancelPolicyDays);
 
-        // payment_intentsテーブルに保存
-        console.log(`Saving PaymentIntent ${paymentIntent.id} to database...`);
         const { error: saveError } = await supabase
           .from('payment_intents')
           .insert({
@@ -168,30 +179,33 @@ cron.schedule('* * * * *', async () => {
           });
 
         if (saveError) {
-          console.error(
-            `Error saving PaymentIntent ${paymentIntent.id}:`,
-            saveError
-          );
+          console.error(`PaymentIntent ${paymentIntent.id} の保存中にエラーが発生しました:`, saveError);
         } else {
-          console.log(
-            `Saved PaymentIntent ${paymentIntent.id} to database.`
-          );
+          const { error: updateError } = await supabase
+            .from('stripe_customers')
+            .update({ status: 'requires_capture' })
+            .eq('id', stripeCustomerId);
+
+          if (updateError) {
+            console.error(`stripe_customer ${stripeCustomerId} のステータス更新中にエラーが発生しました:`, updateError);
+          } else {
+            successCount++;
+            successfulIds.push(stripeCustomerId);
+          }
         }
       } catch (err) {
-        console.error(
-          `Error creating PaymentIntent for reservation ${reservationId}:`,
-          err
-        );
+        console.error(`予約 ${reservationId} の PaymentIntent 作成中にエラーが発生しました:`, err);
       }
     }
+
+    console.log(`処理が必要な stripe_customers ${processedCount}件 のうち、${successCount}件 の PaymentIntent を作成・保存しました。`);
+    console.log('処理に成功した stripe_customers の ID:', successfulIds.join(', '));
   } catch (err) {
-    console.error('Error in scheduled PaymentIntent creation task:', err);
+    console.error('PaymentIntent作成タスク中にエラーが発生しました:', err);
   }
 });
 
-// キャンセルポリシーの最長日数を取得する関数
 async function getMaxCancelPolicyDays(userId: string): Promise<number> {
-  console.log(`Fetching cancel policies for user ${userId}...`);
   const { data, error } = await supabase
     .from('cancel_policies')
     .select('policies')
@@ -199,19 +213,17 @@ async function getMaxCancelPolicyDays(userId: string): Promise<number> {
     .single();
 
   if (error) {
-    console.error('Error fetching cancel policies:', error);
-    return 7; // デフォルトで7日
+    console.error('キャンセルポリシーの取得中にエラーが発生しました:', error);
+    return 7;
   }
 
-  // policies が存在し、配列であることを確認
   if (!data || !data.policies || !Array.isArray(data.policies)) {
-    console.error('Cancel policies data is invalid:', data);
-    return 7; // デフォルトで7日
+    console.error('キャンセルポリシーのデータが無効です:', data);
+    return 7;
   }
 
   const policies = data.policies as Array<{ days: number }>;
   const maxDays = Math.max(...policies.map((policy) => policy.days));
 
-  console.log(`Max cancel policy days for user ${userId}: ${maxDays}`);
   return maxDays;
 }

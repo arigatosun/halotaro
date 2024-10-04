@@ -5,7 +5,7 @@ import { createClient } from '@supabase/supabase-js';
 
 export async function POST(req: NextRequest) {
   try {
-    const { customerEmail, paymentMethodId, stripeCustomerId } = await req.json();
+    const { customerEmail, paymentMethodId, stripeCustomerId, status } = await req.json();
 
     if (!customerEmail || !paymentMethodId || !stripeCustomerId) {
       return NextResponse.json({ error: 'Invalid parameters' }, { status: 400 });
@@ -23,6 +23,7 @@ export async function POST(req: NextRequest) {
         customer_email: customerEmail,
         stripe_customer_id: stripeCustomerId,
         payment_method_id: paymentMethodId,
+        status: status, // 追加
         // reservation_customer_id は後で更新します
       });
 
