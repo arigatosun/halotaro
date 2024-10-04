@@ -54,9 +54,8 @@ export async function POST(request: Request) {
       totalPrice,
       customerInfo,
       paymentInfo,
-      // 新しく追加
-    paymentMethodId,
-    customerEmail,
+      paymentMethodId,
+      customerEmail,
     } = await request.json();
 
     console.log("Received reservation data:", {
@@ -186,87 +185,104 @@ export async function POST(request: Request) {
 
     // **予約作成処理**
     // 必要なパラメーターを設定
-const rpcParams = {
-  p_user_id: userId,
-  p_start_time: startTime,
-  p_end_time: endTime,
-  p_total_price: totalPrice,
-  p_customer_name: customerFullName,
-  p_customer_name_kana: customerFullNameKana,
-  p_customer_email: customerInfo.email,
-  p_customer_phone: customerInfo.phone,
-  p_menu_id: p_menu_id ?? null,
-  p_coupon_id: p_coupon_id ?? null,
-  p_staff_id: staffId ?? null,
-  p_payment_method: paymentInfo?.method ?? null,
-  p_payment_status: paymentInfo?.status ?? null,
-  p_payment_amount: paymentInfo?.amount ?? null,
-  p_stripe_payment_intent_id: paymentInfo?.stripePaymentIntentId ?? null,
-};
+    const rpcParams = {
+      p_user_id: userId,
+      p_start_time: startTime,
+      p_end_time: endTime,
+      p_total_price: totalPrice,
+      p_customer_name: customerFullName,
+      p_customer_name_kana: customerFullNameKana,
+      p_customer_email: customerInfo.email,
+      p_customer_phone: customerInfo.phone,
+      p_menu_id: p_menu_id ?? null,
+      p_coupon_id: p_coupon_id ?? null,
+      p_staff_id: staffId ?? null,
+      p_payment_method: paymentInfo?.method ?? null,
+      p_payment_status: paymentInfo?.status ?? null,
+      p_payment_amount: paymentInfo?.amount ?? totalPrice,
+      p_stripe_payment_intent_id: paymentInfo?.stripePaymentIntentId ?? null,
+    };
 
-  // RPC 関数の呼び出し
-  const { data, error: reservationError } = await supabase.rpc(
-    "create_reservation",
-    rpcParams
-  );
+    // RPC 関数の呼び出し
+    const { data, error: reservationError } = await supabase.rpc(
+      "create_reservation",
+      rpcParams
+    );
 
-  if (reservationError) {
-    console.error("Reservation creation error:", reservationError);
-    throw reservationError;
-  }
-
-  // 予約IDとreservation_customer_idの存在を確認
-if (!data || data.length === 0 || !data[0].reservation_id || !data[0].reservation_customer_id) {
-  console.error("Reservation created but reservation_id or reservation_customer_id is missing", data);
-  throw new Error("予約IDまたは予約顧客IDの取得に失敗しました");
-}
-
-const reservationId = data[0].reservation_id;
-const reservationCustomerId = data[0].reservation_customer_id;
-
-  console.log("Created reservation ID:", reservationId);
-  console.log("Created reservation customer ID:", reservationCustomerId);
-
-  // *** payment_intents テーブルを更新して reservation_id と capture_date を設定 ***
-  if (paymentInfo?.stripePaymentIntentId) {
-    const { data: paymentIntentData, error: paymentIntentError } = await supabase
-      .from('payment_intents')
-      .update({
-        reservation_id: reservationId,
-        capture_date: captureDate.toISOString(), // capture_date を追加
-      })
-      .eq('payment_intent_id', paymentInfo.stripePaymentIntentId);
-
-    if (paymentIntentError) {
-      console.error('Error updating payment_intents with reservation_id and capture_date:', paymentIntentError);
-      // エラー処理を行う（必要に応じてレスポンスを返すか、エラーを投げる）
-      throw new Error('Failed to update payment_intents with reservation_id and capture_date');
-    } else {
-      console.log('Updated payment_intents with reservation_id and capture_date:', paymentIntentData);
+    if (reservationError) {
+      console.error("Reservation creation error:", reservationError);
+      throw reservationError;
     }
-  } else {
-    console.warn('No stripePaymentIntentId provided in paymentInfo.');
-  }
 
-  // 新しく追加: stripe_customers テーブルを更新
-if (reservationCustomerId && paymentMethodId) {
-  const { error: updateError } = await supabase
-    .from('stripe_customers')
-    .update({
-      reservation_customer_id: reservationCustomerId,
-    })
-    .eq('payment_method_id', paymentMethodId);
+    // 予約IDとreservation_customer_idの存在を確認
+    if (!data || data.length === 0 || !data[0].reservation_id || !data[0].reservation_customer_id) {
+      console.error("Reservation created but reservation_id or reservation_customer_id is missing", data);
+      throw new Error("予約IDまたは予約顧客IDの取得に失敗しました");
+    }
 
-  if (updateError) {
-    console.error('Error updating stripe_customers:', updateError);
-    throw new Error('Failed to update stripe_customers with reservation_customer_id');
-  } else {
-    console.log('Successfully updated stripe_customers table');
-  }
-} else {
-  console.warn('Missing reservationCustomerId or paymentMethodId, skipping stripe_customers update');
-}
+    const reservationId = data[0].reservation_id;
+    const reservationCustomerId = data[0].reservation_customer_id;
 
+    console.log("Created reservation ID:", reservationId);
+    console.log("Created reservation customer ID:", reservationCustomerId);
+
+    // *** payment_intents テーブルを更新して reservation_id と capture_date を設定 ***
+    if (paymentInfo?.stripePaymentIntentId) {
+      const { data: paymentIntentData, error: paymentIntentError } = await supabase
+        .from('payment_intents')
+        .update({
+          reservation_id: reservationId,
+          capture_date: captureDate.toISOString(),
+        })
+        .eq('payment_intent_id', paymentInfo.stripePaymentIntentId);
+
+      if (paymentIntentError) {
+        console.error('Error updating payment_intents with reservation_id and capture_date:', paymentIntentError);
+        throw new Error('Failed to update payment_intents with reservation_id and capture_date');
+      } else {
+        console.log('Updated payment_intents with reservation_id and capture_date:', paymentIntentData);
+      }
+    } else if (paymentInfo?.isOver30Days) {
+      // 30日以上先の予約の場合、新しいレコードを作成
+      const { data: newPaymentIntentData, error: newPaymentIntentError } = await supabase
+        .from('payment_intents')
+        .insert({
+          payment_intent_id: `setup_${reservationId}`, // 一意のIDを生成
+          user_id: userId,
+          status: 'requires_payment_method',
+          amount: totalPrice,
+          reservation_id: reservationId,
+          capture_date: captureDate.toISOString(),
+        });
+
+      if (newPaymentIntentError) {
+        console.error('Error creating new payment_intent record:', newPaymentIntentError);
+        throw new Error('Failed to create new payment_intent record');
+      } else {
+        console.log('Created new payment_intent record:', newPaymentIntentData);
+      }
+    } else {
+      console.warn('No stripePaymentIntentId provided in paymentInfo and not over 30 days.');
+    }
+
+    // 新しく追加: stripe_customers テーブルを更新
+    if (reservationCustomerId && paymentMethodId) {
+      const { error: updateError } = await supabase
+        .from('stripe_customers')
+        .update({
+          reservation_customer_id: reservationCustomerId,
+        })
+        .eq('payment_method_id', paymentMethodId);
+
+      if (updateError) {
+        console.error('Error updating stripe_customers:', updateError);
+        throw new Error('Failed to update stripe_customers with reservation_customer_id');
+      } else {
+        console.log('Successfully updated stripe_customers table');
+      }
+    } else {
+      console.warn('Missing reservationCustomerId or paymentMethodId, skipping stripe_customers update');
+    }
 
     // メール送信処理
     try {
@@ -366,13 +382,13 @@ if (reservationCustomerId && paymentMethodId) {
 
       console.log("Emails sent successfully");
     } catch (emailError) {
-  console.error("Error sending emails:", emailError);
-  if (emailError instanceof Error) {
-    console.error("Error message:", emailError.message);
-    console.error("Error stack:", emailError.stack);
-  }
-  // メール送信エラーはログに記録するが、予約プロセス自体は中断しない
-}
+      console.error("Error sending emails:", emailError);
+      if (emailError instanceof Error) {
+        console.error("Error message:", emailError.message);
+        console.error("Error stack:", emailError.stack);
+      }
+      // メール送信エラーはログに記録するが、予約プロセス自体は中断しない
+    }
 
     // 予約情報の保存が成功したので、内部APIにリクエストを送信（非同期）
     sendReservationToAutomation({
@@ -396,8 +412,8 @@ if (reservationCustomerId && paymentMethodId) {
         // TODO: 必要に応じてエラー内容をサロンオーナーに通知
       });
 
-     // クライアントへのレスポンスを即座に返す
-     return NextResponse.json({
+    // クライアントへのレスポンスを即座に返す
+    return NextResponse.json({
       success: true,
       reservationId: reservationId,
       reservationCustomerId: reservationCustomerId,

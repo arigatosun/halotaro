@@ -73,6 +73,7 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
             setPaymentInfo((prev) => ({
               ...prev!,
               paymentMethodId,
+              status: "requires_capture", // ここを変更
             }));
           } else {
             console.error('Unexpected paymentMethodId type:', paymentMethodId);
@@ -192,6 +193,7 @@ interface PaymentProps {
   selectedMenuId: string;
   isOver30Days: boolean;
   reservationCustomerId: string | null; // string | null に変更
+  totalAmount: number; // 追加
 }
 
 // Payment コンポーネントを修正
@@ -202,6 +204,7 @@ const Payment: React.FC<PaymentProps> = ({
   selectedMenuId,
   isOver30Days,
   reservationCustomerId, // string | null
+  totalAmount, // 追加
 }) => {
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [connectedAccountId, setConnectedAccountId] = useState<string | null>(null);
@@ -211,6 +214,7 @@ const Payment: React.FC<PaymentProps> = ({
   const didFetch = useRef(false);
   const [stripeCustomerId, setStripeCustomerId] = useState<string | null>(null);
 
+  
   useEffect(() => {
     if (didFetch.current) return;
     didFetch.current = true;
@@ -224,9 +228,10 @@ const Payment: React.FC<PaymentProps> = ({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            customerEmail: customerInfo.email, // reservationCustomerId の代わりに customerEmail を使用
+            customerEmail: customerInfo.email,
             userId,
             selectedMenuIds: selectedMenus.map(menu => menu.id.toString()),
+            totalAmount, // 追加
           }),
         });
         
@@ -256,7 +261,7 @@ const Payment: React.FC<PaymentProps> = ({
     };
   
     fetchIntent();
-  }, [isOver30Days, customerInfo.email, selectedMenus, setPaymentInfo]);
+  }, [isOver30Days, customerInfo.email, selectedMenus, setPaymentInfo, totalAmount]);
 
   async function updatePaymentIntentStatus({
     paymentIntentId,
@@ -280,20 +285,23 @@ const Payment: React.FC<PaymentProps> = ({
 
   const handlePaymentComplete = async (status: string, paymentIntent?: any) => {
     if (paymentIntent) {
+      let updatedStatus = status;
+      if (isOver30Days) {
+        updatedStatus = "requires_capture";
+      }
+  
       // サーバーにステータス更新をリクエスト
       await updatePaymentIntentStatus({
         paymentIntentId: paymentIntent.id,
-        status: paymentIntent.status,
+        status: updatedStatus,
       });
   
-      if (status === "succeeded") {
-        setPaymentInfo((prev) => ({
-          ...prev!,
-          method: "credit_card",
-          status: paymentIntent.status,
-          amount: paymentIntent.amount,
-        }));
-      }
+      setPaymentInfo((prev) => ({
+        ...prev!,
+        method: "credit_card",
+        status: updatedStatus,
+        amount: paymentIntent.amount,
+      }));
     }
     onPaymentComplete(status, paymentIntent);
   };
