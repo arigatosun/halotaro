@@ -545,18 +545,19 @@ const handleToday = () => {
         />
       )}
 
-      {/* 予約編集フォームモーダル */}
-      {isEditFormOpen && selectedReservation && (
-        <ReservationEditForm
-          reservation={selectedReservation}
-          onClose={() => setIsEditFormOpen(false)}
-          onSubmit={handleEditFormSubmit}
-          onDelete={handleDeleteReservation}
-          staffList={staffList}
-          menuList={menuList}
-          reservations={reservations}
-        />
-      )}
+    {/* 予約編集フォームモーダル */}
+{isEditFormOpen && selectedReservation && (
+  <ReservationEditForm
+    reservation={selectedReservation}
+    onClose={() => setIsEditFormOpen(false)}
+    onSubmit={handleEditFormSubmit}
+    onDelete={handleDeleteReservation}
+    staffList={staffList}
+    menuList={menuList}
+    reservations={reservations}
+    businessHours={businessHours} // この行を追加
+  />
+)}
 
       {/* スナックバー */}
       <NotificationSnackbar

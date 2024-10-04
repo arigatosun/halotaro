@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Reservation, Staff, MenuItem as MenuItemType } from '@/types/reservation';
+import { Reservation, Staff, MenuItem as MenuItemType, BusinessHour } from '@/types/reservation';
 import moment from 'moment';
 import { Alert, Snackbar, Grid, Paper, Typography, Box } from '@mui/material';
 
@@ -16,6 +16,7 @@ interface ReservationEditFormProps {
   staffList: Staff[];
   menuList: MenuItemType[];
   reservations: Reservation[];
+  businessHours: BusinessHour[];
 }
 
 const ReservationEditForm: React.FC<ReservationEditFormProps> = ({
@@ -25,7 +26,8 @@ const ReservationEditForm: React.FC<ReservationEditFormProps> = ({
   onDelete,
   staffList,
   menuList,
-  reservations
+  reservations,
+  businessHours
 }) => {
   const [editingFormData, setEditingFormData] = useState<Partial<Reservation>>({});
   const [selectedDate, setSelectedDate] = useState<string>('');
@@ -57,17 +59,33 @@ const ReservationEditForm: React.FC<ReservationEditFormProps> = ({
     const selectedMenu = menuList.find(menu => menu.id === editingFormData.menu_id);
     if (!selectedMenu) return;
 
-    const dayStart = moment(selectedDate).startOf('day');
-    const dayEnd = moment(selectedDate).endOf('day');
+    const dateStr = selectedDate;
+    let businessHourForDate = businessHours.find(bh => bh.date === dateStr);
+
+    if (!businessHourForDate) {
+      // デフォルトの営業時間を使用
+      const isWeekend = [0, 6].includes(moment(dateStr).day());
+      businessHourForDate = {
+        date: dateStr,
+        open_time: isWeekend ? '10:00:00' : '09:00:00',
+        close_time: isWeekend ? '18:00:00' : '20:00:00'
+      };
+    }
+
+    const openingTime = moment(`${dateStr} ${businessHourForDate.open_time}`, 'YYYY-MM-DD HH:mm:ss');
+    const closingTime = moment(`${dateStr} ${businessHourForDate.close_time}`, 'YYYY-MM-DD HH:mm:ss');
+
     const slots = [];
 
-    for (let m = moment(dayStart); m.isBefore(dayEnd); m.add(30, 'minutes')) {
-      const slotStart = m.format('HH:mm');
-      const slotEnd = m.clone().add(selectedMenu.duration, 'minutes');
+    let currentTime = openingTime.clone();
+    while (currentTime.isBefore(closingTime)) {
+      const slotStart = currentTime.format('HH:mm');
+      const slotEnd = currentTime.clone().add(selectedMenu.duration, 'minutes');
 
-      if (slotEnd.isSameOrBefore(dayEnd) && !isSlotOverlapping(m, slotEnd)) {
+      if (slotEnd.isSameOrBefore(closingTime) && !isSlotOverlapping(currentTime, slotEnd)) {
         slots.push(slotStart);
       }
+      currentTime.add(30, 'minutes');
     }
 
     setAvailableTimeSlots(slots);
@@ -77,6 +95,7 @@ const ReservationEditForm: React.FC<ReservationEditFormProps> = ({
     return reservations.some(res => {
       if (res.id === editingFormData.id) return false;
       if (res.staff_id !== editingFormData.staff_id) return false;
+      if (res.status === 'cancelled' || res.status === 'completed') return false;
       const resStart = moment.utc(res.start_time).local();
       const resEnd = moment.utc(res.end_time).local();
       return start.isBefore(resEnd) && end.isAfter(resStart);
