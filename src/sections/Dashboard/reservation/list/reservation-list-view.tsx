@@ -100,12 +100,11 @@ const ReservationListView: React.FC = () => {
             />
             <div className="flex flex-wrap gap-2">
               {[
+                "会計済み",
                 "受付待ち",
-                "受付済み",
-                "施術中",
-                "来店処理済み",
                 "お客様キャンセル",
                 "サロンキャンセル",
+                "当日キャンセル",
                 "無断キャンセル",
               ].map((status) => (
                 <div key={status} className="flex items-center space-x-2">

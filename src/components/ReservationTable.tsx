@@ -19,19 +19,19 @@ import { ja } from "date-fns/locale";
 // ステータスの型を定義
 type ReservationStatus =
   | "confirmed"
-  | "canceled"
+  | "salon_cancelled"
   | "paid"
-  | "completed"
-  | "in_progress"
+  | "cancelled"
+  | "same_day_cancelled"
   | "no_show";
 
 // ステータスのマッピングを定義
 const statusMapping: Record<ReservationStatus, string> = {
-  confirmed: "予約確定",
-  canceled: "キャンセル",
+  confirmed: "受付待ち",
+  salon_cancelled: "サロンキャンセル",
   paid: "会計済み",
-  completed: "完了",
-  in_progress: "進行中",
+  cancelled: "お客様キャンセル",
+  same_day_cancelled: "当日キャンセル",
   no_show: "無断キャンセル",
 };
 

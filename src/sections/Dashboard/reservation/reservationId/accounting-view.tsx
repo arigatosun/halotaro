@@ -22,6 +22,7 @@ import {
 import { useAuth } from "@/contexts/authcontext";
 import { PlusIcon, MinusIcon, XIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { Label } from "@/components/ui/label"; // 追加
 
 // Item interface
 interface Item {
@@ -705,34 +706,51 @@ export const AccountingPage: React.FC<AccountingPageProps> = ({
                 {customerName || ""} 様
               </h3>
               <div className="flex items-center space-x-4">
-                <Select value={selectedStaff} onValueChange={setSelectedStaff}>
-                  <SelectTrigger className="w-[200px]">
-                    <SelectValue placeholder="指名スタッフ" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {staffList.map((staff) => (
-                      <SelectItem key={staff.id} value={staff.name}>
-                        {staff.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Select
-                  value={selectedCashier}
-                  onValueChange={setSelectedCashier}
-                >
-                  <SelectTrigger className="w-[200px]">
-                    <SelectValue placeholder="レジ担当者" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {staffList.map((staff) => (
-                      <SelectItem key={staff.id} value={staff.name}>
-                        {staff.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {/* 既存の一時保存ボタンにhandleTemporarySaveを割り当て */}
+                {/* 指名スタッフ */}
+                <div className="flex flex-col">
+                  <Label htmlFor="selectedStaff" className="mb-1">
+                    指名スタッフ
+                  </Label>
+                  <Select
+                    // id="selectedStaff" // 削除
+                    value={selectedStaff}
+                    onValueChange={setSelectedStaff}
+                  >
+                    <SelectTrigger className="w-[200px]" aria-labelledby="selectedStaffLabel">
+                      <SelectValue placeholder="選択してください" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {staffList.map((staff) => (
+                        <SelectItem key={staff.id} value={staff.name}>
+                          {staff.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {/* レジ担当者 */}
+                <div className="flex flex-col">
+                  <Label htmlFor="selectedCashier" className="mb-1">
+                    レジ担当者
+                  </Label>
+                  <Select
+                    // id="selectedCashier" // 削除
+                    value={selectedCashier}
+                    onValueChange={setSelectedCashier}
+                  >
+                    <SelectTrigger className="w-[200px]" aria-labelledby="selectedCashierLabel">
+                      <SelectValue placeholder="選択してください" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {staffList.map((staff) => (
+                        <SelectItem key={staff.id} value={staff.name}>
+                          {staff.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {/* 一時保存ボタン */}
                 <Button onClick={handleTemporarySave}>一時保存</Button>
               </div>
             </div>

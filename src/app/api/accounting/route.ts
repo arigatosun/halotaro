@@ -1,4 +1,5 @@
 // app/api/accounting/route.ts
+
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
@@ -61,9 +62,10 @@ export async function POST(req: NextRequest) {
         .select("*")
         .eq("reservation_id", reservationId)
         .eq("is_temporary", true)
+        .eq("user_id", userId) // user_idでフィルタリング
         .single();
 
-      if (fetchError && fetchError.code !== "PGRST116") { // PGRST116: no rows found
+      if (fetchError && fetchError.code !== "PGRST116") {
         throw fetchError;
       }
 
@@ -80,7 +82,8 @@ export async function POST(req: NextRequest) {
             total_price,
             updated_at: new Date().toISOString(),
           })
-          .eq("id", existingData.id);
+          .eq("id", existingData.id)
+          .eq("user_id", userId); // セキュリティのためにuser_idでフィルタリング
 
         if (error) {
           throw error;
@@ -97,10 +100,11 @@ export async function POST(req: NextRequest) {
               customer_name,
               staff_name,
               cashier_name,
-              payment_methods, // JSONB形式で保存
-              items, // JSONB形式で保存
+              payment_methods,
+              items,
               total_price,
               is_temporary: true,
+              user_id: userId, // 追加
             },
           ]);
 
@@ -118,9 +122,10 @@ export async function POST(req: NextRequest) {
         .select("*")
         .eq("reservation_id", reservationId)
         .eq("is_temporary", true)
+        .eq("user_id", userId) // user_idでフィルタリング
         .single();
 
-      if (fetchTempError && fetchTempError.code !== "PGRST116") { // PGRST116: no rows found
+      if (fetchTempError && fetchTempError.code !== "PGRST116") {
         throw fetchTempError;
       }
 
@@ -138,7 +143,8 @@ export async function POST(req: NextRequest) {
             is_temporary: false, // 最終保存
             updated_at: new Date().toISOString(),
           })
-          .eq("id", existingTempData.id);
+          .eq("id", existingTempData.id)
+          .eq("user_id", userId); // セキュリティのためにuser_idでフィルタリング
 
         if (error) {
           throw error;
@@ -155,10 +161,11 @@ export async function POST(req: NextRequest) {
               customer_name,
               staff_name,
               cashier_name,
-              payment_methods, // JSONB形式で保存
-              items, // JSONB形式で保存
+              payment_methods,
+              items,
               total_price,
               is_temporary: false,
+              user_id: userId, // 追加
             },
           ]);
 
@@ -177,58 +184,6 @@ export async function POST(req: NextRequest) {
     console.error("会計情報の保存エラー:", error);
     return NextResponse.json(
       { error: error.message || "会計情報の保存に失敗しました" },
-      { status: 500 }
-    );
-  }
-}
-
-// GET /api/accounting?reservationId=...
-export async function GET(req: NextRequest) {
-  try {
-    const { searchParams } = new URL(req.url);
-    const reservationId = searchParams.get("reservationId");
-
-    if (!reservationId) {
-      return NextResponse.json({ error: "Missing reservationId" }, { status: 400 });
-    }
-
-    // AuthorizationヘッダーからBearerトークンを取得
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const token = authHeader.split("Bearer ")[1];
-
-    // トークンからユーザー情報を取得
-    const { data: userData, error: authError } = await supabase.auth.getUser(token);
-
-    if (authError || !userData.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const userId = userData.user.id;
-
-    // 一時保存データを取得
-    const { data, error } = await supabase
-      .from("accounting_information")
-      .select("*")
-      .eq("reservation_id", reservationId)
-      .eq("is_temporary", true)
-      .single();
-
-    if (error) {
-      if (error.code === "PGRST116") { // no rows found
-        return NextResponse.json({ message: "No temporary save found" }, { status: 200 });
-      }
-      throw error;
-    }
-
-    return NextResponse.json({ data }, { status: 200 });
-  } catch (error: any) {
-    console.error("一時保存の取得エラー:", error);
-    return NextResponse.json(
-      { error: error.message || "一時保存の取得に失敗しました" },
       { status: 500 }
     );
   }

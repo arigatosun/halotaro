@@ -1,5 +1,3 @@
-// app/api/sales-summary/route.ts
-
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import dayjs from "dayjs";
@@ -126,11 +124,18 @@ export async function GET(req: NextRequest) {
     // 総売上の計算
     const totalSales = dailySales.reduce((sum, day) => sum + day.total, 0);
 
-    // 日数の計算（データが存在する日数）
-    const daysCount = dailySales.length || 1; // ゼロ除算防止
+    // 最新の日付を取得
+    const latestDate = dailySales.length > 0
+      ? dayjs(dailySales.reduce((latest, current) => 
+          dayjs(current.date).isAfter(dayjs(latest.date)) ? current : latest
+        ).date)
+      : selectedDate;
+
+    // 経過日数の計算（月初から最新の日付まで）
+    const daysPassed = latestDate.date();
 
     // 平均売上/日
-    const averageSalesPerDay = Math.floor(totalSales / daysCount);
+    const averageSalesPerDay = Math.floor(totalSales / daysPassed);
 
     return NextResponse.json(
       {
