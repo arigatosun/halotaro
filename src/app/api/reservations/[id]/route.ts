@@ -54,7 +54,7 @@ export async function GET(
         staff (
           *
         ),
-        reservation_customers (
+        reservation_customers!fk_customer (
           *
         )
       `)
