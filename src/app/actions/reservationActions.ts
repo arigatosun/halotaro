@@ -31,10 +31,11 @@ export async function getReservations(
 
   const supabase = createServerComponentClient({ cookies });
 
+  // リレーションシップを明示的に指定
   let query = supabase.from("reservations").select(
     `
       *,
-      reservation_customers (name),
+      reservation_customers!fk_customer (name),
       staff (name),
       menu_items (name),
       scraped_menu,
@@ -67,7 +68,7 @@ export async function getReservations(
   const formattedData = data?.map((reservation) => ({
     ...reservation,
     customer_name:
-      reservation.reservation_customers?.[0]?.name ||
+      reservation.reservation_customers?.name ||
       reservation.scraped_customer ||
       "Unknown",
     staff_name: reservation.staff?.name || null,
