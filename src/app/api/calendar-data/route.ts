@@ -69,20 +69,22 @@ export async function GET(request: Request) {
     }
 
     // 予約データの取得
-    const { data: reservations, error: reservationError } = await supabase
-      .from('reservations')
-      .select(`
-        *,
-        reservation_customers (
-          id, name, email, phone, name_kana
-        ),
-        menu_items (id, name, duration, price),
-        staff (id, name)
-      `)
-      .eq('user_id', userId)
-      .gte('start_time', startDate)
-      .lte('end_time', endDate)
-      .order('start_time', { ascending: true });
+   // 予約データの取得
+const { data: reservations, error: reservationError } = await supabase
+.from('reservations')
+.select(`
+  *,
+  reservation_customers!fk_customer (
+    id, name, email, phone, name_kana
+  ),
+  menu_items (id, name, duration, price),
+  staff (id, name)
+`)
+.eq('user_id', userId)
+.gte('start_time', startDate)
+.lte('end_time', endDate)
+.order('start_time', { ascending: true });
+
 
     if (reservationError) {
       console.error('Error fetching reservations:', reservationError);
@@ -91,7 +93,7 @@ export async function GET(request: Request) {
 
     const formattedReservations = reservations.map(reservation => ({
       ...reservation,
-      customer_name: reservation.scraped_customer || reservation.reservation_customers?.[0]?.name || 'Unknown',
+      customer_name: reservation.scraped_customer || reservation.reservation_customers?.name || 'Unknown',
       menu_name: reservation.menu_items?.name || 'Unknown',
       staff_name: reservation.staff?.name || 'Unknown',
       start_time: moment.utc(reservation.start_time).local().format(),
