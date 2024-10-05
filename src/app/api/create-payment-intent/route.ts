@@ -1,16 +1,53 @@
+//api/create-payment-intent/route.ts
+
 import { getTotalAmount } from "@/app/service/menuService";
 import { getUserStripeConnectId } from "@/app/service/userService";
 import { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
+
+async function savePaymentIntentToDatabase({
+  paymentIntentId,
+  userId,
+  amount,
+}: {
+  paymentIntentId: string;
+  userId: string;
+  amount: number;
+}) {
+  const { data, error } = await supabase.from('payment_intents').insert([
+    {
+      payment_intent_id: paymentIntentId,
+      user_id: userId,
+      status: 'requires_capture', // ステータスを手動で設定
+      amount: amount,
+    },
+  ]);
+
+  if (error) {
+    console.error('Error saving PaymentIntent to database:', error);
+    throw new Error('Failed to save PaymentIntent to database');
+  }
+
+  return data;
+}
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-06-20",
 });
 
+
+
 export async function POST(request: NextRequest) {
   try {
     const { userId, selectedMenuIds } = await request.json();
+
     console.log("Received request for userId:", userId);
     console.log("Selected menu IDs:", selectedMenuIds);
 
@@ -47,14 +84,20 @@ export async function POST(request: NextRequest) {
       {
         amount,
         currency: "jpy",
-        automatic_payment_methods: { enabled: true },
+        capture_method: 'manual',
+        payment_method_types: ['card'],
       },
       {
         stripeAccount: stripeConnectId,
       }
     );
-    console.log("Created PaymentIntent:", paymentIntent.id);
-    console.log("Client Secret:", paymentIntent.client_secret);
+
+    // データベースに保存
+    await savePaymentIntentToDatabase({
+      paymentIntentId: paymentIntent.id,
+      userId: userId,
+      amount: amount,
+    });
 
     return NextResponse.json({
       clientSecret: paymentIntent.client_secret,

@@ -1,3 +1,4 @@
+//api/create-reservation/route.ts
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { Resend } from "resend";
@@ -11,8 +12,35 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-// Resend クライアントの初期化（メール送信用）
-const resend = new Resend(process.env.RESEND_API_KEY!);
+const resendApiKey = process.env.RESEND_API_KEY;
+if (!resendApiKey) {
+  throw new Error("RESEND_API_KEY is not set in the environment variables");
+}
+const resend = new Resend(resendApiKey);
+
+// キャンセルポリシーの最長日数を取得する関数
+async function getMaxCancelPolicyDays(userId: string): Promise<number> {
+  const { data, error } = await supabase
+    .from('cancel_policies')
+    .select('policies')
+    .eq('user_id', userId)
+    .single();
+
+  if (error) {
+    if (error.code === 'PGRST116') { // 'PGRST116' は行が見つからないエラー
+      console.log('No cancel policies found for user, using default of 7 days.');
+      return 7; // デフォルトで7日
+    } else {
+      throw new Error('キャンセルポリシーの取得に失敗しました');
+    }
+  }
+
+  // policies は JSON 配列として保存されていると仮定
+  const policies = data.policies as Array<{ days: number }>;
+  const maxDays = Math.max(...policies.map(policy => policy.days));
+
+  return maxDays;
+}
 
 export async function POST(request: Request) {
   try {
@@ -26,6 +54,8 @@ export async function POST(request: Request) {
       totalPrice,
       customerInfo,
       paymentInfo,
+      paymentMethodId,
+      customerEmail,
     } = await request.json();
 
     console.log("Received reservation data:", {
@@ -61,7 +91,7 @@ export async function POST(request: Request) {
       .eq("start_time", startTime)
       .single();
 
-    if (checkError && checkError.code !== "PGRST116") {
+    if (checkError && checkError.code !== "PGRST116") { // 'PGRST116' は行が見つからないエラー
       throw checkError;
     }
 
@@ -146,26 +176,37 @@ export async function POST(request: Request) {
       );
     }
 
-    // RPC関数の呼び出し
+    // **キャンセルポリシーの最長日数を取得**
+    const maxCancelPolicyDays = await getMaxCancelPolicyDays(userId);
+
+    // **キャプチャ日時を計算**
+    const captureDate = new Date(startTime);
+    captureDate.setDate(captureDate.getDate() - maxCancelPolicyDays);
+
+    // **予約作成処理**
+    // 必要なパラメーターを設定
+    const rpcParams = {
+      p_user_id: userId,
+      p_start_time: startTime,
+      p_end_time: endTime,
+      p_total_price: totalPrice,
+      p_customer_name: customerFullName,
+      p_customer_name_kana: customerFullNameKana,
+      p_customer_email: customerInfo.email,
+      p_customer_phone: customerInfo.phone,
+      p_menu_id: p_menu_id ?? null,
+      p_coupon_id: p_coupon_id ?? null,
+      p_staff_id: staffId ?? null,
+      p_payment_method: paymentInfo?.method ?? null,
+      p_payment_status: paymentInfo?.status ?? null,
+      p_payment_amount: paymentInfo?.amount ?? totalPrice,
+      p_stripe_payment_intent_id: paymentInfo?.stripePaymentIntentId ?? null,
+    };
+
+    // RPC 関数の呼び出し
     const { data, error: reservationError } = await supabase.rpc(
       "create_reservation",
-      {
-        p_user_id: userId,
-        p_menu_id: p_menu_id,
-        p_coupon_id: p_coupon_id,
-        p_staff_id: staffId,
-        p_start_time: startTime,
-        p_end_time: endTime,
-        p_total_price: totalPrice,
-        p_customer_name: customerFullName,
-        p_customer_name_kana: customerFullNameKana,
-        p_customer_email: customerInfo.email,
-        p_customer_phone: customerInfo.phone,
-        p_payment_method: paymentInfo?.method,
-        p_payment_status: paymentInfo?.status,
-        p_payment_amount: paymentInfo?.amount,
-        p_stripe_payment_intent_id: paymentInfo?.stripePaymentIntentId,
-      }
+      rpcParams
     );
 
     if (reservationError) {
@@ -173,17 +214,84 @@ export async function POST(request: Request) {
       throw reservationError;
     }
 
-    if (!data || data.length === 0 || !data[0].id) {
-      console.error("Reservation created but ID is missing", data);
-      throw new Error("予約IDの取得に失敗しました");
+    // 予約IDとreservation_customer_idの存在を確認
+    if (!data || data.length === 0 || !data[0].reservation_id || !data[0].reservation_customer_id) {
+      console.error("Reservation created but reservation_id or reservation_customer_id is missing", data);
+      throw new Error("予約IDまたは予約顧客IDの取得に失敗しました");
     }
 
-    const reservationId = data[0].id;
+    const reservationId = data[0].reservation_id;
+    const reservationCustomerId = data[0].reservation_customer_id;
+
     console.log("Created reservation ID:", reservationId);
+    console.log("Created reservation customer ID:", reservationCustomerId);
+
+    // *** payment_intents テーブルを更新して reservation_id と capture_date を設定 ***
+    if (paymentInfo?.stripePaymentIntentId) {
+      const { data: paymentIntentData, error: paymentIntentError } = await supabase
+        .from('payment_intents')
+        .update({
+          reservation_id: reservationId,
+          capture_date: captureDate.toISOString(),
+          status: paymentInfo.status, // ステータスを更新
+        })
+        .eq('payment_intent_id', paymentInfo.stripePaymentIntentId);
+
+      if (paymentIntentError) {
+        console.error('Error updating payment_intents with reservation_id and capture_date:', paymentIntentError);
+        throw new Error('Failed to update payment_intents with reservation_id and capture_date');
+      } else {
+        console.log('Updated payment_intents with reservation_id and capture_date:', paymentIntentData);
+      }
+    } else if (paymentInfo?.isOver30Days) {
+      // 30日以上先の予約の場合、新しいレコードを作成
+      const { data: newPaymentIntentData, error: newPaymentIntentError } = await supabase
+        .from('payment_intents')
+        .insert({
+          payment_intent_id: `setup_${reservationId}`, // 一意のIDを生成
+          user_id: userId,
+          status: 'requires_payment_method',
+          amount: totalPrice,
+          reservation_id: reservationId,
+          capture_date: captureDate.toISOString(),
+        });
+
+      if (newPaymentIntentError) {
+        console.error('Error creating new payment_intent record:', newPaymentIntentError);
+        throw new Error('Failed to create new payment_intent record');
+      } else {
+        console.log('Created new payment_intent record:', newPaymentIntentData);
+      }
+    } else {
+      console.warn('No stripePaymentIntentId provided in paymentInfo and not over 30 days.');
+    }
+
+    // 新しく追加: stripe_customers テーブルを更新
+    if (reservationCustomerId && paymentMethodId) {
+      const { error: updateError } = await supabase
+        .from('stripe_customers')
+        .update({
+          reservation_customer_id: reservationCustomerId,
+        })
+        .eq('payment_method_id', paymentMethodId);
+
+      if (updateError) {
+        console.error('Error updating stripe_customers:', updateError);
+        throw new Error('Failed to update stripe_customers with reservation_customer_id');
+      } else {
+        console.log('Successfully updated stripe_customers table');
+      }
+    } else {
+      console.warn('Missing reservationCustomerId or paymentMethodId, skipping stripe_customers update');
+    }
 
     // メール送信処理
     try {
       console.log("Attempting to send emails...");
+
+      if (!resend) {
+        throw new Error("Resend client is not initialized");
+      }
 
       // ベースURLの設定
       const baseUrl =
@@ -306,7 +414,12 @@ export async function POST(request: Request) {
       });
 
     // クライアントへのレスポンスを即座に返す
-    return NextResponse.json({ success: true, reservationId: reservationId });
+    return NextResponse.json({
+      success: true,
+      reservationId: reservationId,
+      reservationCustomerId: reservationCustomerId,
+      stripeCustomerUpdated: !!(reservationCustomerId && paymentMethodId)
+    });
   } catch (error: any) {
     console.error("Error saving reservation:", error);
     return NextResponse.json({ error: error.message }, { status: 400 });

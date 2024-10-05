@@ -1,0 +1,6 @@
+{
+  "crons": [{
+    "path": "/api/cron-capture-payment-intents",
+    "schedule": "0 * * * *"
+  }]
+}

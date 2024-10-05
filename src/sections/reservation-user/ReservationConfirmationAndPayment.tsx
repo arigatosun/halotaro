@@ -1,7 +1,8 @@
-// ReservationConfirmationAndPayment.tsx
 import React, { useState } from "react";
 import ReservationConfirmation from "./ReservationConfirmation";
 import Payment from "./payments";
+import { useReservation } from "@/contexts/reservationcontext";
+import { differenceInDays } from 'date-fns';
 
 interface ReservationConfirmationAndPaymentProps {
   onNext: () => void;
@@ -11,10 +12,15 @@ interface ReservationConfirmationAndPaymentProps {
   selectedMenuId: string;
 }
 
-const ReservationConfirmationAndPayment: React.FC<
-  ReservationConfirmationAndPaymentProps
-> = ({ onNext, onBack, onPaymentComplete, userId, selectedMenuId }) => {
+const ReservationConfirmationAndPayment: React.FC<ReservationConfirmationAndPaymentProps> = ({
+  onNext,
+  onBack,
+  onPaymentComplete,
+  userId,
+  selectedMenuId,
+}) => {
   const [showPayment, setShowPayment] = useState(false);
+  const { selectedDateTime, reservationCustomerId, customerInfo, selectedMenus } = useReservation();
 
   const handleConfirmation = () => {
     setShowPayment(true);
@@ -23,6 +29,16 @@ const ReservationConfirmationAndPayment: React.FC<
   const handlePaymentBack = () => {
     setShowPayment(false);
   };
+
+  const isOver30Days = selectedDateTime
+    ? differenceInDays(selectedDateTime.start, new Date()) >= 30
+    : false;
+
+  const totalAmount = selectedMenus.reduce((total, menu) => total + menu.price, 0);
+
+  if (!reservationCustomerId) {
+    console.warn('reservationCustomerId is undefined at this stage.');
+  }
 
   return (
     <div>
@@ -36,6 +52,9 @@ const ReservationConfirmationAndPayment: React.FC<
           }}
           userId={userId}
           selectedMenuId={selectedMenuId}
+          isOver30Days={isOver30Days}
+          reservationCustomerId={reservationCustomerId}
+          totalAmount={totalAmount}
         />
       )}
     </div>
