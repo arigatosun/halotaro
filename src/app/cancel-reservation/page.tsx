@@ -144,7 +144,7 @@ const CancelReservationContent = ({ reservationId }: { reservationId: string }) 
       const isSameDay = now.toDateString() === reservationDate.toDateString();
       const cancellationType = isSameDay ? 'same_day_cancellation' : 'advance_cancellation';
   
-      const response = await fetch('/api/cancel-reservation', {
+      const response = await fetch('/api/customer-cancel-reservation', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -19,7 +19,7 @@ export default withSentryConfig(nextConfig, {
 // https://github.com/getsentry/sentry-webpack-plugin#options
 
 org: "arigatosun-llc",
-project: "javascript-nextjs",
+project: "harotalo",
 sentryUrl: "https://sentry.io/",
 
 // Only print logs for uploading source maps in CI

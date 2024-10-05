@@ -1,59 +1,49 @@
-import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+// src/app/api/staff-reservations/route.ts
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+import { NextRequest, NextResponse } from 'next/server';
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+import { cookies } from 'next/headers';
 
-interface ReservationData {
-  start_time: string;
-  end_time: string;
-}
+export const runtime = 'edge';
 
-interface ReservationsByDate {
-  [date: string]: { startTime: string; endTime: string }[];
-}
-
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
-  const staffId = searchParams.get("staffId");
-  const startDate = searchParams.get("startDate");
-  const endDate = searchParams.get("endDate");
+  const staffId = searchParams.get('staffId');
+  const startDate = searchParams.get('startDate');
+  const endDate = searchParams.get('endDate');
 
   if (!staffId || !startDate || !endDate) {
-    return NextResponse.json({ error: "Missing required parameters" }, { status: 400 });
+    return NextResponse.json({ error: 'Missing parameters' }, { status: 400 });
   }
+
+  const supabase = createRouteHandlerClient({ cookies });
 
   try {
     const { data, error } = await supabase
-      .from("reservations")
-      .select("start_time, end_time")
-      .eq("staff_id", staffId)
-      .gte("start_time", startDate)
-      .lt("end_time", endDate)
-      .order("start_time", { ascending: true });
+      .from('reservations')
+      .select('*')
+      .eq('staff_id', staffId)
+      .in('status', ['confirmed', 'pending']) // ここでキャンセルされた予約を除外
+      .gte('start_time', startDate)
+      .lte('end_time', endDate);
 
-    if (error) {
-      throw error;
-    }
+    if (error) throw error;
 
-    // 予約データを日付ごとにグループ化
-    const reservationsByDate = (data as ReservationData[]).reduce((acc: ReservationsByDate, reservation) => {
-      const date = new Date(reservation.start_time).toISOString().split('T')[0];
+    const reservationsByDate = data.reduce((acc: any, reservation: any) => {
+      const date = reservation.start_time.split('T')[0];
       if (!acc[date]) {
         acc[date] = [];
       }
       acc[date].push({
-        startTime: new Date(reservation.start_time).toISOString(),
-        endTime: new Date(reservation.end_time).toISOString()
+        startTime: reservation.start_time,
+        endTime: reservation.end_time,
       });
       return acc;
     }, {});
 
     return NextResponse.json(reservationsByDate);
   } catch (error) {
-    console.error("Error fetching staff reservations:", error);
-    return NextResponse.json({ error: "Failed to fetch staff reservations" }, { status: 500 });
+    console.error('Error fetching staff reservations:', error);
+    return NextResponse.json({ error: 'Failed to fetch staff reservations' }, { status: 500 });
   }
 }
