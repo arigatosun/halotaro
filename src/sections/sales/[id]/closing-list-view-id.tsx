@@ -265,10 +265,10 @@ const RegisterClosingDetail: React.FC = () => {
         <h1 className="text-2xl font-bold">レジ締め詳細</h1>
         <Dialog open={isPrintModalOpen} onOpenChange={setIsPrintModalOpen}>
           <DialogTrigger asChild>
-            <Button variant="outline">
+           {/* <Button variant="outline">
               <Printer className="mr-2 h-4 w-4" />
               ジャーナル印刷
-            </Button>
+            </Button>*/}
           </DialogTrigger>
           <DialogContent className="max-w-4xl">
             <DialogHeader>

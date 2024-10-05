@@ -126,6 +126,7 @@ const RegisterClosingList: React.FC = () => {
               </Button>
             </div>
           </div>
+           {/* 一旦非表示
           <div className="mt-4 flex items-center space-x-4">
             <Label className="text-sm">ジャーナル印刷:</Label>
             <div className="flex items-center space-x-2">
@@ -150,7 +151,7 @@ const RegisterClosingList: React.FC = () => {
                 未印刷
               </Label>
             </div>
-          </div>
+          </div>*/}
           <div className="mt-4 flex justify-end space-x-2">
             <Button
               variant="outline"
@@ -195,8 +196,8 @@ const RegisterClosingList: React.FC = () => {
                     <br />
                     (レジ締め実施日時)
                   </TableHead>
-                  <TableHead className="text-right">レジ過不足金</TableHead>
-                  <TableHead>ジャーナル印刷</TableHead>
+                  <TableHead>レジ過不足金</TableHead>
+                  {/*<TableHead>ジャーナル印刷</TableHead>*/}
                   <TableHead>レジ締め担当者</TableHead>
                   <TableHead>レジ締めメモ</TableHead>
                 </TableRow>
@@ -224,8 +225,8 @@ const RegisterClosingList: React.FC = () => {
                       {item.cash_difference.toLocaleString()} 円
                     </TableCell>
                     <TableCell>
-                      {/* ジャーナル印刷の状態はテーブルにないため、仮に "未印刷" と表示 */}
-                      未印刷
+                      {/* ジャーナル印刷の状態はテーブルにないため、仮に "未印刷" と表示 
+                      未印刷*/}
                     </TableCell>
                     <TableCell>{item.closing_staff?.name || '-'}</TableCell>
                     <TableCell>{item.closing_memo || '-'}</TableCell>

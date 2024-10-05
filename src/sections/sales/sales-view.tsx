@@ -250,10 +250,11 @@ const SalesManagement: React.FC = () => {
           <h2 className="text-xl font-semibold">
             売上詳細（{dayjs(`${selectedYear}-${selectedMonth}-01`).format("YYYY年M月")}）
           </h2>
-          <Button variant={"outline"}>
+           {/* 
+         <Button variant={"outline"}>
             <Download className="w-4 h-4 mr-2" />
             エクスポート
-          </Button>
+          </Button>*/}
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-full bg-white">

@@ -29,79 +29,155 @@ import {
   PaginationPrevious,
 } from "@/components/ui/pagination";
 import Link from "next/link";
-import { Checkbox } from "@/components/ui/checkbox";
 import { DateRange } from "react-day-picker";
+import { useAuth } from "@/contexts/authcontext"; // AuthContextをインポート
 
 // Customer型を定義
 type Customer = {
-  id: number;
-  kana: string;
+  id: string;
   name: string;
-  gender: string;
+  kana: string;
+  email: string;
+  phone: string;
   visits: number;
-  lastVisit: string;
+  gender: string;
+  lastVisit: string; // ISO文字列
 };
 
-// SortKey型を定義
-type SortKey = keyof Customer;
-
-const CustomerListPage: React.FC<{ initialCustomers: Customer[] }> = ({
-  initialCustomers,
-}) => {
-  const [isClient, setIsClient] = useState(false);
-  const [customers] = useState(initialCustomers);
+const CustomerListPage: React.FC = () => {
+  const { session, user } = useAuth(); // セッションとユーザー情報を取得
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const [sortConfig, setSortConfig] = useState<{
-    key: SortKey;
+    key: keyof Customer;
     direction: "ascending" | "descending";
-  } | null>(null);
-  const [searchTerm, setSearchTerm] = useState("");
+  } | null>({
+    key: "lastVisit",
+    direction: "descending",
+  }); // 初期ソート設定
+  const [kanaSearchTerm, setKanaSearchTerm] = useState("");
+  const [phoneSearchTerm, setPhoneSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
+  const [loading, setLoading] = useState(true);
+
+  // APIからデータを取得
+  const fetchCustomers = async () => {
+    if (!session) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+
+    try {
+      // クエリパラメータの構築
+      const params = new URLSearchParams();
+      if (dateRange?.from) {
+        params.append("startDate", dateRange.from.toISOString().split("T")[0]);
+      }
+      if (dateRange?.to) {
+        params.append("endDate", dateRange.to.toISOString().split("T")[0]);
+      }
+      if (kanaSearchTerm) {
+        params.append("kanaSearchTerm", kanaSearchTerm);
+      }
+      if (phoneSearchTerm) {
+        params.append("phoneSearchTerm", phoneSearchTerm);
+      }
+
+      const response = await fetch(`/api/customer-data?${params.toString()}`, {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        const mappedCustomers = data.customers.map((customer: any) => ({
+          id: customer.id,
+          name: customer.name,
+          kana: customer.kana || "",
+          email: customer.email || "",
+          phone: customer.phone || "",
+          visits: customer.visits || 0,
+          gender: customer.gender || "",
+          lastVisit: customer.lastVisit || "",
+        }));
+        setCustomers(mappedCustomers);
+        setCurrentPage(1); // ページをリセット
+      } else {
+        console.error("Error fetching customers:", data.error);
+      }
+    } catch (error) {
+      console.error("Error fetching customers:", error);
+    }
+
+    setLoading(false);
+  };
 
   useEffect(() => {
-    setIsClient(true);
-  }, []);
+    fetchCustomers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session]); // セッションが変わったときに再取得
+
+  // ハンドル検索ボタンのクリック
+  const handleSearch = () => {
+    fetchCustomers();
+  };
+
+  // ハンドルクリアボタンのクリック
+  const handleClear = () => {
+    setKanaSearchTerm("");
+    setPhoneSearchTerm("");
+    setDateRange(undefined);
+    fetchCustomers();
+  };
 
   // 1ページあたりの表示件数
   const itemsPerPage = 10;
 
-  // 検索語でフィルタリングされたお客様リスト
-  const filteredCustomers = useMemo(() => {
-    return customers.filter(
-      (customer) =>
-        customer.kana.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        customer.name.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  }, [customers, searchTerm]);
-
   // フィルタリングされたリストをソート
   const sortedCustomers = useMemo(() => {
-    let sortableItems = [...filteredCustomers];
+    let sortableItems = [...customers];
     if (sortConfig !== null) {
       sortableItems.sort((a, b) => {
-        if (a[sortConfig.key] < b[sortConfig.key]) {
-          return sortConfig.direction === "ascending" ? -1 : 1;
+        if (sortConfig.key === "lastVisit") {
+          const dateA = a.lastVisit ? new Date(a.lastVisit).getTime() : 0;
+          const dateB = b.lastVisit ? new Date(b.lastVisit).getTime() : 0;
+
+          if (dateA < dateB) return sortConfig.direction === "ascending" ? -1 : 1;
+          if (dateA > dateB) return sortConfig.direction === "ascending" ? 1 : -1;
+          return 0;
+        } else {
+          const aValue = a[sortConfig.key];
+          const bValue = b[sortConfig.key];
+
+          if (aValue < bValue) {
+            return sortConfig.direction === "ascending" ? -1 : 1;
+          }
+          if (aValue > bValue) {
+            return sortConfig.direction === "ascending" ? 1 : -1;
+          }
+          return 0;
         }
-        if (a[sortConfig.key] > b[sortConfig.key]) {
-          return sortConfig.direction === "ascending" ? 1 : -1;
-        }
-        return 0;
       });
     }
     return sortableItems;
-  }, [filteredCustomers, sortConfig]);
+  }, [customers, sortConfig]);
 
   // 現在のページに表示するお客様リスト
-  const currentCustomers = sortedCustomers.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  );
+  const currentCustomers = useMemo(() => {
+    return sortedCustomers.slice(
+      (currentPage - 1) * itemsPerPage,
+      currentPage * itemsPerPage
+    );
+  }, [sortedCustomers, currentPage]);
 
   // 総ページ数を計算
   const totalPages = Math.ceil(sortedCustomers.length / itemsPerPage);
 
   // ソート要求を処理する関数
-  const requestSort = (key: SortKey) => {
+  const requestSort = (key: keyof Customer) => {
     let direction: "ascending" | "descending" = "ascending";
     if (
       sortConfig &&
@@ -113,8 +189,12 @@ const CustomerListPage: React.FC<{ initialCustomers: Customer[] }> = ({
     setSortConfig({ key, direction });
   };
 
-  if (!isClient) {
-    return null; // または適切なローディング表示
+  if (loading) {
+    return <div>Loading...</div>;
+  }
+
+  if (!user) {
+    return <div>ログインしてください。</div>;
   }
 
   return (
@@ -132,11 +212,16 @@ const CustomerListPage: React.FC<{ initialCustomers: Customer[] }> = ({
             <div className="flex flex-wrap gap-2">
               <Input
                 placeholder="お客様名(カナ)"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                value={kanaSearchTerm}
+                onChange={(e) => setKanaSearchTerm(e.target.value)}
                 className="w-full md:w-auto"
               />
-              <Input placeholder="電話番号" className="w-full md:w-auto" />
+              <Input
+                placeholder="電話番号"
+                value={phoneSearchTerm}
+                onChange={(e) => setPhoneSearchTerm(e.target.value)}
+                className="w-full md:w-auto"
+              />
               <Select>
                 <SelectTrigger className="w-full md:w-[200px]">
                   <SelectValue placeholder="すべての性別" />
@@ -147,10 +232,10 @@ const CustomerListPage: React.FC<{ initialCustomers: Customer[] }> = ({
                   <SelectItem value="female">女性</SelectItem>
                 </SelectContent>
               </Select>
-              <Button className="w-full md:w-auto">
+              <Button className="w-full md:w-auto" onClick={handleSearch}>
                 <Search className="mr-2 h-4 w-4" /> 検索する
               </Button>
-              <Button variant="outline" className="w-full md:w-auto">
+              <Button variant="outline" className="w-full md:w-auto" onClick={handleClear}>
                 <X className="mr-2 h-4 w-4" /> 条件をクリア
               </Button>
             </div>
@@ -164,7 +249,7 @@ const CustomerListPage: React.FC<{ initialCustomers: Customer[] }> = ({
         <Button>お客様情報を新しく登録する</Button>
       </div>
 
-      {/* 検索条件入力カード */}
+      {/* 検索結果表示テーブル */}
       <Card>
         <CardContent>
           <Table>
@@ -183,9 +268,54 @@ const CustomerListPage: React.FC<{ initialCustomers: Customer[] }> = ({
                     ))}
                 </TableHead>
                 <TableHead>氏名 (漢字)</TableHead>
-                <TableHead>性別</TableHead>
-                <TableHead>来店回数</TableHead>
-                <TableHead>前回来店日</TableHead>
+                <TableHead
+                  className="cursor-pointer"
+                  onClick={() => requestSort("phone")}
+                >
+                  電話番号{" "}
+                  {sortConfig?.key === "phone" &&
+                    (sortConfig.direction === "ascending" ? (
+                      <ChevronUp className="inline" />
+                    ) : (
+                      <ChevronDown className="inline" />
+                    ))}
+                </TableHead>
+                <TableHead
+                  className="cursor-pointer"
+                  onClick={() => requestSort("gender")}
+                >
+                  性別{" "}
+                  {sortConfig?.key === "gender" &&
+                    (sortConfig.direction === "ascending" ? (
+                      <ChevronUp className="inline" />
+                    ) : (
+                      <ChevronDown className="inline" />
+                    ))}
+                </TableHead>
+                <TableHead
+                  className="cursor-pointer"
+                  onClick={() => requestSort("visits")}
+                >
+                  来店回数{" "}
+                  {sortConfig?.key === "visits" &&
+                    (sortConfig.direction === "ascending" ? (
+                      <ChevronUp className="inline" />
+                    ) : (
+                      <ChevronDown className="inline" />
+                    ))}
+                </TableHead>
+                <TableHead
+                  className="cursor-pointer"
+                  onClick={() => requestSort("lastVisit")}
+                >
+                  前回来店日{" "}
+                  {sortConfig?.key === "lastVisit" &&
+                    (sortConfig.direction === "ascending" ? (
+                      <ChevronUp className="inline" />
+                    ) : (
+                      <ChevronDown className="inline" />
+                    ))}
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -200,9 +330,14 @@ const CustomerListPage: React.FC<{ initialCustomers: Customer[] }> = ({
                     </Link>
                   </TableCell>
                   <TableCell>{customer.name}</TableCell>
+                  <TableCell>{customer.phone}</TableCell> {/* 電話番号の表示 */}
                   <TableCell>{customer.gender}</TableCell>
                   <TableCell>{customer.visits}</TableCell>
-                  <TableCell>{customer.lastVisit}</TableCell>
+                  <TableCell>
+                    {customer.lastVisit
+                      ? new Date(customer.lastVisit).toLocaleDateString()
+                      : ""}
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -215,7 +350,9 @@ const CustomerListPage: React.FC<{ initialCustomers: Customer[] }> = ({
         <PaginationContent>
           <PaginationItem>
             <PaginationPrevious
-              onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+              onClick={() =>
+                setCurrentPage((prev) => Math.max(prev - 1, 1))
+              }
               className={
                 currentPage === 1 ? "pointer-events-none opacity-50" : ""
               }
