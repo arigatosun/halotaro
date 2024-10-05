@@ -46,16 +46,6 @@ export async function POST(request: NextRequest) {
 
     const data = await response.json();
 
-    if (!response.ok) {
-      //TODO サロンオーナーに対してエラー内容と同期が失敗した予約を通知する
-
-      // エラーレスポンスの場合
-      return NextResponse.json(
-        { error: data.detail || "Automation failed" },
-        { status: response.status }
-      );
-    }
-
     return NextResponse.json(data);
   } catch (error) {
     console.error("Error in salonboard-automation:", error);
