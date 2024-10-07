@@ -1,3 +1,4 @@
+// StaffScheduleForm.tsx
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -31,6 +32,7 @@ const StaffScheduleForm: React.FC<StaffScheduleFormProps> = ({
     start_time: '',
     end_time: '',
     is_staff_schedule: true,
+    status: 'staff', // 追加
   });
 
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
@@ -44,6 +46,7 @@ const StaffScheduleForm: React.FC<StaffScheduleFormProps> = ({
         event: staffSchedule.event || '',
         staff_id: staffSchedule.staff_id || '',
         is_staff_schedule: true,
+        status: 'staff', // 追加
       });
     } else {
       setFormData({
@@ -52,6 +55,7 @@ const StaffScheduleForm: React.FC<StaffScheduleFormProps> = ({
         start_time: '',
         end_time: '',
         is_staff_schedule: true,
+        status: 'staff', // 追加
       });
     }
   }, [staffSchedule]);
@@ -93,6 +97,7 @@ const StaffScheduleForm: React.FC<StaffScheduleFormProps> = ({
       start_time: formData.start_time ? moment(formData.start_time).utc().format() : '',
       end_time: formData.end_time ? moment(formData.end_time).utc().format() : '',
       is_staff_schedule: true,
+      status: 'staff', // 追加
     };
 
     console.log('Updated Schedule:', updatedSchedule); // デバッグ用

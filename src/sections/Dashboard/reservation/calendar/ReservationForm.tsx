@@ -1,3 +1,5 @@
+// src/sections/Dashboard/reservation/calendar/ReservationForm.tsx
+
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -10,6 +12,7 @@ import { Alert, Snackbar } from '@mui/material';
 
 interface FormDataType {
   customer_name?: string;
+  customer_name_kana?: string; // 追加
   customer_email?: string;
   customer_phone?: string;
   menu_id?: string;
@@ -213,6 +216,7 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
         setFormData(prev => ({
           ...prev,
           start_time: start.format('YYYY-MM-DDTHH:mm'),
+          end_time: end.format('YYYY-MM-DDTHH:mm'), // 修正
         }));
 
         setComputedEndTime(end.format('YYYY-MM-DDTHH:mm'));
@@ -235,6 +239,7 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
       is_staff_schedule: formType === 'staffSchedule',
       menu_id: formData.menu_id ? parseInt(formData.menu_id, 10) : undefined,
       staff_id: formData.staff_id,
+      // 新たに顧客IDを含める必要がある場合は、追加
     };
 
     onSubmit(updatedReservation, isNew);
@@ -286,6 +291,17 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
                       id="customer_name"
                       value={formData.customer_name || ''}
                       onChange={(e) => handleChange('customer_name', e.target.value)}
+                      required
+                    />
+                  </div>
+
+                  {/* 顧客名（カナ）の入力 */}
+                  <div className="space-y-2">
+                    <Label htmlFor="customer_name_kana">顧客名（カナ）</Label>
+                    <Input
+                      id="customer_name_kana"
+                      value={formData.customer_name_kana || ''}
+                      onChange={(e) => handleChange('customer_name_kana', e.target.value)}
                       required
                     />
                   </div>
@@ -453,6 +469,7 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
                     </Select>
                   </div>
 
+                  {/* 開始時間 */}
                   <div className="space-y-2">
                     <Label htmlFor="start_time">開始時間</Label>
                     <Input
@@ -464,6 +481,7 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
                     />
                   </div>
 
+                  {/* 終了時間 */}
                   <div className="space-y-2">
                     <Label htmlFor="end_time">終了時間</Label>
                     <Input

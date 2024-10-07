@@ -34,29 +34,31 @@ const ReservationCalendar: React.FC = () => {
   const [isCreatingFromButton, setIsCreatingFromButton] = useState(false);
 
 
- // useReservationCalendar を呼び出す
- const {
-  reservations,
-  staffList,
-  menuList,
-  closedDays,
-  businessHours,
-  loadData,
-  setReservations,
-  setStaffList,
-  setMenuList,
-  setClosedDays,
-  setDateRange, // 追加
-  snackbar,
-  setSnackbar,
-} = useReservationCalendar();
+  // useReservationCalendar を呼び出す
+  const {
+    reservations,
+    staffList,
+    menuList,
+    closedDays,
+    businessHours,
+    loadData,
+    setReservations,
+    setStaffList,
+    setMenuList,
+    setClosedDays,
+    setBusinessHours,
+    setDateRange, // 追加
+    snackbar,
+    setSnackbar,
+  } = useReservationCalendar();
 
-useEffect(() => {
-  const today = moment();
-  const startDate = today.startOf('day').format('YYYY-MM-DD');
-  const endDate = today.add(1, 'months').endOf('day').format('YYYY-MM-DD');
-  setDateRange({ start: startDate, end: endDate });
-}, []);
+  useEffect(() => {
+    const today = moment();
+    const startDate = today.startOf('day').format('YYYY-MM-DD');
+    const endDate = today.add(1, 'months').endOf('day').format('YYYY-MM-DD');
+    setDateRange({ start: startDate, end: endDate });
+  }, []);
+  
   const calendarRef = useRef<FullCalendar>(null);
 
   const { user, session } = useAuth();
@@ -131,10 +133,11 @@ useEffect(() => {
     if (!user) return;
 
     const eventData = dropInfo.event.extendedProps as Reservation;
-  const newStart = dropInfo.event.start;
-  const newEnd = dropInfo.event.end;
-  const staffId = dropInfo.newResource?.id || dropInfo.event.getResources()[0]?.id;
-  const reservationId = eventData.id;
+    const newStart = dropInfo.event.start;
+    const newEnd = dropInfo.event.end;
+    const staffId = dropInfo.newResource?.id || dropInfo.event.getResources()[0]?.id;
+    const reservationId = eventData.id;
+    
     // 重複チェック
     if (isSlotOverlapping(newStart, newEnd, staffId, reservationId)) {
       dropInfo.revert();
@@ -162,17 +165,17 @@ useEffect(() => {
       await loadData();
 
       const message = eventData.is_staff_schedule
-      ? 'スタッフスケジュールが更新されました'
-      : '予約が更新されました';
+        ? 'スタッフスケジュールが更新されました'
+        : '予約が更新されました';
 
       setSnackbar({ message, severity: 'success' });
     } catch (error) {
       const errorMessage = eventData.is_staff_schedule
         ? 'スタッフスケジュールの更新に失敗しました'
         : '予約の更新に失敗しました';
-        setSnackbar({ message: errorMessage, severity: 'error' });
-      }
-    };
+      setSnackbar({ message: errorMessage, severity: 'error' });
+    }
+  };
 
   // フォーム送信ハンドラ
   const handleFormSubmit = async (data: Partial<Reservation>, isNew: boolean) => {
@@ -264,7 +267,7 @@ useEffect(() => {
       setSnackbar({ message: 'セッションが無効です。再度ログインしてください。', severity: 'error' });
       return;
     }
-
+  
     try {
       const response = await fetch(`/api/calendar-data?id=${reservationId}`, {
         method: 'DELETE',
@@ -272,16 +275,23 @@ useEffect(() => {
           'Authorization': `Bearer ${session.access_token}`,
         },
       });
+  
       if (!response.ok) {
         const errorData = await response.json();
         console.error('Error cancelling reservation:', errorData);
         throw new Error('予約のキャンセルに失敗しました');
       }
-
-      await loadData();
-      setIsFormOpen(false);
-      setIsDetailsOpen(false);
-      setSnackbar({ message: '予約がキャンセルされました', severity: 'success' });
+  
+      const data = await response.json();
+  
+      if (data.success) {
+        await loadData();
+        setIsFormOpen(false);
+        setIsDetailsOpen(false);
+        setSnackbar({ message: '予約がキャンセルされました', severity: 'success' });
+      } else {
+        throw new Error('予約のキャンセルに失敗しました');
+      }
     } catch (error) {
       console.error('Error in handleCancelReservation:', error);
       setSnackbar({ message: '予約のキャンセルに失敗しました', severity: 'error' });
@@ -308,7 +318,7 @@ useEffect(() => {
       if (!response.ok) {
         const errorData = await response.json();
         console.error('Error cancelling reservation:', errorData);
-        throw new Error('Failed to cancel reservation');
+        throw new Error('予約のキャンセルに失敗しました');
       }
       await loadData();
       setIsFormOpen(false);
@@ -372,7 +382,7 @@ useEffect(() => {
       setSnackbar({ message: 'セッションが無効です。再度ログインしてください。', severity: 'error' });
       return;
     }
-
+  
     try {
       const response = await fetch(`/api/calendar-data?id=${id}`, {
         method: 'DELETE',
@@ -385,7 +395,7 @@ useEffect(() => {
         console.error('Error deleting staff schedule:', errorData);
         throw new Error('スタッフスケジュールの削除に失敗しました');
       }
-
+  
       await loadData();
       setSelectedStaffSchedule(null);
       setIsStaffScheduleFormOpen(false);
@@ -403,46 +413,47 @@ useEffect(() => {
     setIsDetailsOpen(false);
   };
 
- // 日付ナビゲーションハンドラ
- const handlePrevDay = () => {
-  const newDate = moment(currentDate).subtract(1, 'day');
-  setCurrentDate(newDate);
-  if (calendarRef.current) {
-    const calendarApi = calendarRef.current.getApi();
-    calendarApi.prev();
-  }
-};
+  // 日付ナビゲーションハンドラ
+  const handlePrevDay = () => {
+    const newDate = moment(currentDate).subtract(1, 'day');
+    setCurrentDate(newDate);
+    if (calendarRef.current) {
+      const calendarApi = calendarRef.current.getApi();
+      calendarApi.prev();
+    }
+  };
 
-const handleNextDay = () => {
-  const newDate = moment(currentDate).add(1, 'day');
-  setCurrentDate(newDate);
-  if (calendarRef.current) {
-    const calendarApi = calendarRef.current.getApi();
-    calendarApi.next();
-  }
-};
+  const handleNextDay = () => {
+    const newDate = moment(currentDate).add(1, 'day');
+    setCurrentDate(newDate);
+    if (calendarRef.current) {
+      const calendarApi = calendarRef.current.getApi();
+      calendarApi.next();
+    }
+  };
 
-const handleToday = () => {
-  const today = moment();
-  setCurrentDate(today);
-  if (calendarRef.current) {
-    const calendarApi = calendarRef.current.getApi();
-    calendarApi.today();
-  }
-};
+  const handleToday = () => {
+    const today = moment();
+    setCurrentDate(today);
+    if (calendarRef.current) {
+      const calendarApi = calendarRef.current.getApi();
+      calendarApi.today();
+    }
+  };
+  
   // カレンダーの日付レンダリング時に休業日をマークする
   const handleDatesSet = (arg: any) => {
     const calendarApi = arg.view.calendar;
 
-      // 表示範囲の開始日と終了日を取得
-      const startDate = moment(arg.start).format('YYYY-MM-DD');
-      const endDate = moment(arg.end).subtract(1, 'days').format('YYYY-MM-DD'); // FullCalendar の end は翌日を指すため
+    // 表示範囲の開始日と終了日を取得
+    const startDate = moment(arg.start).format('YYYY-MM-DD');
+    const endDate = moment(arg.end).subtract(1, 'days').format('YYYY-MM-DD'); // FullCalendar の end は翌日を指すため
 
-      // dateRange を更新
+    // dateRange を更新
     setDateRange({ start: startDate, end: endDate });
 
-     // currentDate を更新
-     setCurrentDate(moment(arg.start));
+    // currentDate を更新
+    setCurrentDate(moment(arg.start));
 
     // 具体的な日付に基づいて休業日をマーク
     if (closedDays && closedDays.length > 0) {
@@ -499,9 +510,9 @@ const handleToday = () => {
           isNew={isNewReservation}
           onClose={() => setIsFormOpen(false)}
           onSubmit={handleFormSubmit}
+          onDelete={handleDeleteReservation}
           staffList={staffList}
           menuList={menuList}
-          onDelete={handleDeleteReservation}
           reservations={reservations} // 既存の予約データを渡す
           hideReservationType={isCreatingFromButton} // 新規予約時に予約タイプを非表示
           isCreatingFromButton={isCreatingFromButton}
@@ -510,19 +521,19 @@ const handleToday = () => {
       )}
 
       {/* スタッフスケジュールフォームモーダル */}
-      {isStaffScheduleFormOpen && (
-        <StaffScheduleForm
-          staffSchedule={selectedStaffSchedule}
-          isNew={!selectedStaffSchedule}
-          onClose={() => {
-            setIsStaffScheduleFormOpen(false);
-            setSelectedStaffSchedule(null);
-          }}
-          onSubmit={handleStaffScheduleFormSubmit}
-          onDelete={handleDeleteStaffSchedule}
-          staffList={staffList}
-        />
-      )}
+    {isStaffScheduleFormOpen && (
+      <StaffScheduleForm
+        staffSchedule={selectedStaffSchedule}
+        isNew={!selectedStaffSchedule}
+        onClose={() => {
+          setIsStaffScheduleFormOpen(false);
+          setSelectedStaffSchedule(null);
+        }}
+        onSubmit={handleStaffScheduleFormSubmit}
+        onDelete={handleDeleteStaffSchedule} // 変更なし
+        staffList={staffList}
+      />
+    )}
 
       {/* スタッフスケジュール詳細モーダル */}
       {selectedStaffSchedule && !isStaffScheduleFormOpen && (
@@ -546,18 +557,18 @@ const handleToday = () => {
       )}
 
     {/* 予約編集フォームモーダル */}
-{isEditFormOpen && selectedReservation && (
-  <ReservationEditForm
-    reservation={selectedReservation}
-    onClose={() => setIsEditFormOpen(false)}
-    onSubmit={handleEditFormSubmit}
-    onDelete={handleDeleteReservation}
-    staffList={staffList}
-    menuList={menuList}
-    reservations={reservations}
-    businessHours={businessHours} // この行を追加
-  />
-)}
+    {isEditFormOpen && selectedReservation && (
+      <ReservationEditForm
+        reservation={selectedReservation}
+        onClose={() => setIsEditFormOpen(false)}
+        onSubmit={handleEditFormSubmit}
+        onDelete={handleDeleteReservation}
+        staffList={staffList}
+        menuList={menuList}
+        reservations={reservations}
+        businessHours={businessHours} // この行を追加
+      />
+    )}
 
       {/* スナックバー */}
       <NotificationSnackbar

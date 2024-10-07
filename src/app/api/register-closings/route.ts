@@ -3,6 +3,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import dayjs from 'dayjs';
+import utc from "dayjs/plugin/utc";
+import timezone from "dayjs/plugin/timezone";
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
+dayjs.locale("ja");
+
+// 日本時間に設定
+dayjs.tz.setDefault("Asia/Tokyo");
 
 // Supabaseクライアントの作成
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -54,8 +63,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No accounting IDs provided' }, { status: 400 });
     }
 
-    // closing_dateを調整
-    const adjustedClosingDate = dayjs(closing_date).subtract(15, 'hour').toISOString();
+    // closing_dateを日本時間で調整
+    const adjustedClosingDate = dayjs.tz(closing_date, "Asia/Tokyo").toISOString();
 
     // レジ締めデータを挿入
     const { data: registerClosingData, error: registerClosingError } = await supabase
@@ -147,13 +156,13 @@ export async function GET(req: NextRequest) {
 
     // 日付フィルタの適用
     if (startDate) {
-      query = query.gte('closing_date', startDate);
+      const adjustedStartDate = dayjs.tz(startDate, "Asia/Tokyo").startOf('day').toISOString();
+      query = query.gte('closing_date', adjustedStartDate);
     }
     if (endDate) {
       // 終了日の翌日の0時0分までを含めるために1日を追加
-      const endDatePlusOne = new Date(endDate);
-      endDatePlusOne.setDate(endDatePlusOne.getDate() + 1);
-      query = query.lt('closing_date', endDatePlusOne.toISOString().split('T')[0]);
+      const adjustedEndDate = dayjs.tz(endDate, "Asia/Tokyo").endOf('day').toISOString();
+      query = query.lte('closing_date', adjustedEndDate);
     }
 
     // ジャーナル印刷フィルタの適用

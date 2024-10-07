@@ -1,3 +1,4 @@
+// app/api/sales-summary/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import dayjs from "dayjs";
@@ -55,8 +56,9 @@ export async function GET(req: NextRequest) {
     // 1. end_timeでフィルタリングしてユーザーの予約を取得
     const { data: reservations, error: reservationsError } = await supabase
       .from('reservations')
-      .select('id, end_time')
+      .select('id, end_time, status')
       .eq('user_id', userId)
+      .neq('status', 'confirmed') // confirmedを除外
       .gte('end_time', startOfMonth)
       .lte('end_time', endOfMonth);
 
@@ -124,18 +126,20 @@ export async function GET(req: NextRequest) {
     // 総売上の計算
     const totalSales = dailySales.reduce((sum, day) => sum + day.total, 0);
 
-    // 最新の日付を取得
-    const latestDate = dailySales.length > 0
-      ? dayjs(dailySales.reduce((latest, current) => 
-          dayjs(current.date).isAfter(dayjs(latest.date)) ? current : latest
-        ).date)
-      : selectedDate;
+    // 現在の年月と選択された年月を比較
+    const today = dayjs();
+    const isCurrentMonth = selectedDate.year() === today.year() && selectedDate.month() === today.month();
 
-    // 経過日数の計算（月初から最新の日付まで）
-    const daysPassed = latestDate.date();
+    // 分母の計算
+    let daysPassed: number;
+    if (isCurrentMonth) {
+      daysPassed = today.date();
+    } else {
+      daysPassed = selectedDate.daysInMonth();
+    }
 
     // 平均売上/日
-    const averageSalesPerDay = Math.floor(totalSales / daysPassed);
+    const averageSalesPerDay = daysPassed > 0 ? Math.floor(totalSales / daysPassed) : 0;
 
     return NextResponse.json(
       {

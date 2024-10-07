@@ -1,3 +1,5 @@
+// src/sections/Dashboard/reservation/calendar/ReservationEditForm.tsx
+
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -43,6 +45,10 @@ const ReservationEditForm: React.FC<ReservationEditFormProps> = ({
         ...reservation,
         start_time: moment.utc(reservation.start_time).local().format('YYYY-MM-DDTHH:mm'),
         end_time: moment.utc(reservation.end_time).local().format('YYYY-MM-DDTHH:mm'),
+        customer_name: reservation.customer_name || '',
+        customer_email: reservation.customer_email || '',
+        customer_phone: reservation.customer_phone || '',
+        customer_name_kana: reservation.customer_name_kana || '',
       });
       setSelectedDate(moment.utc(reservation.start_time).local().format('YYYY-MM-DD'));
       setSelectedTime(moment.utc(reservation.start_time).local().format('HH:mm'));
@@ -189,6 +195,7 @@ const ReservationEditForm: React.FC<ReservationEditFormProps> = ({
           <Box sx={{ display: 'flex', gap: 4 }}>
             <Box sx={{ flex: 1 }}>
               <div className="space-y-4">
+                {/* 顧客情報の表示 */}
                 <div className="space-y-2">
                   <Label htmlFor="customer_name">顧客名</Label>
                   <Input
@@ -206,6 +213,7 @@ const ReservationEditForm: React.FC<ReservationEditFormProps> = ({
                     type="email"
                     value={editingFormData.customer_email || ''}
                     onChange={(e) => handleChange('customer_email', e.target.value)}
+                    required
                   />
                 </div>
 
@@ -219,6 +227,16 @@ const ReservationEditForm: React.FC<ReservationEditFormProps> = ({
                   />
                 </div>
 
+                <div className="space-y-2">
+                  <Label htmlFor="customer_name_kana">顧客名（カナ）</Label>
+                  <Input
+                    id="customer_name_kana"
+                    value={editingFormData.customer_name_kana || ''}
+                    onChange={(e) => handleChange('customer_name_kana', e.target.value)}
+                  />
+                </div>
+
+                {/* メニューの選択 */}
                 <div className="space-y-2">
                   <Label htmlFor="menu_id">メニュー</Label>
                   <Select
@@ -239,6 +257,7 @@ const ReservationEditForm: React.FC<ReservationEditFormProps> = ({
                   </Select>
                 </div>
 
+                {/* 担当スタッフの選択 */}
                 <div className="space-y-2">
                   <Label htmlFor="staff_id">担当スタッフ</Label>
                   <Select
@@ -263,6 +282,7 @@ const ReservationEditForm: React.FC<ReservationEditFormProps> = ({
 
             <Box sx={{ flex: 1 }}>
               <div className="space-y-4">
+                {/* 予約日 */}
                 <div className="space-y-2">
                   <Label htmlFor="reservation_date">予約日</Label>
                   <Input
@@ -274,6 +294,7 @@ const ReservationEditForm: React.FC<ReservationEditFormProps> = ({
                   />
                 </div>
 
+                {/* 予約時間 */}
                 {selectedDate && editingFormData.staff_id && editingFormData.menu_id && (
                   <div className="space-y-2">
                     <Label>予約時間</Label>
@@ -303,9 +324,10 @@ const ReservationEditForm: React.FC<ReservationEditFormProps> = ({
                   </div>
                 )}
 
+                {/* 選択した時間帯の表示 */}
                 {selectedTime && (
                   <Typography variant="body2">
-                    予約時間: {selectedTime} - {moment(`${selectedDate}T${selectedTime}`).add(menuList.find(menu => menu.id === editingFormData.menu_id)?.duration || 0, 'minutes').format('HH:mm')}
+                    予約時間: {selectedTime} ~ {moment(`${selectedDate}T${selectedTime}`).add(menuList.find(menu => menu.id === editingFormData.menu_id)?.duration || 0, 'minutes').format('HH:mm')}
                   </Typography>
                 )}
 
@@ -318,6 +340,7 @@ const ReservationEditForm: React.FC<ReservationEditFormProps> = ({
             </Box>
           </Box>
 
+          {/* サブミットボタンと削除ボタン */}
           <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 4 }}>
             <Button type="submit" disabled={isOverlap || !selectedTime}>
               予約を更新
@@ -329,6 +352,7 @@ const ReservationEditForm: React.FC<ReservationEditFormProps> = ({
         </form>
       </DialogContent>
 
+      {/* スナックバーによる通知 */}
       <Snackbar
         open={!!snackbar}
         autoHideDuration={6000}

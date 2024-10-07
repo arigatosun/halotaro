@@ -28,6 +28,7 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Label } from "@/components/ui/label";
 import ReservationTable from "@/components/ReservationTable";
+import dayjs from "dayjs";
 
 interface AccountingInformation {
   id: string;
@@ -44,6 +45,22 @@ interface AccountingInformation {
   is_closed: boolean;
 }
 
+interface Reservation {
+  id: string;
+  user_id: string;
+  menu_id: string;
+  staff_id: string;
+  status: string;
+  total_price: number;
+  created_at: string;
+  updated_at: string;
+  start_time: string;
+  end_time: string;
+  menu_item?: { id: string; name: string };
+  staff?: { id: string; name: string };
+  customer?: { id: string; name: string };
+}
+
 const CompactRegisterClosingUI: React.FC = () => {
   const { session, user } = useAuth();
   const router = useRouter();
@@ -57,12 +74,10 @@ const CompactRegisterClosingUI: React.FC = () => {
   const [actualCash, setActualCash] = useState<number>(0);
   const [closingDate, setClosingDate] = useState<string>("");
   const [closingMemo, setClosingMemo] = useState<string>("");
-
-  // 新しく追加するステート
   const [latestClosingDate, setLatestClosingDate] = useState<string>("");
 
   // 未会計予約のステート
-  const [unaccountedReservations, setUnaccountedReservations] = useState<any[]>([]);
+  const [unaccountedReservations, setUnaccountedReservations] = useState<Reservation[]>([]);
   const [loadingUnaccounted, setLoadingUnaccounted] = useState<boolean>(false);
   const [errorUnaccounted, setErrorUnaccounted] = useState<Error | null>(null);
 
@@ -164,7 +179,6 @@ const CompactRegisterClosingUI: React.FC = () => {
     fetchUnaccountedReservations();
   }, [session, user]);
 
-
   // 最新の closing_date を取得する関数
   const fetchLatestClosingDate = async () => {
     if (!session || !user) return;
@@ -251,7 +265,7 @@ const CompactRegisterClosingUI: React.FC = () => {
 
     try {
       const accountingIds = accountingList.map((item) => item.id);
-  
+
       const response = await axios.post(
         "/api/register-closings",
         {
@@ -272,7 +286,7 @@ const CompactRegisterClosingUI: React.FC = () => {
           },
         }
       );
-  
+
       // 成功時に会計データを再取得してUIを更新
       await fetchAccountingData();
       await fetchLatestClosingDate(); // 最新の締め日時を再取得
@@ -396,16 +410,13 @@ const CompactRegisterClosingUI: React.FC = () => {
           <div className="flex items-center mt-1">
             <Input
               id="closingDate"
-              type="date" // 型は date のまま
+              type="date"
               className="h-8 text-sm"
               value={closingDate ? closingDate.split("T")[0] : ""}
               onChange={(e) => {
                 const selectedDate = e.target.value;
                 if (selectedDate) {
                   const now = new Date();
-                  const year = now.getFullYear();
-                  const month = String(now.getMonth() + 1).padStart(2, "0");
-                  const day = String(now.getDate()).padStart(2, "0");
                   const hours = String(now.getHours()).padStart(2, "0");
                   const minutes = String(now.getMinutes()).padStart(2, "0");
                   const seconds = String(now.getSeconds()).padStart(2, "0");
@@ -530,10 +541,10 @@ const CompactRegisterClosingUI: React.FC = () => {
                       {statusMapping[reservation.status] || reservation.status}
                     </TableCell>
                     <TableCell>
-                      {reservation.reservation_customers?.[0]?.name || "不明"}
+                      {reservation.customer?.name || "不明"}
                     </TableCell>
                     <TableCell>
-                      {reservation.menu_items?.name || "不明"}
+                      {reservation.menu_item?.name || "不明"}
                     </TableCell>
                     <TableCell>
                       {reservation.staff?.name || "未割当"}
@@ -542,7 +553,6 @@ const CompactRegisterClosingUI: React.FC = () => {
                       {reservation.total_price?.toLocaleString()} 円
                     </TableCell>
                     <TableCell>
-                      {/* 操作ボタン */}
                       <Button
                         size="sm"
                         onClick={() => handleReservationAction(reservation.id)}

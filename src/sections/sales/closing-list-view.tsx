@@ -19,6 +19,16 @@ import {
 import { Label } from "@/components/ui/label";
 import { ChevronLeft, ChevronRight, Search, X } from "lucide-react";
 import Link from "next/link";
+import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
+import timezone from "dayjs/plugin/timezone";
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
+dayjs.locale("ja");
+
+// 日本時間に設定
+dayjs.tz.setDefault("Asia/Tokyo");
 
 const RegisterClosingList: React.FC = () => {
   const { session, user } = useAuth();
@@ -65,6 +75,11 @@ const RegisterClosingList: React.FC = () => {
     setClosingData([]);
   };
 
+  // 日本時間で昨日と今日の日付を取得する関数
+  const getJapaneseDateString = (daysOffset: number = 0) => {
+    return dayjs().tz("Asia/Tokyo").add(daysOffset, 'day').format("YYYY-MM-DD");
+  };
+
   return (
     <div className="p-4 max-w-7xl mx-auto">
       <h1 className="text-2xl font-bold mb-4">レジ締め一覧</h1>
@@ -102,11 +117,9 @@ const RegisterClosingList: React.FC = () => {
                 variant="outline"
                 className="h-8"
                 onClick={() => {
-                  const yesterday = new Date();
-                  yesterday.setDate(yesterday.getDate() - 1);
-                  const dateString = yesterday.toISOString().split('T')[0];
-                  setStartDate(dateString);
-                  setEndDate(dateString);
+                  const yesterday = getJapaneseDateString(-1);
+                  setStartDate(yesterday);
+                  setEndDate(yesterday);
                 }}
               >
                 昨日
@@ -116,10 +129,9 @@ const RegisterClosingList: React.FC = () => {
                 variant="outline"
                 className="h-8"
                 onClick={() => {
-                  const today = new Date();
-                  const dateString = today.toISOString().split('T')[0];
-                  setStartDate(dateString);
-                  setEndDate(dateString);
+                  const today = getJapaneseDateString(0);
+                  setStartDate(today);
+                  setEndDate(today);
                 }}
               >
                 今日
@@ -210,15 +222,12 @@ const RegisterClosingList: React.FC = () => {
                         href={`/dashboard/sales/closing-list/${item.id}`}
                         className="text-orange-500 hover:text-orange-600 hover:underline"
                       >
-                        {new Date(item.closing_date).toLocaleDateString('ja-JP')}
+                        {dayjs(item.closing_date).format("YYYY/MM/DD")}
                       </Link>
                       <br />
                       (
-                      {new Date(item.closing_date).toLocaleDateString('ja-JP')}{' '}
-                      {new Date(item.closing_date).toLocaleTimeString('ja-JP', {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
+                      {dayjs(item.closing_date).format("YYYY/MM/DD")}{" "}
+                      {dayjs(item.closing_date).format("HH:mm")}
                       )
                     </TableCell>
                     <TableCell className="text-right text-red-500">
@@ -255,3 +264,26 @@ const RegisterClosingList: React.FC = () => {
 };
 
 export default RegisterClosingList;
+
+interface SalesCardProps {
+  title: string;
+  value: string;
+  icon: React.ReactNode;
+  trend: string;
+}
+
+const SalesCard: React.FC<SalesCardProps> = ({
+  title,
+  value,
+  icon,
+  trend,
+}) => (
+  <div className="bg-white p-4 rounded-lg shadow">
+    <div className="flex justify-between items-center mb-2">
+      <h3 className="text-lg font-semibold text-gray-700">{title}</h3>
+      {icon}
+    </div>
+    <div className="text-2xl font-bold">{value}</div>
+    <div className="text-sm text-gray-500">{trend}</div>
+  </div>
+);

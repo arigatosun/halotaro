@@ -12,7 +12,7 @@
     "start": "next start",
     "lint": "next lint",
     "start:scheduler": "tsx src/scheduler.ts",
-    "start:create-payment-intents-scheduler": "tsx src/create_payment_intents_scheduler.ts", 
+    "start:create-payment-intents-scheduler": "tsx src/create_payment_intents_scheduler.ts",
     "login-test": "node --loader ts-node/esm --experimental-specifier-resolution=node scripts/main.ts"
   },
   "dependencies": {
@@ -66,6 +66,7 @@
     "clsx": "^2.1.1",
     "date-fns": "^3.6.0",
     "date-fns-tz": "^3.2.0",
+    "dayjs": "^1.11.13",
     "dotenv": "^16.4.5",
     "framer-motion": "^11.7.0",
     "lucide-react": "^0.400.0",
