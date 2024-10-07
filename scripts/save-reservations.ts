@@ -1,6 +1,6 @@
-import { supabase } from "@/lib/supabaseClient";
-import { RawReservation } from "@/types/reservations";
-import { processReservation } from "@/utils/reservaitonProcessor";
+import { supabase } from "../src/lib/supabaseClient";
+import { RawReservation } from "../src/types/reservations";
+import { processReservation } from "../src/utils/reservaitonProcessor";
 
 export async function saveReservations(
   rawReservations: RawReservation[],

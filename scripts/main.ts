@@ -16,8 +16,8 @@ import { syncStaff } from "./staff/syncStaff";
 import { scrapeCoupons } from "./coupon/scrapeCoupons";
 import { processCouponData } from "./coupon/processCouponData";
 import { saveCoupons } from "./coupon/save-coupons";
-import { decrypt, encrypt } from "@/utils/encryption";
-import { processReservation } from "@/utils/reservaitonProcessor";
+import { decrypt, encrypt } from "../src/utils/encryption";
+import { processReservation } from "../src/utils/reservaitonProcessor";
 import { fillReservationForm } from "./harotaro-to-salonboard/syncReseravtionToSalonboardHelpers";
 import { format } from "date-fns";
 
