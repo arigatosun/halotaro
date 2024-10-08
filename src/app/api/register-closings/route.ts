@@ -6,6 +6,7 @@ import dayjs from 'dayjs';
 import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
 
+// dayjsにUTCとタイムゾーンプラグインを追加
 dayjs.extend(utc);
 dayjs.extend(timezone);
 dayjs.locale("ja");
@@ -19,7 +20,7 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 // ---------------------------
-// 既存の POST ハンドラー
+// POST ハンドラー: レジ締め情報を保存
 // ---------------------------
 export async function POST(req: NextRequest) {
   try {
@@ -40,9 +41,8 @@ export async function POST(req: NextRequest) {
 
     const userId = userData.user.id;
 
-    // リクエストボディからデータを取得
+    // リクエストボディからデータを取得（closing_dateは除外）
     const {
-      closing_date,
       prepared_cash,
       prepared_cash_details,
       actual_cash,
@@ -54,24 +54,24 @@ export async function POST(req: NextRequest) {
       accounting_ids,
     } = await req.json();
 
-    // 必須フィールドのバリデーション
-    if (!closing_date || !closing_staff_id) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    // 必須フィールドのバリデーション（closing_dateを除外）
+    if (!closing_staff_id) {
+      return NextResponse.json({ error: 'Missing required fields: closing_staff_id' }, { status: 400 });
     }
 
     if (!Array.isArray(accounting_ids) || accounting_ids.length === 0) {
       return NextResponse.json({ error: 'No accounting IDs provided' }, { status: 400 });
     }
 
-    // closing_dateを日本時間で調整
-    const adjustedClosingDate = dayjs.tz(closing_date, "Asia/Tokyo").toISOString();
+    // 現在の日本時間を取得
+    const currentJST = dayjs().tz("Asia/Tokyo").toISOString();
 
     // レジ締めデータを挿入
     const { data: registerClosingData, error: registerClosingError } = await supabase
       .from('register_closings')
       .insert([
         {
-          closing_date: adjustedClosingDate,
+          closing_date: currentJST, // サーバー側で取得したJST時刻を使用
           prepared_cash,
           prepared_cash_details,
           actual_cash,
@@ -81,6 +81,8 @@ export async function POST(req: NextRequest) {
           cash_in,
           cash_out,
           user_id: userId,
+          created_at: currentJST, // 作成日時もJSTで設定
+          updated_at: currentJST, // 更新日時もJSTで設定
         },
       ])
       .select();
@@ -107,14 +109,14 @@ export async function POST(req: NextRequest) {
   } catch (error: any) {
     console.error('レジ締めの保存エラー:', error);
     return NextResponse.json(
-      { error: error.message || 'レジ締めの保存に失敗しました' },
+      { error: error.message || 'レジ締めの保存に失敗しました。' },
       { status: 500 }
     );
   }
 }
 
 // ---------------------------
-// 新規追加の GET ハンドラー
+// GET ハンドラー: レジ締めデータを取得
 // ---------------------------
 export async function GET(req: NextRequest) {
   try {

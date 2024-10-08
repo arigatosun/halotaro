@@ -15,6 +15,16 @@ const CANCELLATION_STATUSES = [
   "cancelled",
 ];
 
+// 分母となる有効なステータス
+const VALID_STATUSES = [
+  "confirmed",
+  "cancelled",
+  "paid",
+  "salon_cancelled",
+  "same_day_cancelled",
+  "no_show",
+];
+
 export async function GET(req: NextRequest) {
   try {
     // AuthorizationヘッダーからBearerトークンを取得
@@ -56,11 +66,12 @@ export async function GET(req: NextRequest) {
           throw cancelError;
         }
 
-        // 総予約数
+        // 総予約数（有効なステータスのみ）
         const { count: totalCount, error: totalError } = await supabase
           .from("reservations")
           .select("*", { count: "exact", head: true })
           .eq("user_id", userId)
+          .in("status", VALID_STATUSES) // 分母のフィルタリング
           .gte("start_time", start)
           .lte("start_time", end);
 
@@ -73,6 +84,7 @@ export async function GET(req: NextRequest) {
         return {
           date: month.format("M月"),
           count: cancelCount || 0,
+          totalCount: totalCount || 0, // 総予約数を追加
           rate: parseFloat(rate.toFixed(1)),
         };
       })

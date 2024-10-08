@@ -51,9 +51,9 @@ const ReservationConfirmationAndPayment: React.FC<ReservationConfirmationAndPaym
             onPaymentComplete(status, paymentIntent);
           }}
           userId={userId}
-          selectedMenuId={selectedMenuId}
+          //selectedMenuId={selectedMenuId}
           isOver30Days={isOver30Days}
-          reservationCustomerId={reservationCustomerId}
+          //reservationCustomerId={reservationCustomerId}
           totalAmount={totalAmount}
         />
       )}

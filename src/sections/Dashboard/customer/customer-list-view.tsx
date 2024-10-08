@@ -1,6 +1,8 @@
+// customer-list-view.tsx
 "use client";
+
 import React, { useState, useMemo, useEffect } from "react";
-import { Search, X, ChevronDown, ChevronUp } from "lucide-react";
+import { Search, X, ChevronDown, ChevronUp, AlertCircle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,6 +33,17 @@ import {
 import Link from "next/link";
 import { DateRange } from "react-day-picker";
 import { useAuth } from "@/contexts/authcontext"; // AuthContextをインポート
+import { isWithinInterval, parse, addMonths, subMonths } from "date-fns";
+import * as Tooltip from "@radix-ui/react-tooltip";
+
+// ソート可能なキーを定義
+type SortableCustomerKeys =
+  | "kana"
+  | "name"
+  | "phone"
+  | "gender"
+  | "visits"
+  | "lastVisit";
 
 // Customer型を定義
 type Customer = {
@@ -42,13 +55,19 @@ type Customer = {
   visits: number;
   gender: string;
   lastVisit: string; // ISO文字列
+  birthDate?: string; // "MM-DD" 形式または "0-0" (未選択)
+  weddingAnniversary?: string; // "MM-DD" 形式または "0-0" (未選択)
+  children?: Array<{
+    name: string;
+    birthDate: string; // "MM-DD" 形式または "0-0" (未選択)
+  }>;
 };
 
 const CustomerListPage: React.FC = () => {
   const { session, user } = useAuth(); // セッションとユーザー情報を取得
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [sortConfig, setSortConfig] = useState<{
-    key: keyof Customer;
+    key: SortableCustomerKeys;
     direction: "ascending" | "descending";
   } | null>({
     key: "lastVisit",
@@ -56,9 +75,81 @@ const CustomerListPage: React.FC = () => {
   }); // 初期ソート設定
   const [kanaSearchTerm, setKanaSearchTerm] = useState("");
   const [phoneSearchTerm, setPhoneSearchTerm] = useState("");
+  const [genderSearchTerm, setGenderSearchTerm] = useState("all"); // 性別の状態変数を追加
   const [currentPage, setCurrentPage] = useState(1);
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
   const [loading, setLoading] = useState(true);
+
+  // ユーティリティ関数
+  const isDateWithinOneMonth = (dateStr: string): boolean => {
+    if (dateStr === "0-0") return false; // 未設定の場合はfalse
+
+    const [monthStr, dayStr] = dateStr.split("-");
+    const month = parseInt(monthStr, 10);
+    const day = parseInt(dayStr, 10);
+
+    if (isNaN(month) || isNaN(day)) {
+      console.error(`Invalid date format: ${dateStr}`);
+      return false;
+    }
+
+    const today = new Date();
+    const targetDate = new Date(today.getFullYear(), month - 1, day);
+
+    // 比較対象の範囲を設定 (過去1か月から未来1か月)
+    const start = subMonths(today, 1);
+    const end = addMonths(today, 1);
+
+    // 年を跨ぐ場合の調整
+    targetDate.setFullYear(today.getFullYear());
+
+    const result = isWithinInterval(targetDate, { start, end });
+
+    console.log(
+      `Checking date: ${dateStr} -> Target Date: ${targetDate.toDateString()}, Within Interval: ${result}`
+    );
+
+    return result;
+  };
+
+  const hasUpcomingDates = (customer: Customer): boolean => {
+    const { birthDate, weddingAnniversary, children } = customer;
+
+    console.log(`Checking customer ID: ${customer.id}`); // 追加: 顧客IDをログ出力
+
+    if (birthDate && isDateWithinOneMonth(birthDate)) {
+      console.log(`Customer ID ${customer.id}: Birthdate is within one month.`);
+      return true;
+    }
+    if (weddingAnniversary && isDateWithinOneMonth(weddingAnniversary)) {
+      console.log(`Customer ID ${customer.id}: Wedding anniversary is within one month.`);
+      return true;
+    }
+
+    if (children && children.length > 0) {
+      for (const child of children) {
+        if (child.birthDate && isDateWithinOneMonth(child.birthDate)) {
+          console.log(`Customer ID ${customer.id}: Child (${child.name}) birthdate is within one month.`);
+          return true;
+        }
+      }
+    }
+
+    return false;
+  };
+
+  // ソート要求を処理する関数
+  const requestSort = (key: SortableCustomerKeys) => {
+    let direction: "ascending" | "descending" = "ascending";
+    if (
+      sortConfig &&
+      sortConfig.key === key &&
+      sortConfig.direction === "ascending"
+    ) {
+      direction = "descending";
+    }
+    setSortConfig({ key, direction });
+  };
 
   // APIからデータを取得
   const fetchCustomers = async () => {
@@ -83,15 +174,20 @@ const CustomerListPage: React.FC = () => {
       if (phoneSearchTerm) {
         params.append("phoneSearchTerm", phoneSearchTerm);
       }
+      if (genderSearchTerm && genderSearchTerm !== "all") {
+        params.append("genderSearchTerm", genderSearchTerm);
+      }
 
       const response = await fetch(`/api/customer-data?${params.toString()}`, {
         headers: {
           Authorization: `Bearer ${session.access_token}`,
         },
       });
-
+  
       const data = await response.json();
-
+  
+      console.log("Fetched Data:", data); // デバッグ用
+  
       if (response.ok) {
         const mappedCustomers = data.customers.map((customer: any) => ({
           id: customer.id,
@@ -102,7 +198,13 @@ const CustomerListPage: React.FC = () => {
           visits: customer.visits || 0,
           gender: customer.gender || "",
           lastVisit: customer.lastVisit || "",
+          birthDate: customer.birthDate || "0-0",
+          weddingAnniversary: customer.weddingAnniversary || "0-0",
+          children: customer.children || [],
         }));
+  
+        console.log("Mapped Customers:", mappedCustomers); // デバッグ用
+  
         setCustomers(mappedCustomers);
         setCurrentPage(1); // ページをリセット
       } else {
@@ -111,14 +213,15 @@ const CustomerListPage: React.FC = () => {
     } catch (error) {
       console.error("Error fetching customers:", error);
     }
-
+  
     setLoading(false);
   };
+  
 
   useEffect(() => {
     fetchCustomers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session]); // セッションが変わったときに再取得
+  }, [session, kanaSearchTerm, phoneSearchTerm, genderSearchTerm, dateRange]); // 依存関係を追加
 
   // ハンドル検索ボタンのクリック
   const handleSearch = () => {
@@ -129,6 +232,7 @@ const CustomerListPage: React.FC = () => {
   const handleClear = () => {
     setKanaSearchTerm("");
     setPhoneSearchTerm("");
+    setGenderSearchTerm("all"); // 性別の検索条件をリセット
     setDateRange(undefined);
     fetchCustomers();
   };
@@ -149,8 +253,26 @@ const CustomerListPage: React.FC = () => {
           if (dateA > dateB) return sortConfig.direction === "ascending" ? 1 : -1;
           return 0;
         } else {
-          const aValue = a[sortConfig.key];
-          const bValue = b[sortConfig.key];
+          let aValue: string | number = "";
+          let bValue: string | number = "";
+
+          switch (sortConfig.key) {
+            case "kana":
+            case "name":
+            case "phone":
+            case "gender":
+              aValue = a[sortConfig.key] ?? "";
+              bValue = b[sortConfig.key] ?? "";
+              break;
+            case "visits":
+              aValue = a.visits ?? 0;
+              bValue = b.visits ?? 0;
+              break;
+            default:
+              // SortableCustomerKeys に含まれないキーの場合はデフォルト値を設定
+              aValue = "";
+              bValue = "";
+          }
 
           if (aValue < bValue) {
             return sortConfig.direction === "ascending" ? -1 : 1;
@@ -176,19 +298,6 @@ const CustomerListPage: React.FC = () => {
   // 総ページ数を計算
   const totalPages = Math.ceil(sortedCustomers.length / itemsPerPage);
 
-  // ソート要求を処理する関数
-  const requestSort = (key: keyof Customer) => {
-    let direction: "ascending" | "descending" = "ascending";
-    if (
-      sortConfig &&
-      sortConfig.key === key &&
-      sortConfig.direction === "ascending"
-    ) {
-      direction = "descending";
-    }
-    setSortConfig({ key, direction });
-  };
-
   if (loading) {
     return <div>Loading...</div>;
   }
@@ -198,191 +307,215 @@ const CustomerListPage: React.FC = () => {
   }
 
   return (
-    <div className="p-8">
-      <h2 className="text-3xl font-bold mb-8">お客様情報一覧</h2>
+    <Tooltip.Provider>
+      <div className="p-8">
+        <h2 className="text-3xl font-bold mb-8">お客様情報一覧</h2>
 
-      {/* 検索条件入力部分 */}
-      <Card className="mb-8">
-        <CardContent className="p-6">
-          <div className="space-y-4">
-            <DatePickerWithRange
-              date={dateRange}
-              onDateChange={(newDateRange) => setDateRange(newDateRange)}
-            />
-            <div className="flex flex-wrap gap-2">
-              <Input
-                placeholder="お客様名(カナ)"
-                value={kanaSearchTerm}
-                onChange={(e) => setKanaSearchTerm(e.target.value)}
-                className="w-full md:w-auto"
+        {/* 検索条件入力部分 */}
+        <Card className="mb-8">
+          <CardContent className="p-6">
+            <div className="space-y-4">
+              <DatePickerWithRange
+                date={dateRange}
+                onDateChange={(newDateRange) => setDateRange(newDateRange)}
               />
-              <Input
-                placeholder="電話番号"
-                value={phoneSearchTerm}
-                onChange={(e) => setPhoneSearchTerm(e.target.value)}
-                className="w-full md:w-auto"
-              />
-              <Select>
-                <SelectTrigger className="w-full md:w-[200px]">
-                  <SelectValue placeholder="すべての性別" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">すべての性別</SelectItem>
-                  <SelectItem value="male">男性</SelectItem>
-                  <SelectItem value="female">女性</SelectItem>
-                </SelectContent>
-              </Select>
-              <Button className="w-full md:w-auto" onClick={handleSearch}>
-                <Search className="mr-2 h-4 w-4" /> 検索する
-              </Button>
-              <Button variant="outline" className="w-full md:w-auto" onClick={handleClear}>
-                <X className="mr-2 h-4 w-4" /> 条件をクリア
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <Input
+                  placeholder="お客様名(カナ)"
+                  value={kanaSearchTerm}
+                  onChange={(e) => setKanaSearchTerm(e.target.value)}
+                  className="w-full md:w-auto"
+                />
+                <Input
+                  placeholder="電話番号"
+                  value={phoneSearchTerm}
+                  onChange={(e) => setPhoneSearchTerm(e.target.value)}
+                  className="w-full md:w-auto"
+                />
+                <Select value={genderSearchTerm} onValueChange={setGenderSearchTerm}>
+                  <SelectTrigger className="w-full md:w-[200px]">
+                    <SelectValue placeholder="すべての性別" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">すべての性別</SelectItem>
+                    <SelectItem value="male">男性</SelectItem>
+                    <SelectItem value="female">女性</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button className="w-full md:w-auto" onClick={handleSearch}>
+                  <Search className="mr-2 h-4 w-4" /> 検索する
+                </Button>
+                <Button
+                  variant="outline"
+                  className="w-full md:w-auto"
+                  onClick={handleClear}
+                >
+                  <X className="mr-2 h-4 w-4" /> 条件をクリア
+                </Button>
+              </div>
             </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
 
-      {/* 検索結果件数と新規登録ボタン */}
-      <div className="flex justify-between items-center mb-4">
-        <p>該当するお客様情報が {sortedCustomers.length} 件あります</p>
-        <Button>お客様情報を新しく登録する</Button>
-      </div>
+        {/* 検索結果件数と新規登録ボタン */}
+        <div className="flex justify-between items-center mb-4">
+          <p>該当するお客様情報が {sortedCustomers.length} 件あります</p>
+          {/*<Button>お客様情報を新しく登録する</Button>*/}
+        </div>
 
-      {/* 検索結果表示テーブル */}
-      <Card>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead
-                  className="cursor-pointer"
-                  onClick={() => requestSort("kana")}
-                >
-                  氏名 (カナ){" "}
-                  {sortConfig?.key === "kana" &&
-                    (sortConfig.direction === "ascending" ? (
-                      <ChevronUp className="inline" />
-                    ) : (
-                      <ChevronDown className="inline" />
-                    ))}
-                </TableHead>
-                <TableHead>氏名 (漢字)</TableHead>
-                <TableHead
-                  className="cursor-pointer"
-                  onClick={() => requestSort("phone")}
-                >
-                  電話番号{" "}
-                  {sortConfig?.key === "phone" &&
-                    (sortConfig.direction === "ascending" ? (
-                      <ChevronUp className="inline" />
-                    ) : (
-                      <ChevronDown className="inline" />
-                    ))}
-                </TableHead>
-                <TableHead
-                  className="cursor-pointer"
-                  onClick={() => requestSort("gender")}
-                >
-                  性別{" "}
-                  {sortConfig?.key === "gender" &&
-                    (sortConfig.direction === "ascending" ? (
-                      <ChevronUp className="inline" />
-                    ) : (
-                      <ChevronDown className="inline" />
-                    ))}
-                </TableHead>
-                <TableHead
-                  className="cursor-pointer"
-                  onClick={() => requestSort("visits")}
-                >
-                  来店回数{" "}
-                  {sortConfig?.key === "visits" &&
-                    (sortConfig.direction === "ascending" ? (
-                      <ChevronUp className="inline" />
-                    ) : (
-                      <ChevronDown className="inline" />
-                    ))}
-                </TableHead>
-                <TableHead
-                  className="cursor-pointer"
-                  onClick={() => requestSort("lastVisit")}
-                >
-                  前回来店日{" "}
-                  {sortConfig?.key === "lastVisit" &&
-                    (sortConfig.direction === "ascending" ? (
-                      <ChevronUp className="inline" />
-                    ) : (
-                      <ChevronDown className="inline" />
-                    ))}
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {currentCustomers.map((customer) => (
-                <TableRow key={customer.id}>
-                  <TableCell>
-                    <Link
-                      href={`/dashboard/customer/${customer.id}`}
-                      className="text-blue-600 hover:underline"
-                    >
-                      {customer.kana}
-                    </Link>
-                  </TableCell>
-                  <TableCell>{customer.name}</TableCell>
-                  <TableCell>{customer.phone}</TableCell> {/* 電話番号の表示 */}
-                  <TableCell>{customer.gender}</TableCell>
-                  <TableCell>{customer.visits}</TableCell>
-                  <TableCell>
-                    {customer.lastVisit
-                      ? new Date(customer.lastVisit).toLocaleDateString()
-                      : ""}
-                  </TableCell>
+        {/* 検索結果表示テーブル */}
+        <Card>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead
+                    className="cursor-pointer"
+                    onClick={() => requestSort("kana")}
+                  >
+                    氏名 (カナ){" "}
+                    {sortConfig?.key === "kana" &&
+                      (sortConfig.direction === "ascending" ? (
+                        <ChevronUp className="inline" />
+                      ) : (
+                        <ChevronDown className="inline" />
+                      ))}
+                  </TableHead>
+                  <TableHead>氏名 (漢字)</TableHead>
+                  <TableHead
+                    className="cursor-pointer"
+                    onClick={() => requestSort("phone")}
+                  >
+                    電話番号{" "}
+                    {sortConfig?.key === "phone" &&
+                      (sortConfig.direction === "ascending" ? (
+                        <ChevronUp className="inline" />
+                      ) : (
+                        <ChevronDown className="inline" />
+                      ))}
+                  </TableHead>
+                  <TableHead
+                    className="cursor-pointer"
+                    onClick={() => requestSort("gender")}
+                  >
+                    性別{" "}
+                    {sortConfig?.key === "gender" &&
+                      (sortConfig.direction === "ascending" ? (
+                        <ChevronUp className="inline" />
+                      ) : (
+                        <ChevronDown className="inline" />
+                      ))}
+                  </TableHead>
+                  <TableHead
+                    className="cursor-pointer"
+                    onClick={() => requestSort("visits")}
+                  >
+                    来店回数{" "}
+                    {sortConfig?.key === "visits" &&
+                      (sortConfig.direction === "ascending" ? (
+                        <ChevronUp className="inline" />
+                      ) : (
+                        <ChevronDown className="inline" />
+                      ))}
+                  </TableHead>
+                  <TableHead
+                    className="cursor-pointer"
+                    onClick={() => requestSort("lastVisit")}
+                  >
+                    前回来店日{" "}
+                    {sortConfig?.key === "lastVisit" &&
+                      (sortConfig.direction === "ascending" ? (
+                        <ChevronUp className="inline" />
+                      ) : (
+                        <ChevronDown className="inline" />
+                      ))}
+                  </TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+              </TableHeader>
+              <TableBody>
+                {currentCustomers.map((customer) => (
+                  <TableRow key={customer.id}>
+                    <TableCell>
+                      <Link
+                        href={`/dashboard/customer/${customer.id}`}
+                        className="text-blue-600 hover:underline flex items-center"
+                      >
+                        {customer.kana}
+                        {hasUpcomingDates(customer) && (
+                          <Tooltip.Root>
+                            <Tooltip.Trigger asChild>
+                              <AlertCircle
+                                className="ml-2 text-yellow-500 cursor-pointer"
+                                aria-label="誕生日または結婚記念日、子供の誕生日が近づいています"
+                              />
+                            </Tooltip.Trigger>
+                            <Tooltip.Portal>
+                              <Tooltip.Content
+                                className="bg-gray-700 text-white p-2 rounded shadow-lg text-sm"
+                                side="top"
+                                align="center"
+                              >
+                                誕生日または結婚記念日、子供の誕生日が近づいています
+                                <Tooltip.Arrow className="fill-gray-700" />
+                              </Tooltip.Content>
+                            </Tooltip.Portal>
+                          </Tooltip.Root>
+                        )}
+                      </Link>
+                    </TableCell>
+                    <TableCell>{customer.name}</TableCell>
+                    <TableCell>{customer.phone}</TableCell> {/* 電話番号の表示 */}
+                    <TableCell>{customer.gender}</TableCell> {/* 性別の表示 */}
+                    <TableCell>{customer.visits}</TableCell> {/* 来店回数の表示 */}
+                    <TableCell>
+                      {customer.lastVisit
+                        ? new Date(customer.lastVisit).toLocaleDateString()
+                        : ""}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
 
-      {/* ページネーション */}
-      <Pagination className="mt-4">
-        <PaginationContent>
-          <PaginationItem>
-            <PaginationPrevious
-              onClick={() =>
-                setCurrentPage((prev) => Math.max(prev - 1, 1))
-              }
-              className={
-                currentPage === 1 ? "pointer-events-none opacity-50" : ""
-              }
-            />
-          </PaginationItem>
-          {[...Array(totalPages)].map((_, i) => (
-            <PaginationItem key={i}>
-              <PaginationLink
-                onClick={() => setCurrentPage(i + 1)}
-                isActive={currentPage === i + 1}
-              >
-                {i + 1}
-              </PaginationLink>
+        {/* ページネーション */}
+        <Pagination className="mt-4">
+          <PaginationContent>
+            <PaginationItem>
+              <PaginationPrevious
+                onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                className={
+                  currentPage === 1 ? "pointer-events-none opacity-50" : ""
+                }
+              />
             </PaginationItem>
-          ))}
-          <PaginationItem>
-            <PaginationNext
-              onClick={() =>
-                setCurrentPage((prev) => Math.min(prev + 1, totalPages))
-              }
-              className={
-                currentPage === totalPages
-                  ? "pointer-events-none opacity-50"
-                  : ""
-              }
-            />
-          </PaginationItem>
-        </PaginationContent>
-      </Pagination>
-    </div>
+            {[...Array(totalPages)].map((_, i) => (
+              <PaginationItem key={i}>
+                <PaginationLink
+                  onClick={() => setCurrentPage(i + 1)}
+                  isActive={currentPage === i + 1}
+                >
+                  {i + 1}
+                </PaginationLink>
+              </PaginationItem>
+            ))}
+            <PaginationItem>
+              <PaginationNext
+                onClick={() =>
+                  setCurrentPage((prev) => Math.min(prev + 1, totalPages))
+                }
+                className={
+                  currentPage === totalPages
+                    ? "pointer-events-none opacity-50"
+                    : ""
+                }
+              />
+            </PaginationItem>
+          </PaginationContent>
+        </Pagination>
+      </div>
+    </Tooltip.Provider>
   );
 };
 

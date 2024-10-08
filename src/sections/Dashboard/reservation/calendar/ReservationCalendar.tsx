@@ -33,7 +33,6 @@ const ReservationCalendar: React.FC = () => {
   const [currentDate, setCurrentDate] = useState(moment()); 
   const [isCreatingFromButton, setIsCreatingFromButton] = useState(false);
 
-
   // useReservationCalendar を呼び出す
   const {
     reservations,
@@ -47,7 +46,7 @@ const ReservationCalendar: React.FC = () => {
     setMenuList,
     setClosedDays,
     setBusinessHours,
-    setDateRange, // 追加
+    setDateRange,
     snackbar,
     setSnackbar,
   } = useReservationCalendar();
@@ -55,9 +54,10 @@ const ReservationCalendar: React.FC = () => {
   useEffect(() => {
     const today = moment();
     const startDate = today.startOf('day').format('YYYY-MM-DD');
-    const endDate = today.add(1, 'months').endOf('day').format('YYYY-MM-DD');
+    const endDate = today.endOf('day').format('YYYY-MM-DD'); // 1日分に変更
     setDateRange({ start: startDate, end: endDate });
   }, []);
+  
   
   const calendarRef = useRef<FullCalendar>(null);
 
@@ -120,6 +120,9 @@ const ReservationCalendar: React.FC = () => {
     return reservations.some(res => {
       if (!res.staff_id || res.staff_id !== staffId) return false;
       if (excludeReservationId && res.id === excludeReservationId) return false;
+      // キャンセルされた予約を除外
+      const excludedStatuses = ['cancelled', 'salon_cancelled', 'same_day_cancelled', 'no_show'];
+      if (res.status && excludedStatuses.includes(res.status)) return false;
       const resStart = moment.utc(res.start_time).local();
       const resEnd = moment.utc(res.end_time).local();
       const newStart = moment(start).local();

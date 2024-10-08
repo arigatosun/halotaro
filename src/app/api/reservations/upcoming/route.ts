@@ -42,7 +42,6 @@ export async function GET(req: NextRequest) {
 
     // 現在時刻と本日の終了時刻を取得
     const now = dayjs();
-    const startOfToday = now.startOf("day").toISOString();
     const endOfToday = now.endOf("day").toISOString();
 
     const { data: reservations, error } = await supabase
@@ -54,6 +53,7 @@ export async function GET(req: NextRequest) {
         staff(name)
       `)
       .eq("user_id", userId)
+      .eq("status", "confirmed") // 追加: status が 'confirmed' のみ
       .gte("start_time", now.toISOString())
       .lte("start_time", endOfToday)
       .order("start_time", { ascending: true })

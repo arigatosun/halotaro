@@ -99,7 +99,13 @@ const SalesManagement: React.FC = () => {
         previousAverageSalesPerDay: previousSummary?.averageSalesPerDay,
       });
 
-      setDailySales(currentDailySales);
+      // 全ての日を含むデータを生成（未来の日付を除外）
+      const preparedDailySales = prepareDailySalesData(
+        currentDailySales,
+        year,
+        month
+      );
+      setDailySales(preparedDailySales);
     } catch (error: any) {
       console.error("月間売上データの取得エラー:", error);
       setError("売上データの取得に失敗しました。");
@@ -108,22 +114,46 @@ const SalesManagement: React.FC = () => {
     }
   };
 
-  const prepareDailySalesData = (dailySales: DailySales[], year: number, month: number) => {
-    const daysInMonth = dayjs(`${year}-${month}`).daysInMonth();
-    const allDays = Array.from({ length: daysInMonth }, (_, i) => {
+  /**
+   * 選択された月の過去の日付（および今日）までの売上データを準備します。
+   * 売上がない日は total を 0 に設定し、未来の日付は除外します。
+   * データは昇順（古い日付から新しい日付）にソートされます。
+   */
+  const prepareDailySalesData = (
+    dailySales: DailySales[],
+    year: number,
+    month: number
+  ): DailySales[] => {
+    const selectedDate = dayjs(`${year}-${month}-01`);
+    const daysInMonth = selectedDate.daysInMonth();
+    const today = dayjs();
+    const isCurrentMonth =
+      selectedDate.year() === today.year() &&
+      selectedDate.month() === today.month();
+
+    // 選択された月の基準日付
+    const endDay = isCurrentMonth ? today.date() : daysInMonth;
+
+    // 全ての対象日を生成
+    const allDays: DailySales[] = Array.from({ length: endDay }, (_, i) => {
       const day = i + 1;
       return {
         date: dayjs(`${year}-${month}-${day}`).format("YYYY-MM-DD"),
-        total: 0
+        total: 0,
       };
     });
 
-    const salesMap = new Map(dailySales.map(sale => [sale.date, sale.total]));
-    
-    return allDays.map(day => ({
+    // 売上データをマップ化
+    const salesMap = new Map(dailySales.map((sale) => [sale.date, sale.total]));
+
+    // 売上がある日は total を設定
+    const preparedData = allDays.map((day) => ({
       date: day.date,
-      total: salesMap.get(day.date) || 0
-    })).sort((a, b) => dayjs(a.date).diff(dayjs(b.date)));
+      total: salesMap.get(day.date) || 0,
+    }));
+
+    // 昇順（古い日付順）にソート
+    return preparedData.sort((a, b) => dayjs(a.date).diff(dayjs(b.date)));
   };
 
   useEffect(() => {
@@ -141,7 +171,10 @@ const SalesManagement: React.FC = () => {
     setSelectedMonth(Number(event.target.value));
   };
 
-  const getPercentageChange = (current: number, previous?: number) => {
+  const getPercentageChange = (
+    current: number,
+    previous?: number
+  ) => {
     if (previous === undefined || previous === 0) {
       return "---";
     }
@@ -153,7 +186,7 @@ const SalesManagement: React.FC = () => {
     return <p className="p-4">読み込み中...</p>;
   }
 
-  // 年の選択肢を生成（例えば、過去5年から現在まで）
+  // 年の選択肢を生成（例えば、過去50年から現在まで）
   const currentYear = dayjs().year();
   const years = Array.from(new Array(50), (_, index) => currentYear - index);
 
@@ -225,7 +258,7 @@ const SalesManagement: React.FC = () => {
           </h2>
         </div>
         <ResponsiveContainer width="100%" height={300}>
-          <LineChart data={prepareDailySalesData(dailySales, selectedYear, selectedMonth)}>
+          <LineChart data={dailySales}>
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis 
               dataKey="date" 
@@ -250,8 +283,8 @@ const SalesManagement: React.FC = () => {
           <h2 className="text-xl font-semibold">
             売上詳細（{dayjs(`${selectedYear}-${selectedMonth}-01`).format("YYYY年M月")}）
           </h2>
-           {/* 
-         <Button variant={"outline"}>
+          {/* 一旦非表示
+          <Button variant={"outline"}>
             <Download className="w-4 h-4 mr-2" />
             エクスポート
           </Button>*/}
@@ -265,19 +298,22 @@ const SalesManagement: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {dailySales.map((day, index) => (
-                <tr
-                  key={index}
-                  className={index % 2 === 0 ? "bg-gray-50" : ""}
-                >
-                  <td className="px-4 py-2">
-                    {dayjs(day.date).format("YYYY/MM/DD")}
-                  </td>
-                  <td className="px-4 py-2 text-right">
-                    ¥{day.total.toLocaleString()}
-                  </td>
-                </tr>
-              ))}
+              {dailySales
+                .slice()
+                .reverse() // データを降順に並び替え
+                .map((day, index) => (
+                  <tr
+                    key={day.date} // キーを日付に変更
+                    className={index % 2 === 0 ? "bg-gray-50" : ""}
+                  >
+                    <td className="px-4 py-2">
+                      {dayjs(day.date).format("YYYY/MM/DD")}
+                    </td>
+                    <td className="px-4 py-2 text-right">
+                      ¥{day.total.toLocaleString()}
+                    </td>
+                  </tr>
+                ))}
             </tbody>
           </table>
         </div>

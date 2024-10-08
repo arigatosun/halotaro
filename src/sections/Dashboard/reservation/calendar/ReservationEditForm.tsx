@@ -10,6 +10,13 @@ import { Reservation, Staff, MenuItem as MenuItemType, BusinessHour } from '@/ty
 import moment from 'moment';
 import { Alert, Snackbar, Grid, Paper, Typography, Box } from '@mui/material';
 
+interface EditingFormDataType extends Partial<Reservation> {
+  customer_first_name?: string; // 追加
+  customer_last_name?: string;  // 追加
+  customer_first_name_kana?: string; // 追加
+  customer_last_name_kana?: string;  // 追加
+}
+
 interface ReservationEditFormProps {
   reservation: Reservation;
   onClose: () => void;
@@ -31,7 +38,7 @@ const ReservationEditForm: React.FC<ReservationEditFormProps> = ({
   reservations,
   businessHours
 }) => {
-  const [editingFormData, setEditingFormData] = useState<Partial<Reservation>>({});
+  const [editingFormData, setEditingFormData] = useState<EditingFormDataType>({});
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [availableTimeSlots, setAvailableTimeSlots] = useState<string[]>([]);
   const [isOverlap, setIsOverlap] = useState<boolean>(false);
@@ -41,14 +48,24 @@ const ReservationEditForm: React.FC<ReservationEditFormProps> = ({
 
   useEffect(() => {
     if (reservation) {
+      // フルネームを姓と名に分割
+      const nameParts = (reservation.customer_name || '').split(' ');
+      const lastName = nameParts[0] || '';
+      const firstName = nameParts[1] || '';
+
+      const nameKanaParts = (reservation.customer_name_kana || '').split(' ');
+      const lastNameKana = nameKanaParts[0] || '';
+      const firstNameKana = nameKanaParts[1] || '';
+
       setEditingFormData({
         ...reservation,
+        customer_last_name: lastName,
+        customer_first_name: firstName,
+        customer_last_name_kana: lastNameKana,
+        customer_first_name_kana: firstNameKana,
         start_time: moment.utc(reservation.start_time).local().format('YYYY-MM-DDTHH:mm'),
         end_time: moment.utc(reservation.end_time).local().format('YYYY-MM-DDTHH:mm'),
-        customer_name: reservation.customer_name || '',
-        customer_email: reservation.customer_email || '',
-        customer_phone: reservation.customer_phone || '',
-        customer_name_kana: reservation.customer_name_kana || '',
+        // その他のフィールド...
       });
       setSelectedDate(moment.utc(reservation.start_time).local().format('YYYY-MM-DD'));
       setSelectedTime(moment.utc(reservation.start_time).local().format('HH:mm'));
@@ -151,6 +168,15 @@ const ReservationEditForm: React.FC<ReservationEditFormProps> = ({
       return;
     }
 
+    if (!editingFormData.menu_id) {
+      setSnackbar({ message: 'メニューを選択してください。', severity: 'error' });
+      return;
+    }
+
+    // 姓名を結合
+    const customer_name = `${editingFormData.customer_last_name || ''} ${editingFormData.customer_first_name || ''}`.trim();
+    const customer_name_kana = `${editingFormData.customer_last_name_kana || ''} ${editingFormData.customer_first_name_kana || ''}`.trim();
+
     const selectedMenu = menuList.find(menu => menu.id === editingFormData.menu_id);
     if (!selectedMenu) {
       setSnackbar({ message: 'メニューを選択してください。', severity: 'error' });
@@ -162,6 +188,8 @@ const ReservationEditForm: React.FC<ReservationEditFormProps> = ({
 
     const updatedReservation = {
       ...editingFormData,
+      customer_name,
+      customer_name_kana,
       start_time: startDateTime.toISOString(),
       end_time: endDateTime.toISOString(),
       total_price: selectedMenu.price || 0,
@@ -197,15 +225,50 @@ const ReservationEditForm: React.FC<ReservationEditFormProps> = ({
               <div className="space-y-4">
                 {/* 顧客情報の表示 */}
                 <div className="space-y-2">
-                  <Label htmlFor="customer_name">顧客名</Label>
+                  {/* 顧客名の入力 (姓) */}
+                  <Label htmlFor="customer_last_name">顧客名（姓）</Label>
                   <Input
-                    id="customer_name"
-                    value={editingFormData.customer_name || ''}
-                    onChange={(e) => handleChange('customer_name', e.target.value)}
+                    id="customer_last_name"
+                    value={editingFormData.customer_last_name || ''}
+                    onChange={(e) => handleChange('customer_last_name', e.target.value)}
                     required
                   />
                 </div>
 
+                {/* 顧客名の入力 (名) */}
+                <div className="space-y-2">
+                  <Label htmlFor="customer_first_name">顧客名（名）</Label>
+                  <Input
+                    id="customer_first_name"
+                    value={editingFormData.customer_first_name || ''}
+                    onChange={(e) => handleChange('customer_first_name', e.target.value)}
+                    required
+                  />
+                </div>
+
+                {/* 顧客名（カナ）の入力 (姓) */}
+                <div className="space-y-2">
+                  <Label htmlFor="customer_last_name_kana">顧客名（カナ・姓）</Label>
+                  <Input
+                    id="customer_last_name_kana"
+                    value={editingFormData.customer_last_name_kana || ''}
+                    onChange={(e) => handleChange('customer_last_name_kana', e.target.value)}
+                    required
+                  />
+                </div>
+
+                {/* 顧客名（カナ）の入力 (名) */}
+                <div className="space-y-2">
+                  <Label htmlFor="customer_first_name_kana">顧客名（カナ・名）</Label>
+                  <Input
+                    id="customer_first_name_kana"
+                    value={editingFormData.customer_first_name_kana || ''}
+                    onChange={(e) => handleChange('customer_first_name_kana', e.target.value)}
+                    required
+                  />
+                </div>
+
+                {/* メールアドレスの入力 */}
                 <div className="space-y-2">
                   <Label htmlFor="customer_email">メールアドレス</Label>
                   <Input
@@ -217,6 +280,7 @@ const ReservationEditForm: React.FC<ReservationEditFormProps> = ({
                   />
                 </div>
 
+                {/* 電話番号の入力 */}
                 <div className="space-y-2">
                   <Label htmlFor="customer_phone">電話番号</Label>
                   <Input
@@ -224,15 +288,6 @@ const ReservationEditForm: React.FC<ReservationEditFormProps> = ({
                     type="tel"
                     value={editingFormData.customer_phone || ''}
                     onChange={(e) => handleChange('customer_phone', e.target.value)}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="customer_name_kana">顧客名（カナ）</Label>
-                  <Input
-                    id="customer_name_kana"
-                    value={editingFormData.customer_name_kana || ''}
-                    onChange={(e) => handleChange('customer_name_kana', e.target.value)}
                   />
                 </div>
 

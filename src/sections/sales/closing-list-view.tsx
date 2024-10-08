@@ -1,5 +1,3 @@
-// closing-list-view.tsx
-
 "use client";
 import React, { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/authcontext";
@@ -7,7 +5,6 @@ import axios from "axios";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Table,
   TableBody,
@@ -34,8 +31,6 @@ const RegisterClosingList: React.FC = () => {
   const { session, user } = useAuth();
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  const [isPrinted, setIsPrinted] = useState(true);
-  const [isNotPrinted, setIsNotPrinted] = useState(true);
   const [closingData, setClosingData] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -70,8 +65,6 @@ const RegisterClosingList: React.FC = () => {
   const handleClearConditions = () => {
     setStartDate("");
     setEndDate("");
-    setIsPrinted(true);
-    setIsNotPrinted(true);
     setClosingData([]);
   };
 
@@ -81,7 +74,7 @@ const RegisterClosingList: React.FC = () => {
   };
 
   return (
-    <div className="p-4 max-w-7xl mx-auto">
+    <div className="p-4 w-full mx-auto">
       <h1 className="text-2xl font-bold mb-4">レジ締め一覧</h1>
 
       <Card className="mb-4">
@@ -138,32 +131,6 @@ const RegisterClosingList: React.FC = () => {
               </Button>
             </div>
           </div>
-           {/* 一旦非表示
-          <div className="mt-4 flex items-center space-x-4">
-            <Label className="text-sm">ジャーナル印刷:</Label>
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="printed"
-                checked={isPrinted}
-                onCheckedChange={(checked) => setIsPrinted(checked as boolean)}
-              />
-              <Label htmlFor="printed" className="text-sm">
-                印刷済み
-              </Label>
-            </div>
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="notPrinted"
-                checked={isNotPrinted}
-                onCheckedChange={(checked) =>
-                  setIsNotPrinted(checked as boolean)
-                }
-              />
-              <Label htmlFor="notPrinted" className="text-sm">
-                未印刷
-              </Label>
-            </div>
-          </div>*/}
           <div className="mt-4 flex justify-end space-x-2">
             <Button
               variant="outline"
@@ -200,49 +167,45 @@ const RegisterClosingList: React.FC = () => {
           ) : closingData.length === 0 ? (
             <p>データがありません。</p>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[180px]">
-                    レジ締め日
-                    <br />
-                    (レジ締め実施日時)
-                  </TableHead>
-                  <TableHead>レジ過不足金</TableHead>
-                  {/*<TableHead>ジャーナル印刷</TableHead>*/}
-                  <TableHead>レジ締め担当者</TableHead>
-                  <TableHead>レジ締めメモ</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {closingData.map((item) => (
-                  <TableRow key={item.id}>
-                    <TableCell className="font-medium">
-                      <Link
-                        href={`/dashboard/sales/closing-list/${item.id}`}
-                        className="text-orange-500 hover:text-orange-600 hover:underline"
-                      >
-                        {dayjs(item.closing_date).format("YYYY/MM/DD")}
-                      </Link>
+            <div className="overflow-x-auto">
+              <Table className="w-full">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[25%] text-center">
+                      レジ締め日
                       <br />
-                      (
-                      {dayjs(item.closing_date).format("YYYY/MM/DD")}{" "}
-                      {dayjs(item.closing_date).format("HH:mm")}
-                      )
-                    </TableCell>
-                    <TableCell className="text-right text-red-500">
-                      {item.cash_difference.toLocaleString()} 円
-                    </TableCell>
-                    <TableCell>
-                      {/* ジャーナル印刷の状態はテーブルにないため、仮に "未印刷" と表示 
-                      未印刷*/}
-                    </TableCell>
-                    <TableCell>{item.closing_staff?.name || '-'}</TableCell>
-                    <TableCell>{item.closing_memo || '-'}</TableCell>
+                      (レジ締め実施日時)
+                    </TableHead>
+                    <TableHead className="w-[25%] text-center">レジ過不足金</TableHead>
+                    <TableHead className="w-[25%] text-center">レジ締め担当者</TableHead>
+                    <TableHead className="w-[25%] text-center">レジ締めメモ</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {closingData.map((item) => (
+                    <TableRow key={item.id}>
+                      <TableCell className="text-center">
+                        <Link
+                          href={`/dashboard/sales/closing-list/${item.id}`}
+                          className="text-orange-500 hover:text-orange-600 hover:underline"
+                        >
+                          {dayjs(item.closing_date).format("YYYY/MM/DD")}
+                        </Link>
+                        <br />
+                        ({dayjs(item.closing_date).format("YYYY/MM/DD HH:mm")})
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <span className={item.cash_difference < 0 ? "text-red-500" : "text-green-500"}>
+                          {item.cash_difference.toLocaleString()} 円
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-center">{item.closing_staff?.name || '-'}</TableCell>
+                      <TableCell className="text-center">{item.closing_memo || '-'}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           )}
           <div className="mt-4 flex items-center justify-between">
             <div className="text-sm text-gray-500">1/1ページ</div>
@@ -264,26 +227,3 @@ const RegisterClosingList: React.FC = () => {
 };
 
 export default RegisterClosingList;
-
-interface SalesCardProps {
-  title: string;
-  value: string;
-  icon: React.ReactNode;
-  trend: string;
-}
-
-const SalesCard: React.FC<SalesCardProps> = ({
-  title,
-  value,
-  icon,
-  trend,
-}) => (
-  <div className="bg-white p-4 rounded-lg shadow">
-    <div className="flex justify-between items-center mb-2">
-      <h3 className="text-lg font-semibold text-gray-700">{title}</h3>
-      {icon}
-    </div>
-    <div className="text-2xl font-bold">{value}</div>
-    <div className="text-sm text-gray-500">{trend}</div>
-  </div>
-);

@@ -29,6 +29,12 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Label } from "@/components/ui/label";
 import ReservationTable from "@/components/ReservationTable";
 import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
+import timezone from "dayjs/plugin/timezone";
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
+dayjs.tz.setDefault("Asia/Tokyo");
 
 interface AccountingInformation {
   id: string;
@@ -65,7 +71,7 @@ const CompactRegisterClosingUI: React.FC = () => {
   const { session, user } = useAuth();
   const router = useRouter();
   const [staffList, setStaffList] = useState<any[]>([]);
-  const [selectedStaff, setSelectedStaff] = useState<string>("");
+  const [selectedStaff, setSelectedStaff] = useState<string>(""); // 初期値を空文字に設定
   const [accountingList, setAccountingList] = useState<AccountingInformation[]>([]);
   const [totalByPaymentMethod, setTotalByPaymentMethod] = useState<{ [key: string]: number }>({});
   const [loading, setLoading] = useState<boolean>(true);
@@ -102,10 +108,10 @@ const CompactRegisterClosingUI: React.FC = () => {
         const staffData = response.data;
         setStaffList(staffData);
 
-        // デフォルトで最初のスタッフを選択
-        if (staffData.length > 0) {
-          setSelectedStaff(staffData[0].id);
-        }
+        // ここでは自動選択を解除します
+        // if (staffData.length > 0) {
+        //   setSelectedStaff(staffData[0].id);
+        // }
       } catch (err) {
         console.error("スタッフデータの取得エラー:", err);
         setError("スタッフデータの取得に失敗しました。");
@@ -190,16 +196,8 @@ const CompactRegisterClosingUI: React.FC = () => {
       });
       const { closing_date } = response.data;
       if (closing_date) {
-        // 日付と時間を取得してフォーマット
-        const date = new Date(closing_date);
-        const formattedDateTime = date.toLocaleString("ja-JP", {
-          year: "numeric",
-          month: "long",
-          day: "numeric",
-          hour: "2-digit",
-          minute: "2-digit",
-          second: "2-digit",
-        });
+        // 日本時間でフォーマット
+        const formattedDateTime = dayjs(closing_date).tz("Asia/Tokyo").format('YYYY-MM-DD HH:mm:ss');
         setLatestClosingDate(`${formattedDateTime} ～`);
       } else {
         setLatestClosingDate("未締め");
@@ -222,17 +220,8 @@ const CompactRegisterClosingUI: React.FC = () => {
 
   // 本日ボタンを押したときのハンドラー
   const handleSetToday = () => {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, "0");
-    const day = String(now.getDate()).padStart(2, "0");
-    const hours = String(now.getHours()).padStart(2, "0");
-    const minutes = String(now.getMinutes()).padStart(2, "0");
-    const seconds = String(now.getSeconds()).padStart(2, "0");
-
-    // フォーマットを "YYYY-MM-DDTHH:MM:SSZ" に変更（ISO 8601形式）
-    const formattedDateTime = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}Z`;
-
+    const now = dayjs().tz("Asia/Tokyo");
+    const formattedDateTime = now.toISOString(); // UTCに変換してISO文字列として設定
     setClosingDate(formattedDateTime);
   };
 
@@ -249,19 +238,11 @@ const CompactRegisterClosingUI: React.FC = () => {
       return;
     }
 
-    const closingDateObj = new Date(closingDate);
-    if (isNaN(closingDateObj.getTime())) {
+    const closingDateObj = dayjs(closingDate);
+    if (!closingDateObj.isValid()) {
       alert("有効なレジ締め日を選択してください。");
       return;
     }
-
-    // 現在の時間を取得
-    const now = new Date();
-    // 選択された日付に現在の時間を設定
-    closingDateObj.setHours(now.getHours(), now.getMinutes(), now.getSeconds());
-
-    // UTC形式に変換
-    const closingDateUTC = closingDateObj.toISOString();
 
     try {
       const accountingIds = accountingList.map((item) => item.id);
@@ -269,7 +250,8 @@ const CompactRegisterClosingUI: React.FC = () => {
       const response = await axios.post(
         "/api/register-closings",
         {
-          closing_date: closingDateUTC,
+          // サーバー側で closing_date を設定するため、クライアントから送信しません
+          // closing_date: closingDateObj.toISOString(),
           prepared_cash: preparedCash,
           prepared_cash_details: null,
           actual_cash: actualCash,
@@ -292,7 +274,7 @@ const CompactRegisterClosingUI: React.FC = () => {
       await fetchLatestClosingDate(); // 最新の締め日時を再取得
       await fetchUnaccountedReservations(); // 未会計予約を再取得
       alert("レジ締めが完了しました。");
-    } catch (error) {
+    } catch (error: any) {
       console.error("レジ締めの保存エラー:", error);
       alert("レジ締めの保存に失敗しました。");
     }
@@ -412,18 +394,16 @@ const CompactRegisterClosingUI: React.FC = () => {
               id="closingDate"
               type="date"
               className="h-8 text-sm"
-              value={closingDate ? closingDate.split("T")[0] : ""}
+              value={closingDate ? dayjs(closingDate).format('YYYY-MM-DD') : ""}
               onChange={(e) => {
                 const selectedDate = e.target.value;
                 if (selectedDate) {
-                  const now = new Date();
-                  const hours = String(now.getHours()).padStart(2, "0");
-                  const minutes = String(now.getMinutes()).padStart(2, "0");
-                  const seconds = String(now.getSeconds()).padStart(2, "0");
-
-                  // 選択された日付に現在の時間を設定（UTC形式）
-                  const formattedDateTime = `${selectedDate}T${hours}:${minutes}:${seconds}Z`;
-                  setClosingDate(formattedDateTime);
+                  const now = dayjs().tz("Asia/Tokyo");
+                  const selectedDateTime = dayjs(`${selectedDate} ${now.format("HH:mm:ss")}`, "YYYY-MM-DD HH:mm:ss")
+                    .tz("Asia/Tokyo")
+                    .utc()
+                    .toISOString();
+                  setClosingDate(selectedDateTime);
                 } else {
                   setClosingDate("");
                 }
@@ -453,11 +433,16 @@ const CompactRegisterClosingUI: React.FC = () => {
           <Select
             value={selectedStaff}
             onValueChange={(value) => setSelectedStaff(value)}
+            required
           >
             <SelectTrigger id="closingStaff" className="mt-1 h-8 text-sm">
-              <SelectValue placeholder="選択してください" />
+              <SelectValue placeholder="レジ締め担当者" />
             </SelectTrigger>
             <SelectContent>
+              {/* プレースホルダーとしての選択肢を追加 */}
+              <SelectItem value="aaa" disabled>
+                レジ締め担当者
+              </SelectItem>
               {staffList.map((staff) => (
                 <SelectItem key={staff.id} value={staff.id}>
                   {staff.name}
@@ -529,13 +514,7 @@ const CompactRegisterClosingUI: React.FC = () => {
                 {unaccountedReservations.map((reservation) => (
                   <TableRow key={reservation.id}>
                     <TableCell>
-                      {new Date(reservation.start_time).toLocaleString("ja-JP", {
-                        year: "numeric",
-                        month: "numeric",
-                        day: "numeric",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
+                      {dayjs(reservation.start_time).tz("Asia/Tokyo").format('YYYY-MM-DD HH:mm')}
                     </TableCell>
                     <TableCell>
                       {statusMapping[reservation.status] || reservation.status}
@@ -599,14 +578,7 @@ const CompactRegisterClosingUI: React.FC = () => {
                   <TableRow key={item.id}>
                     {/* 来店日時を日時含む形式で表示 */}
                     <TableCell>
-                      {new Date(item.created_at).toLocaleString("ja-JP", {
-                        year: "numeric",
-                        month: "long",
-                        day: "numeric",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                        second: "2-digit",
-                      })}
+                      {dayjs(item.created_at).tz("Asia/Tokyo").format('YYYY-MM-DD HH:mm:ss')}
                     </TableCell>
                     <TableCell>{item.customer_name}</TableCell>
                     <TableCell>{item.staff_name}</TableCell>

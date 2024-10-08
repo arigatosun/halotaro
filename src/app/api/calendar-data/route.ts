@@ -92,7 +92,7 @@ export async function GET(request: Request) {
       .eq('user_id', userId)
       .gte('start_time', startDate)
       .lte('end_time', endDate)
-      .in('status', includedStatuses) // 修正: 'confirmed' と 'paid' のみ取得
+      .in('status', includedStatuses)
       .order('start_time', { ascending: true });
 
     if (reservationError) {
@@ -146,7 +146,7 @@ export async function GET(request: Request) {
       .from('salon_business_hours')
       .select('*')
       .eq('salon_id', salonId)
-      .gte('date', startDateStr) // 'YYYY-MM-DD' フォーマットで比較
+      .gte('date', startDateStr)
       .lte('date', endDateStr);
 
     if (businessHoursError) {
@@ -218,6 +218,10 @@ export async function POST(request: Request) {
     customer_email,
     customer_phone,
     customer_name_kana,
+    customer_last_name,
+    customer_first_name,
+    customer_last_name_kana,
+    customer_first_name_kana,
     staff_id,
     menu_id,
     start_time,
@@ -225,25 +229,41 @@ export async function POST(request: Request) {
     total_price,
     is_staff_schedule, 
     event,
-    payment_method, // 追加（必要に応じて）
-    payment_status, // 追加（必要に応じて）
-    payment_amount, // 追加（必要に応じて）
-    stripe_payment_intent_id, // 追加（必要に応じて）
+    payment_method,
+    payment_status,
+    payment_amount,
+    stripe_payment_intent_id,
   } = data;
 
   if (is_staff_schedule) {
-    // スタッフスケジュールの作成（修正: status を 'staff' に設定）
+    // スタッフスケジュールの作成
     try {
+      // バリデーション: end_time が必須
+      if (!end_time) {
+        return NextResponse.json({ error: 'end_time is required for staff schedule' }, { status: 400 });
+      }
+
+      // バリデーション: end_time が start_time より後
+      const startMoment = moment(start_time);
+      const endMoment = moment(end_time);
+      if (!endMoment.isAfter(startMoment)) {
+        return NextResponse.json({ error: 'end_time must be after start_time' }, { status: 400 });
+      }
+
+      // スタッフスケジュールの場合、顧客関連フィールドは除外
       const insertData: Partial<Reservation> = {
         user_id: authResult.user.id,
         staff_id: staff_id || undefined,
-        start_time: start_time ? moment(start_time).utc().format() : undefined,
-        end_time: end_time ? moment(end_time).utc().format() : undefined,
-        status: 'staff', // 修正: 'confirmed' から 'staff' に変更
+        start_time: start_time ? moment(start_time).utc().format('YYYY-MM-DD HH:mm:ss') : undefined,
+        end_time: end_time ? moment(end_time).utc().format('YYYY-MM-DD HH:mm:ss') : undefined,
+        status: 'staff',
         total_price: 0,
         is_staff_schedule: true,
-        event: event || undefined,
+        event: event || '予定あり',
+        // 顧客関連フィールドはスタッフスケジュールには不要
       };
+
+      console.log('Inserting staff schedule:', insertData); // 挿入前のデータログ
 
       const { data: newSchedule, error: scheduleError } = await supabase
         .from('reservations')
@@ -263,7 +283,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: scheduleError.message }, { status: 500 });
       }
 
-      // ステータスが除外対象ではないため、フォーマット処理のみ
+      // 予約データのフォーマット
       const formattedSchedule = {
         ...newSchedule,
         customer_name: newSchedule.scraped_customer || newSchedule.reservation_customers?.name || 'Unknown',
@@ -278,7 +298,7 @@ export async function POST(request: Request) {
       };
 
       return NextResponse.json(formattedSchedule);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Unexpected error during staff schedule creation:', error);
       return NextResponse.json({ error: 'An unexpected error occurred' }, { status: 500 });
     }
@@ -288,8 +308,8 @@ export async function POST(request: Request) {
       // create_reservation 関数を呼び出すためのパラメータを準備
       const rpcParams = {
         p_user_id: authResult.user.id,
-        p_start_time: start_time ? moment(start_time).utc().format() : null,
-        p_end_time: end_time ? moment(end_time).utc().format() : null,
+        p_start_time: start_time ? moment(start_time).utc().format('YYYY-MM-DD HH:mm:ss') : null,
+        p_end_time: end_time ? moment(end_time).utc().format('YYYY-MM-DD HH:mm:ss') : null,
         p_total_price: total_price || 0,
         p_customer_name: customer_name,
         p_customer_name_kana: customer_name_kana,
@@ -303,6 +323,12 @@ export async function POST(request: Request) {
         p_payment_amount: payment_amount || null,
         p_stripe_payment_intent_id: stripe_payment_intent_id || null,
       };
+
+      // Supabase クライアント（サービスロールキーを使用）を作成
+      const supabaseService = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY! // サービスロールキーを使用
+      );
 
       // create_reservation 関数を呼び出す
       const { data: reservationData, error: reservationError } = await supabaseService.rpc(
@@ -360,56 +386,10 @@ export async function POST(request: Request) {
         is_staff_schedule: newReservation.is_staff_schedule || false,
       };
 
-      // 支払い情報の更新
-      if (stripe_payment_intent_id) {
-        const { data: paymentIntentData, error: paymentIntentError } = await supabase
-          .from('payment_intents')
-          .update({
-            reservation_id: reservationId,
-            capture_date: moment(end_time).subtract(30, 'days').utc().format(), // 例として30日前
-            status: payment_status,
-          })
-          .eq('payment_intent_id', stripe_payment_intent_id);
-
-        if (paymentIntentError) {
-          console.error('Error updating payment_intents with reservation_id and capture_date:', paymentIntentError);
-          throw new Error('Failed to update payment_intents with reservation_id and capture_date');
-        } else {
-          console.log('Updated payment_intents with reservation_id and capture_date:', paymentIntentData);
-        }
-      }
-
-      // stripe_customers テーブルの更新
-      // 必要な場合のみ実施（payment_method_idが提供されている場合）
-      if (reservationCustomerId && data.payment_method_id) {
-        const { error: updateError } = await supabase
-          .from('stripe_customers')
-          .update({
-            reservation_customer_id: reservationCustomerId,
-          })
-          .eq('payment_method_id', data.payment_method_id);
-
-        if (updateError) {
-          console.error('Error updating stripe_customers:', updateError);
-          throw new Error('Failed to update stripe_customers with reservation_customer_id');
-        } else {
-          console.log('Successfully updated stripe_customers table');
-        }
-      } else {
-        console.warn('Missing reservationCustomerId or paymentMethodId, skipping stripe_customers update');
-      }
-
-      // メール送信処理（必要に応じて）
-
-      // 内部APIへの通知（必要に応じて）
+      // 必要に応じて、支払い情報やメール送信処理を追加
 
       // 成功レスポンスを返す
-      return NextResponse.json({
-        success: true,
-        reservationId: reservationId,
-        reservationCustomerId: reservationCustomerId,
-        stripeCustomerUpdated: !!(reservationCustomerId && data.payment_method_id)
-      });
+      return NextResponse.json(formattedReservation);
     } catch (error: any) {
       console.error("Error saving reservation:", error);
       return NextResponse.json({ error: error.message }, { status: 400 });
@@ -431,7 +411,7 @@ export async function PUT(request: Request) {
 
   try {
     // 既存の予約データを取得
-    const { data: existingReservations, error: fetchError } = await supabase
+    const { data: existingReservation, error: fetchError } = await supabase
       .from('reservations')
       .select(`
         *,
@@ -449,18 +429,34 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: fetchError.message }, { status: 500 });
     }
 
-    if (!existingReservations) {
+    if (!existingReservation) {
       return NextResponse.json({ error: 'Reservation not found' }, { status: 404 });
     }
 
-    const existingReservation = existingReservations;
-
-    // reservation_customers をオブジェクトとして扱う
+    // 顧客IDの取得（スタッフスケジュールの場合はnullの可能性あり）
     const customerId = existingReservation.reservation_customers?.id || null;
 
-    if (!customerId) {
+    if (!customerId && !existingReservation.is_staff_schedule) {
       console.error('Customer ID not found for reservation:', id);
       return NextResponse.json({ error: 'Customer information not found' }, { status: 500 });
+    }
+
+    // スタッフスケジュールの場合、end_time が必須
+    if (existingReservation.is_staff_schedule && !updateFields.end_time) {
+      return NextResponse.json({ error: 'end_time is required for staff schedule updates' }, { status: 400 });
+    }
+
+    // スタッフスケジュールの場合、顧客関連フィールドは除外
+    if (existingReservation.is_staff_schedule) {
+      // updateFields から顧客関連フィールドを除外
+      delete updateFields.customer_name;
+      delete updateFields.customer_email;
+      delete updateFields.customer_phone;
+      delete updateFields.customer_name_kana;
+      delete updateFields.customer_last_name;
+      delete updateFields.customer_first_name;
+      delete updateFields.customer_last_name_kana;
+      delete updateFields.customer_first_name_kana;
     }
 
     // 更新するフィールドを明示的に指定
@@ -472,7 +468,7 @@ export async function PUT(request: Request) {
     for (const field of fieldsToUpdate) {
       if (updateFields[field] !== undefined) {
         if (field === 'start_time' || field === 'end_time') {
-          updatedData[field] = updateFields[field] ? moment(updateFields[field]).utc().format() : undefined;
+          updatedData[field] = updateFields[field] ? moment(updateFields[field]).utc().format('YYYY-MM-DD HH:mm:ss') : undefined;
         } else {
           updatedData[field] = updateFields[field];
         }
@@ -482,7 +478,6 @@ export async function PUT(request: Request) {
     // 予約のステータスを更新する際の追加ロジック
     if (updateFields.status) {
       // ステータスがキャンセル系の場合、特別な処理を追加することも可能
-      // 例: ステータスが 'cancelled' に変更された場合の処理
     }
 
     // スタッフスケジュールの場合、ステータスを 'staff' に強制設定
@@ -510,8 +505,8 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: updateError.message }, { status: 500 });
     }
 
-    // 顧客情報の更新（もし顧客情報が提供されている場合）
-    if (updateFields.customer_name || updateFields.customer_email || updateFields.customer_phone || updateFields.customer_name_kana) {
+    // 顧客情報の更新（顧客IDが存在する場合のみ）
+    if (customerId && (updateFields.customer_name || updateFields.customer_email || updateFields.customer_phone || updateFields.customer_name_kana)) {
       const customerUpdateData: any = {};
       if (updateFields.customer_name) customerUpdateData.name = updateFields.customer_name;
       if (updateFields.customer_email) customerUpdateData.email = updateFields.customer_email;

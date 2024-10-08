@@ -11,11 +11,13 @@ import moment from 'moment';
 import { Alert, Snackbar } from '@mui/material';
 
 interface FormDataType {
-  customer_name?: string;
-  customer_name_kana?: string; // 追加
+  customer_first_name?: string;
+  customer_last_name?: string;
+  customer_first_name_kana?: string;
+  customer_last_name_kana?: string;
   customer_email?: string;
   customer_phone?: string;
-  menu_id?: string;
+  menu_id?: number; // 型を number に変更
   staff_id?: string;
   start_time?: string;
   end_time?: string;
@@ -63,41 +65,43 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
   const [selectedMenuPrice, setSelectedMenuPrice] = useState<number>(0);
 
   useEffect(() => {
-    if (reservation?.is_staff_schedule) {
-      setFormType('staffSchedule');
-    } else {
-      setFormType('reservation');
-    }
-  }, [reservation]);
-
-  useEffect(() => {
-    if (isNew && !selectedDate) {
-      setSelectedDate(new Date());
-    }
-  }, [isNew, selectedDate]);
-
-  useEffect(() => {
     if (reservation && !isCreatingFromButton) {
-      const startMoment = reservation.start_time ? moment.utc(reservation.start_time).local() : null;
-      const endMoment = reservation.end_time ? moment.utc(reservation.end_time).local() : null;
+      // フルネームを姓と名に分割
+      const nameParts = (reservation.customer_name || '').split(' ');
+      const lastName = nameParts[0] || '';
+      const firstName = nameParts[1] || '';
+
+      const nameKanaParts = (reservation.customer_name_kana || '').split(' ');
+      const lastNameKana = nameKanaParts[0] || '';
+      const firstNameKana = nameKanaParts[1] || '';
 
       setFormData({
         ...reservation,
-        start_time: startMoment ? startMoment.format('YYYY-MM-DDTHH:mm') : '',
-        end_time: endMoment ? endMoment.format('YYYY-MM-DDTHH:mm') : '',
-        menu_id: reservation.menu_id?.toString(),
-        staff_id: reservation.staff_id?.toString(),
+        customer_last_name: lastName,
+        customer_first_name: firstName,
+        customer_last_name_kana: lastNameKana,
+        customer_first_name_kana: firstNameKana,
+        menu_id: reservation.menu_id, // そのまま設定
+        staff_id: reservation.staff_id,
       });
 
-      if (startMoment) {
+      if (reservation.start_time) {
+        const startMoment = moment.utc(reservation.start_time).local();
         setSelectedDate(startMoment.toDate());
         setSelectedTimeSlot(startMoment.format('HH:mm'));
-        setComputedEndTime(endMoment ? endMoment.format('YYYY-MM-DDTHH:mm') : '');
+        if (reservation.menu_id) {
+          const selectedMenu = menuList.find(menu => menu.id === reservation.menu_id); // 比較を修正
+          if (selectedMenu) {
+            const endMoment = startMoment.clone().add(selectedMenu.duration, 'minutes');
+            setComputedEndTime(endMoment.format('YYYY-MM-DDTHH:mm'));
+          }
+        }
       }
 
       setIsOverlap(false);
       setOverlapMessage('');
     } else {
+      // 新規予約の場合の初期化
       setFormData({});
       setSelectedDate(new Date());
       setSelectedTimeSlot(null);
@@ -105,19 +109,19 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
       setIsOverlap(false);
       setOverlapMessage('');
     }
-  }, [reservation, isCreatingFromButton]);
+  }, [reservation, isCreatingFromButton, menuList]);
 
   const handleChange = (name: string, value: string) => {
-    console.log(`handleChange called with name: ${name}, value: ${value}`);
-    setFormData(prev => ({
-      ...prev,
-      [name]: value,
-    }));
-  };
+  setFormData(prev => ({
+    ...prev,
+    [name]: name === 'menu_id' ? (value ? Number(value) : undefined) : value,
+  }));
+};
+
 
   useEffect(() => {
     if (formData.menu_id) {
-      const selectedMenu = menuList.find(menu => menu.id.toString() === formData.menu_id);
+      const selectedMenu = menuList.find(menu => menu.id === formData.menu_id);
       if (selectedMenu) {
         setSelectedMenuPrice(selectedMenu.price);
       } else {
@@ -130,8 +134,7 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
 
   useEffect(() => {
     if (selectedDate && formData.staff_id && formData.menu_id) {
-      console.log('Calculating available times:', { selectedDate, staffId: formData.staff_id, menuId: formData.menu_id });
-      const selectedMenu = menuList.find(menu => menu.id.toString() === formData.menu_id);
+      const selectedMenu = menuList.find(menu => menu.id === formData.menu_id);
       if (selectedMenu) {
         const menuDuration = selectedMenu.duration;
         const staffId = formData.staff_id;
@@ -150,65 +153,53 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
         }
 
         if (businessHourForDate.is_holiday) {
-          console.log('This day is a holiday');
-          setAvailableTimes([]); 
+          setAvailableTimes([]);
           return;
         }
 
-        if (businessHourForDate) {
-          const openingTime = moment(`${dateStr} ${businessHourForDate.open_time}`, 'YYYY-MM-DD HH:mm:ss');
-          const closingTime = moment(`${dateStr} ${businessHourForDate.close_time}`, 'YYYY-MM-DD HH:mm:ss');
+        const openingTime = moment(`${dateStr} ${businessHourForDate.open_time}`, 'YYYY-MM-DD HH:mm:ss');
+        const closingTime = moment(`${dateStr} ${businessHourForDate.close_time}`, 'YYYY-MM-DD HH:mm:ss');
 
-          const timeSlots = [];
+        const timeSlots = [];
+        let currentTime = openingTime.clone();
+        while (currentTime.isBefore(closingTime)) {
+          timeSlots.push(currentTime.format('HH:mm'));
+          currentTime.add(30, 'minutes');
+        }
 
-          let currentTime = openingTime.clone();
-          while (currentTime.isBefore(closingTime)) {
-            timeSlots.push(currentTime.format('HH:mm'));
-            currentTime.add(30, 'minutes');
-          }
+        const available: string[] = [];
 
-          const available: string[] = [];
+        timeSlots.forEach(time => {
+          const start = moment(`${dateStr} ${time}`, 'YYYY-MM-DD HH:mm');
+          const end = start.clone().add(menuDuration, 'minutes');
 
-          timeSlots.forEach(time => {
-            const start = moment(`${dateStr} ${time}`, 'YYYY-MM-DD HH:mm');
-            const end = start.clone().add(menuDuration, 'minutes');
+          if (end.isAfter(closingTime)) return;
 
-            if (end.isAfter(closingTime)) return;
+          const overlapping = reservations.some(res => {
+            if (res.staff_id !== staffId) return false;
+            if (res.status === 'cancelled' || res.status === 'completed') return false;
 
-            const overlapping = reservations.some(res => {
-              if (res.staff_id !== staffId) return false;
-              if (res.status === 'cancelled' || res.status === 'completed') return false;
+            const resStart = moment.utc(res.start_time).local();
+            const resEnd = moment.utc(res.end_time).local();
 
-              const resStart = moment.utc(res.start_time).local();
-              const resEnd = moment.utc(res.end_time).local();
-
-              return start.isBefore(resEnd) && end.isAfter(resStart);
-            });
-
-            if (!overlapping) {
-              available.push(time);
-            }
+            return start.isBefore(resEnd) && end.isAfter(resStart);
           });
 
-          console.log('Available times:', available);
-          setAvailableTimes(available);
-        } else {
-          console.log('No business hours found for the selected date');
-          setAvailableTimes([]);
-        }
-      } else {
-        console.log('Selected menu not found');
-        setAvailableTimes([]);
+          if (!overlapping) {
+            available.push(time);
+          }
+        });
+
+        setAvailableTimes(available);
       }
     } else {
-      console.log('Not enough data to calculate available times');
       setAvailableTimes([]);
     }
   }, [selectedDate, formData.staff_id, formData.menu_id, reservations, menuList, businessHours]);
 
   useEffect(() => {
     if (selectedTimeSlot && selectedDate && formData.menu_id) {
-      const selectedMenu = menuList.find(menu => menu.id.toString() === formData.menu_id);
+      const selectedMenu = menuList.find(menu => menu.id === formData.menu_id);
       if (selectedMenu) {
         const start = moment(`${moment(selectedDate).format('YYYY-MM-DD')}T${selectedTimeSlot}`);
         const end = start.clone().add(selectedMenu.duration, 'minutes');
@@ -216,7 +207,7 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
         setFormData(prev => ({
           ...prev,
           start_time: start.format('YYYY-MM-DDTHH:mm'),
-          end_time: end.format('YYYY-MM-DDTHH:mm'), // 修正
+          end_time: end.format('YYYY-MM-DDTHH:mm'),
         }));
 
         setComputedEndTime(end.format('YYYY-MM-DDTHH:mm'));
@@ -231,15 +222,20 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
       return;
     }
 
+    // 姓名を結合
+    const customer_name = `${formData.customer_last_name || ''} ${formData.customer_first_name || ''}`.trim();
+    const customer_name_kana = `${formData.customer_last_name_kana || ''} ${formData.customer_first_name_kana || ''}`.trim();
+
     let updatedReservation: Partial<Reservation> = {
       ...formData,
+      customer_name,
+      customer_name_kana,
       start_time: formData.start_time ? moment(formData.start_time).utc().format() : undefined,
       end_time: computedEndTime ? moment(computedEndTime).utc().format() : undefined,
       total_price: selectedMenuPrice,
       is_staff_schedule: formType === 'staffSchedule',
-      menu_id: formData.menu_id ? parseInt(formData.menu_id, 10) : undefined,
-      staff_id: formData.staff_id,
-      // 新たに顧客IDを含める必要がある場合は、追加
+      // menu_id は既に number 型なので変換不要
+      // その他のフィールドは既に含まれている
     };
 
     onSubmit(updatedReservation, isNew);
@@ -284,28 +280,51 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
               {formType === 'reservation' ? (
                 // Reservation form
                 <>
-                  {/* 顧客情報の入力 */}
+                  {/* 顧客名の入力 (姓) */}
                   <div className="space-y-2">
-                    <Label htmlFor="customer_name">顧客名</Label>
+                    <Label htmlFor="customer_last_name">顧客名（姓）</Label>
                     <Input
-                      id="customer_name"
-                      value={formData.customer_name || ''}
-                      onChange={(e) => handleChange('customer_name', e.target.value)}
+                      id="customer_last_name"
+                      value={formData.customer_last_name || ''}
+                      onChange={(e) => handleChange('customer_last_name', e.target.value)}
                       required
                     />
                   </div>
 
-                  {/* 顧客名（カナ）の入力 */}
+                  {/* 顧客名の入力 (名) */}
                   <div className="space-y-2">
-                    <Label htmlFor="customer_name_kana">顧客名（カナ）</Label>
+                    <Label htmlFor="customer_first_name">顧客名（名）</Label>
                     <Input
-                      id="customer_name_kana"
-                      value={formData.customer_name_kana || ''}
-                      onChange={(e) => handleChange('customer_name_kana', e.target.value)}
+                      id="customer_first_name"
+                      value={formData.customer_first_name || ''}
+                      onChange={(e) => handleChange('customer_first_name', e.target.value)}
                       required
                     />
                   </div>
 
+                  {/* 顧客名（カナ）の入力 (姓) */}
+                  <div className="space-y-2">
+                    <Label htmlFor="customer_last_name_kana">顧客名（カナ・姓）</Label>
+                    <Input
+                      id="customer_last_name_kana"
+                      value={formData.customer_last_name_kana || ''}
+                      onChange={(e) => handleChange('customer_last_name_kana', e.target.value)}
+                      required
+                    />
+                  </div>
+
+                  {/* 顧客名（カナ）の入力 (名) */}
+                  <div className="space-y-2">
+                    <Label htmlFor="customer_first_name_kana">顧客名（カナ・名）</Label>
+                    <Input
+                      id="customer_first_name_kana"
+                      value={formData.customer_first_name_kana || ''}
+                      onChange={(e) => handleChange('customer_first_name_kana', e.target.value)}
+                      required
+                    />
+                  </div>
+
+                  {/* メールアドレスの入力 */}
                   <div className="space-y-2">
                     <Label htmlFor="customer_email">メールアドレス</Label>
                     <Input
@@ -317,6 +336,7 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
                     />
                   </div>
 
+                  {/* 電話番号の入力 */}
                   <div className="space-y-2">
                     <Label htmlFor="customer_phone">電話番号</Label>
                     <Input
@@ -331,7 +351,7 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
                   <div className="space-y-2">
                     <Label htmlFor="menu_id">メニュー</Label>
                     <Select
-                      value={formData.menu_id || ''}
+                      value={formData.menu_id?.toString() || ''} // 文字列に変換
                       onValueChange={(value) => handleChange('menu_id', value)}
                       required
                     >
@@ -416,7 +436,7 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
                       <p>
                         {selectedTimeSlot} ~{' '}
                         {moment(selectedTimeSlot, 'HH:mm')
-                          .add(menuList.find(menu => menu.id.toString() === formData.menu_id)?.duration || 0, 'minutes')
+                          .add(menuList.find(menu => menu.id === formData.menu_id)?.duration || 0, 'minutes')
                           .format('HH:mm')}
                       </p>
                     </div>

@@ -52,6 +52,18 @@ import { useRouter } from "next/navigation";
 import truncateText from "@/utils/truncate-text";
 import { useAuth } from "@/contexts/authcontext";
 
+// 月の選択肢
+const MONTHS = Array.from({ length: 12 }, (_, i) => ({
+  value: String(i + 1).padStart(2, "0"),
+  label: `${i + 1}月`,
+}));
+
+// 日の選択肢
+const DAYS = Array.from({ length: 31 }, (_, i) => ({
+  value: String(i + 1).padStart(2, "0"),
+  label: `${i + 1}日`,
+}));
+
 interface CustomerDetailPageProps {
   id: string;
 }
@@ -138,7 +150,9 @@ const CustomerDetailPage: React.FC<CustomerDetailPageProps> = ({ id }) => {
     setEditedDetails({ ...editedDetails, [name]: value });
   };
 
-  const handleDetailInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleDetailInputChange = (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
     const { name, value } = e.target;
     setDetailInfo({ ...detailInfo, [name]: value });
   };
@@ -167,18 +181,21 @@ const CustomerDetailPage: React.FC<CustomerDetailPageProps> = ({ id }) => {
       // 保存するデータのフィールド名をデータベースに合わせる
       const saveDetailInfo = {
         ...detailInfo,
-        birth_date: detailInfo.birthDate,
-        wedding_anniversary: detailInfo.weddingAnniversary,
+        birth_date: detailInfo.birthDate === "00-00" ? null : detailInfo.birthDate,
+        wedding_anniversary:
+          detailInfo.weddingAnniversary === "00-00"
+            ? null
+            : detailInfo.weddingAnniversary,
         // キャメルケースのフィールドを削除
         birthDate: undefined,
         weddingAnniversary: undefined,
         memo: memo,
       };
 
-      const response = await fetch('/api/customer-details/update', {
-        method: 'POST',
+      const response = await fetch("/api/customer-details/update", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
           Authorization: `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({
@@ -191,14 +208,18 @@ const CustomerDetailPage: React.FC<CustomerDetailPageProps> = ({ id }) => {
       const data = await response.json();
 
       if (response.ok) {
-        console.log('Detail information updated successfully');
+        console.log("Detail information updated successfully");
         setIsDetailEditing(false);
-        setCustomerDetails({ ...customerDetails, detailInfo: { ...detailInfo, memo }, memo });
+        setCustomerDetails({
+          ...customerDetails,
+          detailInfo: { ...detailInfo, memo },
+          memo,
+        });
       } else {
-        console.error('Error updating detail information:', data.error);
+        console.error("Error updating detail information:", data.error);
       }
     } catch (error) {
-      console.error('Error updating detail information:', error);
+      console.error("Error updating detail information:", error);
     }
   };
 
@@ -206,23 +227,26 @@ const CustomerDetailPage: React.FC<CustomerDetailPageProps> = ({ id }) => {
     if (!session) return;
 
     try {
-      const response = await fetch(`/api/customer-details/delete?id=${customerDetails.id}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`,
-        },
-      });
+      const response = await fetch(
+        `/api/customer-details/delete?id=${customerDetails.id}`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        }
+      );
 
       const data = await response.json();
 
       if (response.ok) {
-        console.log('Customer deleted successfully');
+        console.log("Customer deleted successfully");
         router.push("/dashboard/customer"); // 削除後に顧客一覧に戻る
       } else {
-        console.error('Error deleting customer:', data.error);
+        console.error("Error deleting customer:", data.error);
       }
     } catch (error) {
-      console.error('Error deleting customer:', error);
+      console.error("Error deleting customer:", error);
     }
   };
 
@@ -252,14 +276,14 @@ const CustomerDetailPage: React.FC<CustomerDetailPageProps> = ({ id }) => {
         return (
           <Select
             name={name}
-            value={value || "未選択"}
+            value={value || "0"}
             onValueChange={(value) => handleSelectChangeFn(name, value)}
           >
             <SelectTrigger className={editStyles}>
               <SelectValue placeholder="未選択" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="未選択">未選択</SelectItem>
+              <SelectItem value="0">未選択</SelectItem>
               <SelectItem value="男性">男性</SelectItem>
               <SelectItem value="女性">女性</SelectItem>
               <SelectItem value="その他">その他</SelectItem>
@@ -284,6 +308,75 @@ const CustomerDetailPage: React.FC<CustomerDetailPageProps> = ({ id }) => {
       <div className={`${commonStyles} flex items-center`}>
         {icon && <span className="mr-2">{icon}</span>}
         {value || "未選択"}
+      </div>
+    );
+  };
+
+  const renderDateField = (
+    label: string,
+    value: string,
+    onChange: (newValue: string) => void,
+    icon: React.ReactNode,
+    isEditingField: boolean
+  ) => {
+    const [month, day] = value.split("-");
+
+    const handleMonthChange = (newMonth: string) => {
+      const updatedValue = `${newMonth}-${day || "01"}`;
+      onChange(updatedValue);
+    };
+
+    const handleDayChange = (newDay: string) => {
+      const updatedValue = `${month || "00"}-${newDay}`;
+      onChange(updatedValue);
+    };
+
+    return (
+      <div className="flex items-center space-x-2">
+        {icon && <span className="mr-2">{icon}</span>}
+        {isEditingField ? (
+          <>
+            <Select
+              value={month || "0"}
+              onValueChange={handleMonthChange}
+            >
+              <SelectTrigger className="w-20">
+                <SelectValue placeholder="月" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="0">未選択</SelectItem>
+                {MONTHS.map((m) => (
+                  <SelectItem key={m.value} value={m.value}>
+                    {m.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <span>-</span>
+            <Select
+              value={day || "0"}
+              onValueChange={handleDayChange}
+            >
+              <SelectTrigger className="w-20">
+                <SelectValue placeholder="日" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="0">未選択</SelectItem>
+                {DAYS.map((d) => (
+                  <SelectItem key={d.value} value={d.value}>
+                    {d.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </>
+        ) : (
+          <span>
+            {month && day && month !== "00" && day !== "00"
+              ? `${parseInt(month)}月${parseInt(day)}日`
+              : "未設定"}
+          </span>
+        )}
       </div>
     );
   };
@@ -437,15 +530,34 @@ const CustomerDetailPage: React.FC<CustomerDetailPageProps> = ({ id }) => {
                           {item.label}
                         </TableCell>
                         <TableCell className="py-2 w-2/3">
-                          {renderEditableField(
-                            item.field,
-                            detailInfo[item.field],
-                            item.field === "birthDate" || item.field === "weddingAnniversary" ? "text" : item.type || "text",
-                            true,
-                            item.icon,
-                            isDetailEditing,
-                            handleDetailInputChange,
-                            handleDetailSelectChange
+                          {item.field === "birthDate" ||
+                          item.field === "weddingAnniversary" ? (
+                            renderDateField(
+                              item.label,
+                              detailInfo[item.field],
+                              (newValue: string) => {
+                                setDetailInfo({
+                                  ...detailInfo,
+                                  [item.field]: newValue,
+                                });
+                              },
+                              item.icon,
+                              isDetailEditing
+                            )
+                          ) : (
+                            renderEditableField(
+                              item.field,
+                              detailInfo[item.field],
+                              item.field === "birthDate" ||
+                                item.field === "weddingAnniversary"
+                                ? "date"
+                                : item.type || "text",
+                              true,
+                              item.icon,
+                              isDetailEditing,
+                              handleDetailInputChange,
+                              handleDetailSelectChange
+                            )
                           )}
                         </TableCell>
                       </TableRow>
@@ -459,52 +571,132 @@ const CustomerDetailPage: React.FC<CustomerDetailPageProps> = ({ id }) => {
                   {isDetailEditing ? (
                     <>
                       {detailInfo.children && detailInfo.children.length > 0 ? (
-                        detailInfo.children.map((child: any, index: number) => (
-                          <div key={index} className="flex space-x-4 mt-2">
-                            <Input
-                              name={`childName-${index}`}
-                              value={child.name}
-                              placeholder="名前"
-                              onChange={(e) => {
-                                const updatedChildren = [...detailInfo.children];
-                                updatedChildren[index].name = e.target.value;
-                                setDetailInfo({ ...detailInfo, children: updatedChildren });
-                              }}
-                            />
-                            <Input
-                              name={`childBirthDate-${index}`}
-                              type="text" // テキスト形式に変更
-                              value={child.birthDate}
-                              placeholder="誕生日"
-                              onChange={(e) => {
-                                const updatedChildren = [...detailInfo.children];
-                                updatedChildren[index].birthDate = e.target.value;
-                                setDetailInfo({ ...detailInfo, children: updatedChildren });
-                              }}
-                            />
-                            <Button
-                              variant="destructive"
-                              onClick={() => {
-                                const updatedChildren = detailInfo.children.filter(
-                                  (_: any, i: number) => i !== index
-                                );
-                                setDetailInfo({ ...detailInfo, children: updatedChildren });
-                              }}
+                        detailInfo.children.map(
+                          (child: any, index: number) => (
+                            <div
+                              key={index}
+                              className="flex space-x-4 mt-2 items-center"
                             >
-                              削除
-                            </Button>
-                          </div>
-                        ))
+                              <Input
+                                name={`childName-${index}`}
+                                value={child.name}
+                                placeholder="名前"
+                                onChange={(e) => {
+                                  const updatedChildren = [
+                                    ...detailInfo.children,
+                                  ];
+                                  updatedChildren[index].name =
+                                    e.target.value;
+                                  setDetailInfo({
+                                    ...detailInfo,
+                                    children: updatedChildren,
+                                  });
+                                }}
+                              />
+                              {/* 子供の誕生日を月と日で選択 */}
+                              <div className="flex items-center space-x-2">
+                                <Select
+                                  value={
+                                    child.birthDate
+                                      ? child.birthDate.split("-")[0]
+                                      : "0"
+                                  }
+                                  onValueChange={(value) => {
+                                    const updatedChildren = [
+                                      ...detailInfo.children,
+                                    ];
+                                    const currentDay = child.birthDate
+                                      ? child.birthDate.split("-")[1]
+                                      : "00";
+                                    updatedChildren[index].birthDate = `${value}-${currentDay}`;
+                                    setDetailInfo({
+                                      ...detailInfo,
+                                      children: updatedChildren,
+                                    });
+                                  }}
+                                >
+                                  <SelectTrigger className="w-20">
+                                    <SelectValue placeholder="月" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="0">未選択</SelectItem>
+                                    {MONTHS.map((m) => (
+                                      <SelectItem
+                                        key={m.value}
+                                        value={m.value}
+                                      >
+                                        {m.label}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                <span>-</span>
+                                <Select
+                                  value={
+                                    child.birthDate
+                                      ? child.birthDate.split("-")[1]
+                                      : "0"
+                                  }
+                                  onValueChange={(value) => {
+                                    const updatedChildren = [
+                                      ...detailInfo.children,
+                                    ];
+                                    const currentMonth = child.birthDate
+                                      ? child.birthDate.split("-")[0]
+                                      : "00";
+                                    updatedChildren[index].birthDate = `${currentMonth}-${value}`;
+                                    setDetailInfo({
+                                      ...detailInfo,
+                                      children: updatedChildren,
+                                    });
+                                  }}
+                                >
+                                  <SelectTrigger className="w-20">
+                                    <SelectValue placeholder="日" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="0">未選択</SelectItem>
+                                    {DAYS.map((d) => (
+                                      <SelectItem
+                                        key={d.value}
+                                        value={d.value}
+                                      >
+                                        {d.label}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <Button
+                                variant="destructive"
+                                onClick={() => {
+                                  const updatedChildren =
+                                    detailInfo.children.filter(
+                                      (_: any, i: number) => i !== index
+                                    );
+                                  setDetailInfo({
+                                    ...detailInfo,
+                                    children: updatedChildren,
+                                  });
+                                }}
+                              >
+                                削除
+                              </Button>
+                            </div>
+                          )
+                        )
                       ) : (
-                        <p className="text-sm text-gray-500 mt-2">子供の情報がありません。</p>
+                        <p className="text-sm text-gray-500 mt-2">
+                          子供の情報がありません。
+                        </p>
                       )}
                       <Button
                         variant="outline"
                         className="mt-4"
                         onClick={() => {
                           const updatedChildren = detailInfo.children
-                            ? [...detailInfo.children, { name: "", birthDate: "" }]
-                            : [{ name: "", birthDate: "" }];
+                            ? [...detailInfo.children, { name: "", birthDate: "0-0" }]
+                            : [{ name: "", birthDate: "0-0" }];
                           setDetailInfo({ ...detailInfo, children: updatedChildren });
                         }}
                       >
@@ -514,14 +706,25 @@ const CustomerDetailPage: React.FC<CustomerDetailPageProps> = ({ id }) => {
                   ) : (
                     <>
                       {detailInfo.children && detailInfo.children.length > 0 ? (
-                        detailInfo.children.map((child: any, index: number) => (
-                          <div key={index} className="mt-2">
-                            <p>名前: {child.name || "未設定"}</p>
-                            <p>誕生日: {child.birthDate || "未設定"}</p>
-                          </div>
-                        ))
+                        detailInfo.children.map(
+                          (child: any, index: number) => (
+                            <div key={index} className="mt-2">
+                              <p>名前: {child.name || "未設定"}</p>
+                              <p>
+                                誕生日:{" "}
+                                {child.birthDate && child.birthDate !== "0-0"
+                                  ? `${parseInt(child.birthDate.split("-")[0])}月${parseInt(
+                                      child.birthDate.split("-")[1]
+                                    )}日`
+                                  : "未設定"}
+                              </p>
+                            </div>
+                          )
+                        )
                       ) : (
-                        <p className="text-sm text-gray-500 mt-2">子供の情報がありません。</p>
+                        <p className="text-sm text-gray-500 mt-2">
+                          子供の情報がありません。
+                        </p>
                       )}
                     </>
                   )}
@@ -580,7 +783,10 @@ const CustomerDetailPage: React.FC<CustomerDetailPageProps> = ({ id }) => {
                     <tbody>
                       {filteredReservations.map(
                         (reservation: any, index: number) => (
-                          <tr key={index} className="border-b hover:bg-gray-50">
+                          <tr
+                            key={index}
+                            className="border-b hover:bg-gray-50"
+                          >
                             <td className="p-3 text-sm">
                               {reservation.date ? reservation.date : ""}
                             </td>
@@ -588,10 +794,12 @@ const CustomerDetailPage: React.FC<CustomerDetailPageProps> = ({ id }) => {
                               {truncateText(reservation.menu, 10)}
                             </td>
                             <td className="p-3 text-sm text-center">
-                              ¥{reservation.technicalAmount.toLocaleString()}
+                              ¥
+                              {reservation.technicalAmount.toLocaleString()}
                             </td>
                             <td className="p-3 text-sm text-center">
-                              ¥{reservation.productAmount.toLocaleString()}
+                              ¥
+                              {reservation.productAmount.toLocaleString()}
                             </td>
                             <td className="p-3 text-sm text-center">
                               ¥{reservation.amount.toLocaleString()}
@@ -623,13 +831,19 @@ const CustomerDetailPage: React.FC<CustomerDetailPageProps> = ({ id }) => {
                 <span className="font-semibold whitespace-nowrap">
                   合計商品売上: ¥
                   {filteredReservations
-                    .reduce((sum: number, r: any) => sum + r.productAmount, 0)
+                    .reduce(
+                      (sum: number, r: any) => sum + r.productAmount,
+                      0
+                    )
                     .toLocaleString()}
                 </span>
                 <span className="font-semibold whitespace-nowrap">
                   合計支払金額: ¥
                   {filteredReservations
-                    .reduce((sum: number, r: any) => sum + r.amount, 0)
+                    .reduce(
+                      (sum: number, r: any) => sum + r.amount,
+                      0
+                    )
                     .toLocaleString()}
                 </span>
               </div>
@@ -652,7 +866,7 @@ const CustomerDetailPage: React.FC<CustomerDetailPageProps> = ({ id }) => {
                     <Dialog>
                       <DialogTrigger asChild>
                         <Button variant="destructive">
-                          <Trash2 className="mr-2" /> 削除 
+                          <Trash2 className="mr-2" /> 削除
                         </Button>
                       </DialogTrigger>
                       <DialogContent>

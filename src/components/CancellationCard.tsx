@@ -1,8 +1,7 @@
-// CancellationCard.tsx
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   ComposedChart,
@@ -21,6 +20,7 @@ import dayjs from "dayjs";
 interface CancellationData {
   date: string;
   count: number;
+  totalCount: number; // 総予約数を追加
   rate: number;
 }
 
@@ -33,6 +33,13 @@ const CancellationCard: React.FC = () => {
   const [monthlyData, setMonthlyData] = useState<CancellationData[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+
+  // 期間の説明を定義
+  const periodDescriptions: Record<"daily" | "weekly" | "monthly", string> = {
+    daily: "過去14日間",
+    weekly: "過去4週間",
+    monthly: "過去6か月間",
+  };
 
   const fetchCancellationData = async (period: "daily" | "weekly" | "monthly") => {
     try {
@@ -135,15 +142,22 @@ const CancellationCard: React.FC = () => {
     }
   };
 
+  // キャンセル数の合計
   const getTotalCancellations = () => {
     return getDataForTab().reduce((sum, item) => sum + item.count, 0);
   };
 
+  // 総予約数の合計
+  const getTotalReservations = () => {
+    return getDataForTab().reduce((sum, item) => sum + item.totalCount, 0);
+  };
+
+  // 平均キャンセル率の計算を修正
   const getAverageRate = () => {
-    const data = getDataForTab();
-    if (data.length === 0) return 0;
-    const totalRate = data.reduce((sum, item) => sum + item.rate, 0);
-    return parseFloat((totalRate / data.length).toFixed(1));
+    const totalCancellations = getTotalCancellations();
+    const totalReservations = getTotalReservations();
+    if (totalReservations === 0) return 0;
+    return parseFloat(((totalCancellations / totalReservations) * 100).toFixed(1));
   };
 
   if (authLoading || loading) {
@@ -169,6 +183,10 @@ const CancellationCard: React.FC = () => {
   return (
     <Card className="bg-white border-none shadow-lg mt-10">
       <CardContent>
+        {/* 期間の説明を表示 */}
+        <div className="mb-4">
+          <h2 className="text-lg font-semibold">キャンセル状況 ({periodDescriptions[activeTab]})</h2>
+        </div>
         <div className="grid grid-cols-2 gap-8 mb-6">
           <div className="text-center">
             <h3 className="text-sm font-medium text-gray-600">キャンセル数</h3>

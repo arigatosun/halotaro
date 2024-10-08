@@ -3,6 +3,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import dayjs from 'dayjs';
+import utc from "dayjs/plugin/utc";
+import timezone from "dayjs/plugin/timezone";
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
+dayjs.locale("ja");
+
+// 日本時間に設定
+dayjs.tz.setDefault("Asia/Tokyo");
 
 // Supabaseクライアントの作成
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -41,8 +50,8 @@ export async function GET(req: NextRequest) {
       throw error;
     }
 
-    // closing_dateを6時間減算して返す
-    const adjustedClosingDate = dayjs(data.closing_date).subtract(9, 'hour').format('YYYY-MM-DD HH:mm:ss');
+    // closing_dateを日本時間に変換して返す
+    const adjustedClosingDate = dayjs(data.closing_date).tz("Asia/Tokyo").format('YYYY-MM-DD HH:mm:ss');
 
     return NextResponse.json({ closing_date: adjustedClosingDate }, { status: 200 });
   } catch (error: any) {
