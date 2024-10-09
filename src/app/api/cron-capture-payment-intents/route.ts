@@ -1,5 +1,3 @@
-// app/api/cron-capture-payment-intents/route.ts
-
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
@@ -10,11 +8,11 @@ const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY!;
 const CRON_SECRET = process.env.CRON_SECRET!;
 
-// デバッグ用ログ（必要に応じてコメントアウト）
+// デバッグ用ログ
 console.log('SUPABASE_URL:', SUPABASE_URL);
-console.log('SUPABASE_SERVICE_ROLE_KEY:', SUPABASE_SERVICE_ROLE_KEY ? '[SET]' : '[NOT SET]');
-console.log('STRIPE_SECRET_KEY:', STRIPE_SECRET_KEY ? '[SET]' : '[NOT SET]');
-console.log('CRON_SECRET:', CRON_SECRET ? '[SET]' : '[NOT SET]');
+console.log('SUPABASE_SERVICE_ROLE_KEY:', SUPABASE_SERVICE_ROLE_KEY ? '[設定済み]' : '[未設定]');
+console.log('STRIPE_SECRET_KEY:', STRIPE_SECRET_KEY ? '[設定済み]' : '[未設定]');
+console.log('CRON_SECRET:', CRON_SECRET ? '[設定済み]' : '[未設定]');
 
 // Stripe クライアントの初期化
 const stripe = new Stripe(STRIPE_SECRET_KEY, {
@@ -38,8 +36,8 @@ async function updatePaymentIntentStatusInDatabase({
     .eq('payment_intent_id', paymentIntentId);
 
   if (error) {
-    console.error('Error updating PaymentIntent status in database:', error);
-    throw new Error('Failed to update PaymentIntent status in database');
+    console.error('データベース内のPaymentIntentステータス更新中にエラーが発生しました:', error);
+    throw new Error('データベース内のPaymentIntentステータスの更新に失敗しました');
   }
 
   return data;
@@ -49,12 +47,12 @@ async function updatePaymentIntentStatusInDatabase({
 export async function GET(request: NextRequest) {
   // 認証チェック
   if (request.headers.get('Authorization') !== `Bearer ${CRON_SECRET}`) {
-    console.error('Unauthorized access attempt');
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    console.error('不正なアクセス試行がありました');
+    return NextResponse.json({ error: '認証されていません' }, { status: 401 });
   }
 
-  console.log('Scheduler has started.');
-  console.log(`[${new Date().toISOString()}] Running scheduled capture task...`);
+  console.log('スケジューラーが起動しました。');
+  console.log(`[${new Date().toISOString()}] PaymentIntentキャプチャタスクを開始します...`);
 
   try {
     // 現在のUTC時刻を取得
@@ -68,25 +66,31 @@ export async function GET(request: NextRequest) {
       .eq('status', 'requires_capture');
 
     if (error) {
-      console.error('Error fetching payment intents:', error);
-      return NextResponse.json({ error: 'Error fetching payment intents' }, { status: 500 });
+      console.error('payment_intentsの取得中にエラーが発生しました:', error);
+      return NextResponse.json({ error: 'payment_intentsの取得に失敗しました' }, { status: 500 });
     }
 
     if (!paymentIntents || paymentIntents.length === 0) {
-      console.log('No PaymentIntents require capture at this time.');
-      return NextResponse.json({ message: 'No PaymentIntents require capture at this time.' }, { status: 200 });
+      console.log('現時点でキャプチャが必要なPaymentIntentはありません。');
+      return NextResponse.json({ message: '現時点でキャプチャが必要なPaymentIntentはありません。' }, { status: 200 });
     }
 
-    console.log(`Found ${paymentIntents.length} PaymentIntent(s) to capture.`);
+    console.log(`キャプチャが必要なPaymentIntentを${paymentIntents.length}件見つけました。`);
+
+    let processedCount = 0;
+    let successCount = 0;
+    let successfulIds: string[] = [];
 
     for (const paymentIntentData of paymentIntents) {
       const { payment_intent_id, user_id, status } = paymentIntentData;
 
       // ステータスが 'requires_capture' であることを再確認
       if (status !== 'requires_capture') {
-        console.log(`PaymentIntent ${payment_intent_id} status is not 'requires_capture'. Skipping.`);
+        console.log(`PaymentIntent ${payment_intent_id} のステータスが 'requires_capture' ではありません。スキップします。`);
         continue;
       }
+
+      processedCount++;
 
       // Stripe Connect アカウントIDを取得（stripe_profiles テーブルをクエリ）
       const { data: userData, error: userError } = await supabase
@@ -96,7 +100,7 @@ export async function GET(request: NextRequest) {
         .single();
 
       if (userError || !userData || !userData.stripe_connect_id) {
-        console.error(`Error fetching Stripe Connect ID for user ${user_id}:`, userError);
+        console.error(`ユーザー ${user_id} の Stripe Connect ID 取得中にエラーが発生しました:`, userError);
         continue;
       }
 
@@ -112,7 +116,7 @@ export async function GET(request: NextRequest) {
           }
         );
 
-        console.log(`Successfully captured PaymentIntent ${paymentIntent.id}`);
+        console.log(`PaymentIntent ${paymentIntent.id} のキャプチャに成功しました。`);
 
         // payment_intents テーブルのステータスを更新
         const { error: updateError } = await supabase
@@ -121,19 +125,24 @@ export async function GET(request: NextRequest) {
           .eq('payment_intent_id', paymentIntent.id);
 
         if (updateError) {
-          console.error(`Error updating status for PaymentIntent ${paymentIntent.id}:`, updateError);
+          console.error(`PaymentIntent ${paymentIntent.id} のステータス更新中にエラーが発生しました:`, updateError);
         } else {
-          console.log(`Updated status for PaymentIntent ${paymentIntent.id} to '${paymentIntent.status}'.`);
+          console.log(`PaymentIntent ${paymentIntent.id} のステータスを '${paymentIntent.status}' に更新しました。`);
+          successCount++;
+          successfulIds.push(paymentIntent.id);
         }
       } catch (captureError: any) {
-        console.error(`Error capturing PaymentIntent ${payment_intent_id}:`, captureError);
+        console.error(`PaymentIntent ${payment_intent_id} のキャプチャ中にエラーが発生しました:`, captureError);
         // 必要に応じて再試行のロジックや通知の仕組みを追加
       }
     }
 
-    return NextResponse.json({ message: 'Scheduled capture task completed.' }, { status: 200 });
+    console.log(`処理が必要なPaymentIntent ${processedCount}件のうち、${successCount}件のキャプチャに成功しました。`);
+    console.log('キャプチャに成功したPaymentIntentのID:', successfulIds.join(', '));
+
+    return NextResponse.json({ message: 'PaymentIntentキャプチャタスクが完了しました。' }, { status: 200 });
   } catch (err: any) {
-    console.error('Error in scheduled capture task:', err);
-    return NextResponse.json({ error: 'Error in scheduled capture task' }, { status: 500 });
+    console.error('PaymentIntentキャプチャタスク中にエラーが発生しました:', err);
+    return NextResponse.json({ error: 'PaymentIntentキャプチャタスク中にエラーが発生しました' }, { status: 500 });
   }
 }
