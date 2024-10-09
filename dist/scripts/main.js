@@ -30,6 +30,7 @@ const supabase = (0, supabase_js_1.createClient)(
 );
 
 const { decrypt } = require("./utils/encryption");
+
 async function saveSession(userId, context) {
   const cookies = await context.cookies();
   const sessionData = { cookies };
@@ -45,6 +46,7 @@ async function saveSession(userId, context) {
   });
   if (error) throw error;
 }
+
 async function loadSession(userId, context) {
   const { data, error } = await supabase
     .from("salonboard_sessions")
@@ -61,6 +63,7 @@ async function loadSession(userId, context) {
   await context.addCookies(sessionData.cookies);
   return true;
 }
+
 async function setupBrowser() {
   const browser = await playwright_1.chromium.launch({
     headless: false,
@@ -96,6 +99,7 @@ async function setupBrowser() {
   });
   return { browser, context };
 }
+
 async function loginAndNavigate(
   page,
   context,
@@ -104,28 +108,25 @@ async function loginAndNavigate(
   password,
   url
 ) {
-  const sessionLoaded = await loadSession(haloTaroUserId, context);
-  if (sessionLoaded) {
-    console.log("保存された認証情報を使用してブラウザを開きました。");
-    if (await page.isVisible('input[name="userId"]')) {
-      console.log("セッションが無効になっています。再ログインが必要です。");
-      await loginWithManualCaptcha(page, salonboardUserId, password);
-      await saveSession(haloTaroUserId, context);
-    }
-  } else {
-    console.log("新規ログインを行います。");
+  // セッションは既にロード済みと仮定
+  await page.goto(url, { waitUntil: "networkidle" });
+
+  // ログインが必要かチェック
+  if (await page.isVisible('input[name="userId"]')) {
+    console.log("ログインが必要です。再ログインを試みます。");
     await loginWithManualCaptcha(page, salonboardUserId, password);
     await saveSession(haloTaroUserId, context);
+
+    // 再度目的のURLにアクセス
+    await page.goto(url, { waitUntil: "networkidle" });
+
+    // 再度ログインが必要かチェック
+    if (await page.isVisible('input[name="userId"]')) {
+      throw new Error("ログインに失敗しました。");
+    }
   }
-  await page.goto(url, { waitUntil: "networkidle" });
-  await checkAndRelogin(
-    page,
-    salonboardUserId,
-    password,
-    context,
-    haloTaroUserId
-  );
 }
+
 // サロンボードのログイン画面にログインする
 async function loginWithManualCaptcha(page, userId, password) {
   await page.goto("https://salonboard.com/login/");
@@ -139,34 +140,16 @@ async function loginWithManualCaptcha(page, userId, password) {
   }
   console.log("ログイン完了");
 }
-async function checkAndRelogin(
-  page,
-  userId,
-  password,
-  context,
-  haloTaroUserId
-) {
-  const errorSelector = ".mod_color_e50000.mod_font01.mod_align_center";
-  const isErrorPresent = await page.isVisible(errorSelector);
-  if (isErrorPresent) {
-    console.log("セッションの期限切れを検出しました。再ログインを試みます。");
-    await loginWithManualCaptcha(page, userId, password);
-    await saveSession(haloTaroUserId, context);
-    // 現在のURLに再度アクセス
-    await page.reload({ waitUntil: "networkidle" });
-    // 再ログイン後もエラーが表示される場合
-    if (await page.isVisible(errorSelector)) {
-      throw new Error(
-        "再ログイン後もエラーが発生しています。手動での確認が必要です。"
-      );
-    }
-  }
-}
+
 // サロンボードの予約情報を同期する
-async function syncReservations(haloTaroUserId, salonboardUserId, password) {
+async function syncReservations(
+  haloTaroUserId,
+  salonboardUserId,
+  password,
+  context
+) {
   logger_1.logger.log("予約情報同期の開始 user_id:", haloTaroUserId);
   logger_1.logger.log(new Date().toISOString());
-  const { browser, context } = await setupBrowser();
   const page = await context.newPage();
   try {
     await loginAndNavigate(
@@ -227,14 +210,14 @@ async function syncReservations(haloTaroUserId, salonboardUserId, password) {
     console.error("An error occurred during reservation sync:", error);
     throw error;
   } finally {
-    await browser.close();
+    await page.close();
   }
 }
+
 // サロンボードのメニュー情報を同期する
-async function syncMenus(haloTaroUserId, salonboardUserId, password) {
+async function syncMenus(haloTaroUserId, salonboardUserId, password, context) {
   logger_1.logger.log("メニューの同期: user_id", haloTaroUserId);
   logger_1.logger.log(new Date().toISOString());
-  const { browser, context } = await setupBrowser();
   const page = await context.newPage();
   try {
     await loginAndNavigate(
@@ -259,14 +242,19 @@ async function syncMenus(haloTaroUserId, salonboardUserId, password) {
     console.error("An error occurred during menu sync:", error);
     throw error;
   } finally {
-    await browser.close();
+    await page.close();
   }
 }
+
 // サロンボードのスタッフ情報を同期する
-async function syncStaffData(haloTaroUserId, salonboardUserId, password) {
+async function syncStaffData(
+  haloTaroUserId,
+  salonboardUserId,
+  password,
+  context
+) {
   logger_1.logger.log("スタッフ情報同期 user_id:", haloTaroUserId);
   logger_1.logger.log(new Date().toISOString());
-  const { browser, context } = await setupBrowser();
   const page = await context.newPage();
   try {
     await loginAndNavigate(
@@ -298,12 +286,17 @@ async function syncStaffData(haloTaroUserId, salonboardUserId, password) {
     console.error("An error occurred during staff sync:", error);
     throw error;
   } finally {
-    await browser.close();
+    await page.close();
   }
 }
+
 // サロンボードのクーポン情報を同期する
-async function syncCoupons(haloTaroUserId, salonboardUserId, password) {
-  const { browser, context } = await setupBrowser();
+async function syncCoupons(
+  haloTaroUserId,
+  salonboardUserId,
+  password,
+  context
+) {
   const page = await context.newPage();
   try {
     await loginAndNavigate(
@@ -338,9 +331,10 @@ async function syncCoupons(haloTaroUserId, salonboardUserId, password) {
     console.error("Error syncing coupons:", error);
     throw error;
   } finally {
-    await browser.close();
+    await page.close();
   }
 }
+
 async function syncReservationToSalonboard(
   haloTaroUserId,
   salonboardUserId,
@@ -425,6 +419,7 @@ function normalizeString(str) {
     .toLowerCase() // 小文字に変換
     .normalize("NFKC"); // Unicode正規化（全角英数字を半角に変換など）
 }
+
 async function getStaffIdByName(page, staffName) {
   const normalizedStaffName = normalizeString(staffName);
   // スタッフリストを取得
@@ -480,22 +475,32 @@ async function syncAllData(haloTaroUserId) {
   const password = decrypt(encrypted_password);
 
   const { browser, context } = await setupBrowser();
-  const page = await context.newPage();
 
   try {
-    await loginAndNavigate(
-      page,
-      context,
-      haloTaroUserId,
-      salonboardUserId,
-      password,
-      "https://salonboard.com/"
-    );
+    const page = await context.newPage();
 
-    await syncReservations(haloTaroUserId, salonboardUserId, password);
-    await syncMenus(haloTaroUserId, salonboardUserId, password);
-    await syncStaffData(haloTaroUserId, salonboardUserId, password);
-    await syncCoupons(haloTaroUserId, salonboardUserId, password);
+    // セッションをロードまたはログイン
+    const sessionLoaded = await loadSession(haloTaroUserId, context);
+    if (sessionLoaded) {
+      console.log("保存された認証情報を使用してブラウザを開きました。");
+      await page.goto("https://salonboard.com/");
+      if (await page.isVisible('input[name="userId"]')) {
+        console.log("セッションが無効になっています。再ログインが必要です。");
+        await loginWithManualCaptcha(page, salonboardUserId, password);
+        await saveSession(haloTaroUserId, context);
+      }
+    } else {
+      console.log("新規ログインを行います。");
+      await loginWithManualCaptcha(page, salonboardUserId, password);
+      await saveSession(haloTaroUserId, context);
+    }
+    await page.close();
+
+    // 各同期関数に context を渡す
+    await syncReservations(haloTaroUserId, salonboardUserId, password, context);
+    await syncMenus(haloTaroUserId, salonboardUserId, password, context);
+    await syncStaffData(haloTaroUserId, salonboardUserId, password, context);
+    await syncCoupons(haloTaroUserId, salonboardUserId, password, context);
 
     console.log("全データの同期が完了しました。");
 
