@@ -11,7 +11,12 @@ import { Text } from "@react-email/text";
 interface SynchronizationErrorNotificationProps {
   adminName: string;
   errorMessage: string;
-  reservationData: any;
+  reservationData: {
+    customerName: string;
+    startTime: string;
+    endTime: string;
+    staffName: string;
+  };
 }
 
 export const SynchronizationErrorNotification: React.FC<
@@ -36,11 +41,14 @@ export const SynchronizationErrorNotification: React.FC<
             {errorMessage}
           </Text>
           <Text style={detailTextStyle}>
-            <strong style={labelStyle}>予約データ:</strong>
+            <strong style={labelStyle}>予約情報:</strong>
             <br />
-            <pre style={preStyle}>
-              {JSON.stringify(reservationData, null, 2)}
-            </pre>
+            お客様: {reservationData.customerName} 様
+            <br />
+            予約日時: {formatDateTime(reservationData.startTime)} -{" "}
+            {formatDateTime(reservationData.endTime)}
+            <br />
+            スタッフ: {reservationData.staffName}
           </Text>
         </Section>
         <Text style={textStyle}>
@@ -55,6 +63,11 @@ export const SynchronizationErrorNotification: React.FC<
     </Container>
   </Html>
 );
+
+const formatDateTime = (dateTimeString: string) => {
+  const date = new Date(dateTimeString);
+  return date.toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" });
+};
 
 const containerStyle: React.CSSProperties = {
   margin: "0 auto",

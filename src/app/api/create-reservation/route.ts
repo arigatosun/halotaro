@@ -5,6 +5,7 @@ import { ReservationConfirmation } from "../../../emails/ReservationConfirmation
 import { NewReservationNotification } from "../../../emails/NewReservationNotification";
 import { SynchronizationErrorNotification } from "../../../emails/SynchronizationErrorNotification";
 import { generateCancelUrl } from "../../../utils/url";
+import * as Sentry from "@sentry/nextjs";
 
 // Supabase クライアントの初期化
 const supabase = createClient(
@@ -366,7 +367,17 @@ export async function POST(request: Request) {
         if (!automationResponse.success) {
           console.error("Automation sync failed:", automationResponse.error);
 
-          // *** エラー時にサロンオーナーとスタッフへエラーメールを送信 ***
+          // Sentryにエラーを送信
+          Sentry.captureException(new Error(automationResponse.error), {
+            contexts: {
+              reservation: {
+                userId: userId,
+                reservationId: reservationId,
+              },
+            },
+          });
+
+          // エラーメールの送信
           if (recipientEmails.length > 0) {
             resend.emails
               .send({
@@ -377,12 +388,10 @@ export async function POST(request: Request) {
                   adminName: "管理者",
                   errorMessage: automationResponse.error,
                   reservationData: {
-                    userId,
-                    reservationId,
-                    startTime,
-                    endTime,
-                    staffName,
-                    customerInfo,
+                    customerName: `${customerInfo.lastNameKanji} ${customerInfo.firstNameKanji}`,
+                    startTime: startTime,
+                    endTime: endTime,
+                    staffName: staffName,
                   },
                 }),
               })
@@ -411,12 +420,10 @@ export async function POST(request: Request) {
                 adminName: "管理者",
                 errorMessage: error.message,
                 reservationData: {
-                  userId,
-                  reservationId,
-                  startTime,
-                  endTime,
-                  staffName,
-                  customerInfo,
+                  customerName: `${customerInfo.lastNameKanji} ${customerInfo.firstNameKanji}`,
+                  startTime: startTime,
+                  endTime: endTime,
+                  staffName: staffName,
                 },
               }),
             })
@@ -493,7 +500,9 @@ async function sendReservationToAutomation(reservationData: any) {
     const data = await response.json();
 
     if (!response.ok) {
-      return { success: false, error: data.error || "Automation failed" };
+      // エラーメッセージを取得
+      const errorMessage = data.detail || data.error || "Automation failed";
+      return { success: false, error: errorMessage };
     }
 
     return { success: true, data };

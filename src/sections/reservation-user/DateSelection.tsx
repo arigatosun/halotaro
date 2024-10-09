@@ -553,8 +553,9 @@ const DateSelection: React.FC<DateSelectionProps> = ({
         }
       }
 
-      // スタッフを自動的に割り当てる
-      const assignedStaffId = availableStaffIds[0]; // カスタムロジックを適用可能
+      // スタッフを自動的に割り当てる（ランダムに選択）
+      const randomIndex = Math.floor(Math.random() * availableStaffIds.length);
+      const assignedStaffId = availableStaffIds[randomIndex];
       selectedStaff =
         staffList.find((staff) => staff.id === assignedStaffId) || null;
       setAssignedStaff(selectedStaff);
@@ -1067,7 +1068,7 @@ const DateSelection: React.FC<DateSelectionProps> = ({
                 )}に予約しますか？`}
               <br />
               担当スタッフ:{" "}
-              {assignedStaff?.name || selectedStaffProp?.name || "自動割り当て"}
+              {selectedStaffProp ? selectedStaffProp.name : "指定なし"}
             </DialogContentText>
           </DialogContent>
           <DialogActions>

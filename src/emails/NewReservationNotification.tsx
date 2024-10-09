@@ -1,10 +1,10 @@
-import * as React from 'react';
-import { Html } from '@react-email/html';
-import { Head } from '@react-email/head';
-import { Preview } from '@react-email/preview';
-import { Container } from '@react-email/container';
-import { Section } from '@react-email/section';
-import { Text } from '@react-email/text';
+import * as React from "react";
+import { Html } from "@react-email/html";
+import { Head } from "@react-email/head";
+import { Preview } from "@react-email/preview";
+import { Container } from "@react-email/container";
+import { Section } from "@react-email/section";
+import { Text } from "@react-email/text";
 
 interface NewReservationNotificationProps {
   customerName: string;
@@ -17,7 +17,9 @@ interface NewReservationNotificationProps {
   totalPrice: number;
 }
 
-export const NewReservationNotification: React.FC<NewReservationNotificationProps> = ({
+export const NewReservationNotification: React.FC<
+  NewReservationNotificationProps
+> = ({
   customerName,
   customerEmail,
   customerPhone,
@@ -35,7 +37,9 @@ export const NewReservationNotification: React.FC<NewReservationNotificationProp
         <Text style={headerTextStyle}>新規予約のお知らせ</Text>
       </Section>
       <Section style={contentStyle}>
-        <Text style={textStyle}>新しい予約が入りました。以下の予約詳細をご確認ください：</Text>
+        <Text style={textStyle}>
+          新しい予約が入りました。以下の予約詳細をご確認ください：
+        </Text>
         <Section style={detailsStyle}>
           <Text style={detailTextStyle}>
             <strong style={labelStyle}>顧客名:</strong>
@@ -69,8 +73,7 @@ export const NewReservationNotification: React.FC<NewReservationNotificationProp
           </Text>
           <Text style={detailTextStyle}>
             <strong style={labelStyle}>料金:</strong>
-            <br />
-            ¥{totalPrice.toLocaleString()}
+            <br />¥{totalPrice.toLocaleString()}
           </Text>
         </Section>
         <Text style={textStyle}>
@@ -87,85 +90,85 @@ export const NewReservationNotification: React.FC<NewReservationNotificationProp
 );
 
 const containerStyle: React.CSSProperties = {
-  margin: '0 auto',
-  padding: '20px 0 48px',
-  width: '100%',
-  maxWidth: '600px',
-  backgroundColor: '#ffffff',
+  margin: "0 auto",
+  padding: "20px 0 48px",
+  width: "100%",
+  maxWidth: "600px",
+  backgroundColor: "#ffffff",
 };
 
 const headerStyle: React.CSSProperties = {
-  backgroundColor: '#F97316',
-  padding: '20px',
-  textAlign: 'center',
+  backgroundColor: "#F97316",
+  padding: "20px",
+  textAlign: "center",
 };
 
 const headerTextStyle: React.CSSProperties = {
-  color: '#ffffff',
-  fontSize: '24px',
-  fontWeight: 'bold',
-  margin: '0',
+  color: "#ffffff",
+  fontSize: "24px",
+  fontWeight: "bold",
+  margin: "0",
 };
 
 const contentStyle: React.CSSProperties = {
-  padding: '20px',
+  padding: "20px",
 };
 
 const textStyle: React.CSSProperties = {
-  fontSize: '16px',
-  lineHeight: '24px',
-  color: '#333333',
-  marginBottom: '16px',
+  fontSize: "16px",
+  lineHeight: "24px",
+  color: "#333333",
+  marginBottom: "16px",
 };
 
 const detailsStyle: React.CSSProperties = {
-  backgroundColor: '#f8f8f8',
-  borderRadius: '8px',
-  padding: '16px',
-  marginBottom: '16px',
+  backgroundColor: "#f8f8f8",
+  borderRadius: "8px",
+  padding: "16px",
+  marginBottom: "16px",
 };
 
 const detailTextStyle: React.CSSProperties = {
-  fontSize: '14px',
-  lineHeight: '22px',
-  color: '#333333',
-  marginBottom: '12px',
+  fontSize: "14px",
+  lineHeight: "22px",
+  color: "#333333",
+  marginBottom: "12px",
 };
 
 const labelStyle: React.CSSProperties = {
-  display: 'inline-block',
-  marginBottom: '4px',
-  color: '#666666',
+  display: "inline-block",
+  marginBottom: "4px",
+  color: "#666666",
 };
 
 const footerStyle: React.CSSProperties = {
-  backgroundColor: '#f0f0f0',
-  padding: '12px',
-  textAlign: 'center',
-  borderRadius: '0 0 8px 8px',
+  backgroundColor: "#f0f0f0",
+  padding: "12px",
+  textAlign: "center",
+  borderRadius: "0 0 8px 8px",
 };
 
 const footerTextStyle: React.CSSProperties = {
-  fontSize: '12px',
-  color: '#666666',
+  fontSize: "12px",
+  color: "#666666",
 };
 
 const formatDateTime = (dateTimeString: string) => {
   const date = new Date(dateTimeString);
-  return date.toLocaleString('ja-JP', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    weekday: 'long',
-    hour: '2-digit',
-    minute: '2-digit',
+  return date.toLocaleString("ja-JP", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    weekday: "long",
+    hour: "2-digit",
+    minute: "2-digit",
   });
 };
 
 const formatTime = (timeString: string) => {
   const date = new Date(timeString);
-  return date.toLocaleString('ja-JP', {
-    hour: '2-digit',
-    minute: '2-digit',
+  return date.toLocaleString("ja-JP", {
+    hour: "2-digit",
+    minute: "2-digit",
   });
 };
