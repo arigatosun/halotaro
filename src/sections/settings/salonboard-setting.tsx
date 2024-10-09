@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Info, Lock, Shield } from "lucide-react";
+import { Info, Loader2, Lock, Shield } from "lucide-react";
 import { useAuth } from "@/contexts/authcontext";
 
 const SalonBoardIntegrationView: React.FC = () => {
@@ -29,6 +29,11 @@ const SalonBoardIntegrationView: React.FC = () => {
     lastUpdated: string;
   } | null>(null);
 
+  // 同期状態を管理するための新しいステート
+  const [syncStatus, setSyncStatus] = useState<string | null>(null);
+  const [pollingIntervalId, setPollingIntervalId] =
+    useState<NodeJS.Timeout | null>(null);
+
   useEffect(() => {
     if (!authLoading && !user && retryCount < 3) {
       refreshAuthState();
@@ -39,7 +44,15 @@ const SalonBoardIntegrationView: React.FC = () => {
   useEffect(() => {
     if (user) {
       fetchSavedCredentials();
+      // 追加: コンポーネントのマウント時に同期状態をチェック
+      checkInitialSyncStatus();
     }
+    // クリーンアップ: コンポーネントのアンマウント時にポーリングを停止
+    return () => {
+      if (pollingIntervalId) {
+        clearInterval(pollingIntervalId);
+      }
+    };
   }, [user]);
 
   const fetchSavedCredentials = async () => {
@@ -55,6 +68,39 @@ const SalonBoardIntegrationView: React.FC = () => {
       }
     } catch (error) {
       console.error("Failed to fetch saved credentials:", error);
+    }
+  };
+
+  // 追加: 初期同期状態をチェックする関数
+  const checkInitialSyncStatus = async () => {
+    try {
+      const response = await fetch(
+        `/api/salonboard-sync-status?userId=${user!.id}`
+      );
+      const data = await response.json();
+
+      if (data.status === "in_progress") {
+        setIsLoading(true);
+        setSyncStatus("in_progress");
+        setResult("同期を再開しています...");
+        // ポーリングを再開
+        const intervalId = setInterval(checkSyncStatus, 5000); // 5秒ごとにチェック
+        setPollingIntervalId(intervalId);
+      } else if (data.status === "completed") {
+        setIsLoading(false);
+        setSyncStatus("completed");
+        setResult("同期が完了しました。");
+      } else if (data.status === "error") {
+        setIsLoading(false);
+        setSyncStatus("error");
+        setResult(`同期中にエラーが発生しました: ${data.errorMessage}`);
+      } else {
+        setIsLoading(false);
+        setSyncStatus(null);
+        setResult(null);
+      }
+    } catch (error) {
+      console.error("Failed to check initial sync status:", error);
     }
   };
 
@@ -99,12 +145,42 @@ const SalonBoardIntegrationView: React.FC = () => {
     }
   };
 
-  const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
+  const checkSyncStatus = async () => {
+    try {
+      const response = await fetch(
+        `/api/salonboard-sync-status?userId=${user!.id}`
+      );
+      const data = await response.json();
 
-  // 新しい同期ボタンのハンドラを追加
+      if (data.status === "completed") {
+        setIsLoading(false);
+        setSyncStatus("completed");
+        setResult("同期が完了しました。");
+        if (pollingIntervalId) {
+          clearInterval(pollingIntervalId);
+        }
+      } else if (data.status === "error") {
+        setIsLoading(false);
+        setSyncStatus("error");
+        setResult(`同期中にエラーが発生しました: ${data.errorMessage}`);
+        if (pollingIntervalId) {
+          clearInterval(pollingIntervalId);
+        }
+      } else {
+        // まだ同期中
+        setSyncStatus("in_progress");
+        setResult("同期中...");
+      }
+    } catch (error) {
+      console.error("Failed to check sync status:", error);
+    }
+  };
+
+  // 新しい同期ボタンのハンドラ
   const handleFullSync = async () => {
     setIsLoading(true);
     setResult(null);
+    setSyncStatus("in_progress");
 
     try {
       const response = await fetch("/api/salonboard-integration", {
@@ -112,7 +188,7 @@ const SalonBoardIntegrationView: React.FC = () => {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ haloTaroUserId: user.id }),
+        body: JSON.stringify({ haloTaroUserId: user!.id }),
       });
 
       if (!response.ok) {
@@ -122,10 +198,14 @@ const SalonBoardIntegrationView: React.FC = () => {
 
       const data = await response.json();
       setResult(data.message);
+
+      // 同期状態のポーリングを開始
+      const intervalId = setInterval(checkSyncStatus, 5000); // 5秒ごとにチェック
+      setPollingIntervalId(intervalId);
     } catch (error) {
-      setResult("同期中にエラーが発生しました。もう一度お試しください。");
-    } finally {
       setIsLoading(false);
+      setSyncStatus("error");
+      setResult("同期中にエラーが発生しました。もう一度お試しください。");
     }
   };
 
@@ -189,7 +269,9 @@ const SalonBoardIntegrationView: React.FC = () => {
                   disabled={isLoading}
                   className="flex-1 bg-blue-500 hover:bg-blue-600"
                 >
-                  {isLoading ? "保存中..." : "ログイン情報を保存"}
+                  {isLoading && syncStatus !== "in_progress"
+                    ? "保存中..."
+                    : "ログイン情報を保存"}
                 </Button>
                 <div className="flex space-x-4">
                   <Button
@@ -197,24 +279,30 @@ const SalonBoardIntegrationView: React.FC = () => {
                     disabled={isLoading || !savedCredentials}
                     className="flex-1 bg-blue-500 hover:bg-blue-600"
                   >
-                    {isLoading ? "同期中..." : "サロンボードと同期"}
+                    {isLoading && syncStatus === "in_progress" ? (
+                      <>
+                        同期中...
+                        <Loader2 className="ml-2 animate-spin" />
+                      </>
+                    ) : (
+                      "サロンボードと同期"
+                    )}
                   </Button>
                 </div>
               </div>
               {result && (
                 <Alert className="mt-4">
-                  <AlertTitle>同期開始</AlertTitle>
+                  <AlertTitle>
+                    {syncStatus === "completed"
+                      ? "同期完了"
+                      : syncStatus === "error"
+                      ? "エラー"
+                      : "同期中"}
+                  </AlertTitle>
                   <AlertDescription>{result}</AlertDescription>
                 </Alert>
               )}
             </>
-          )}
-
-          {result && (
-            <Alert className="mt-4">
-              <AlertTitle>実行結果</AlertTitle>
-              <AlertDescription>{result}</AlertDescription>
-            </Alert>
           )}
         </CardContent>
       </Card>

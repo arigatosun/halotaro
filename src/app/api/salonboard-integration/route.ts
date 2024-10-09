@@ -15,6 +15,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    console.log("API_URL:", API_URL);
+    console.log("API_KEY:", API_KEY);
+
     // サーバーサイドのAPIにリクエストを送信
     const response = await fetch(`${API_URL}/salonboard-integration`, {
       method: "POST",
@@ -39,10 +42,20 @@ export async function POST(req: NextRequest) {
 
     const data = JSON.parse(responseText);
     return NextResponse.json({ message: data.message });
-  } catch (error) {
+  } catch (error: any) {
     console.error("APIルートでのエラー:", error);
+    console.error("エラーの詳細:", {
+      message: error.message,
+      cause: error.cause,
+      code: error.code,
+      stack: error.stack,
+    });
     return NextResponse.json(
-      { error: "サーバー内部でエラーが発生しました" },
+      {
+        error: "サーバー内部でエラーが発生しました",
+        details: error.message,
+        code: error.code,
+      },
       { status: 500 }
     );
   }
