@@ -1,0 +1,13 @@
+{
+  "type": "service_account",
+  "project_id": "harotalo",
+  "private_key_id": "8619e1834e7978ddf50e19b17c93dcb7425c7e0c",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQDdxTvtqhP2AVGU\nREbgpZYYgM50u6WxGY78IvDfzPosWZT66H26tZtCjRIB/jbclo3tvPqTfm+HIfmx\nM5dQKdIIhYez1HMxixn5JSVXOjybKaAmAp2G1rGLCQ+1j2IcqZ5cIL0n3EmCxDLh\nHL4CF0nWEGCVmqtaj6FsbgWEz9AUnq0JeAYWQJ5kw965bziREbWhcOhFu3ILBAO1\naS5bkLYyPkom56uQRxWtRNPnd5ZkAlS65sNZHDR7K2OsZWxJxqHPZEQPFCvJrlpU\nxbTOQn10MQVgMiWc20bDAzX2FC05sCJDBbGAqT7IZDTS7xi5I08n008mS7QU6yr+\nuwadS3UNAgMBAAECggEAD9SXRrZSzsc2Ub1JSppCAMVvt1vOY+TH/6M7ituLaiS0\n4po7oLB7q5WoA5YSyCPucATYOt9rdPvNt+1Pr6G57pt1iIvcSIeTluTPablsVRkf\nZ5yH2SBfM7u1sDH9gL/yNW+tgPhpE5lkwQv3sOzaUO+srVEz9SF2lj0I+NDgG3CR\nhZS23H1KjDKp21u2GGM6V56KwF7un/fDR8v53H7SQkWtnrVJ/45lJVaNtBYp7zy8\nsX/ISA+uUrq2asQFpUDFb+vSCOXsimcWqJeL86uGPyXwa3oRPCksZKB1Qf72VqT4\nPcLZRGQlXZexKn0snX9I6TUdXURMdzf5ho2qYnGBgwKBgQD02Nk3k8oNlEYN0Bhk\nXGFQG/NoY0IfIfpVJrvDOZBvgv3b8ev6gXj6LR4UPSV7AQfxk6u1PWRCXgCQoRXK\nugkyLjWmqU6Exb2AKYL1Yq/yPH42pd8ZFD/eKvYAAr5fCjxjBaplQYEy9YwhSfQc\nMKjgYQ55Uj58uBFzO+BNUic8MwKBgQDn30pDjv7NzZINGtTuDC1HS7W3LVxGk25S\nIMycVGiXGl1pbyFt+g2OVOjrWnhNTtJe8ee3SBwHsESZhetwfzyU/pHf1jExtZug\nxg8RupoSm/wyDarLLsa8jtkhbE4UlGqIVzCTkGfR8RWGQB4Hxz222JthE1/oO7p+\nl9K127lJvwKBgAyaAIwAujx6riRV2nuH2aZS2fM8cJHDoOuzA6TnmIx0tHYWfGu3\nMC/IFK07/GrZQbxoOkUotLlJt0O6VrHJY2HGyRIb0qO4vakT+d6BRsbz4BcV8GaN\nCUB4+5JCkeO4ViVOjFeLyIeD5cNs1/h/dKGfvSv3VKn8m0FQCppQKR7LAoGAAs1Y\nAGkB+0q4sR/Z4uaSxYHMuGH7835knul2j40Vln3jExsctE+JSmcMSYvWWFjTggI6\nYqSkchNXQOO1bK6c9M/+w027WnZvYwoBtJ0kr4TjD1fK8JmoHS88wIKmjukcQHmN\nRLtCBe976xtrQXzO6h7EAfBSAGR4ZH9BNKFrI9ECgYBwqn6+UU536UC8NSX5f7dY\nv5b9pc4zhUasKMm980T8ly/pLnYTU/oQPxidazUKRk4WQKnUycU/Im3witseHvpX\ncuxpbwPDg1HErA2Qd6J3WQSo56tvBD77XO8ZAcRvWvMtvQkX/8VV4dZ0DvSP6iHw\nzKIQwXR6fHwhm5S7hrMIZA==\n-----END PRIVATE KEY-----\n",
+  "client_email": "saronboard-sync@harotalo.iam.gserviceaccount.com",
+  "client_id": "113014067966100682823",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/saronboard-sync%40harotalo.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}
