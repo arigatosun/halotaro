@@ -25,14 +25,10 @@ interface StripeCustomer {
   id: string;
   stripe_customer_id: string;
   payment_method_id: string;
-  reservation_customer_id: string;
+  reservation_id: string;
   customer_email: string;
   status: string;
-  reservation_customers: {
-    id: string;
-    reservation_id: string;
-    reservations: Reservation;
-  };
+  reservations: Reservation;
 }
 
 const supabase = createClient(
@@ -53,19 +49,15 @@ cron.schedule('* * * * *', async () => {
         id,
         stripe_customer_id,
         payment_method_id,
-        reservation_customer_id,
+        reservation_id,
         customer_email,
         status,
-        reservation_customers!reservation_customer_id (
+        reservations!reservation_id (
           id,
-          reservation_id,
-          reservations!reservation_id (
-            id,
-            user_id,
-            total_price,
-            start_time,
-            status
-          )
+          user_id,
+          total_price,
+          start_time,
+          status
         )
       `)
       .eq('status', 'request');
@@ -91,24 +83,11 @@ cron.schedule('* * * * *', async () => {
         id: stripeCustomerId,
         stripe_customer_id: customerId,
         payment_method_id: paymentMethodId,
-        reservation_customers,
+        reservations,
       } = stripeCustomer;
 
-      const reservationCustomerFromJoin = reservation_customers;
-
-      if (!reservationCustomerFromJoin) {
-        console.error(`stripe_customer ${stripeCustomerId} に関連する reservation_customer がありません。`);
-        continue;
-      }
-
-      const {
-        reservations,
-      } = reservationCustomerFromJoin;
-
-      const reservation = reservations;
-
-      if (!reservation) {
-        console.error(`Reservation customer ${reservationCustomerFromJoin.id} に関連する reservation がありません。`);
+      if (!reservations) {
+        console.error(`stripe_customer ${stripeCustomerId} に関連する reservation がありません。`);
         continue;
       }
 
@@ -118,7 +97,7 @@ cron.schedule('* * * * *', async () => {
         total_price: amount,
         start_time: startTime,
         status: reservationStatus,
-      } = reservation;
+      } = reservations;
 
       if (reservationStatus !== 'confirmed') {
         continue;

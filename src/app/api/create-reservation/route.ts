@@ -267,11 +267,11 @@ export async function POST(request: Request) {
     }
 
     // 新しく追加: stripe_customers テーブルを更新
-    if (reservationCustomerId && paymentMethodId) {
+    if (reservationId && paymentMethodId) {
       const { error: updateError } = await supabase
         .from('stripe_customers')
         .update({
-          reservation_customer_id: reservationCustomerId,
+          reservation_id: reservationId,
         })
         .eq('payment_method_id', paymentMethodId);
 
@@ -417,8 +417,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       reservationId: reservationId,
-      reservationCustomerId: reservationCustomerId,
-      stripeCustomerUpdated: !!(reservationCustomerId && paymentMethodId)
+      stripeCustomerUpdated: !!(reservationId && paymentMethodId)
     });
   } catch (error: any) {
     console.error("Error saving reservation:", error);
