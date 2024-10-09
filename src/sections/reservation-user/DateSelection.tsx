@@ -29,19 +29,31 @@ import {
   IconButton,
   Fade,
   Skeleton,
-  CircularProgress
+  CircularProgress,
 } from "@mui/material";
 import { ChevronLeft, ChevronRight, Info, Event } from "@mui/icons-material";
 import moment from "moment";
 import "moment/locale/ja";
 import { useReservation } from "@/contexts/reservationcontext";
 import { useParams } from "next/navigation";
-import { SelectedDateTime } from '@/contexts/reservationcontext';
+import { SelectedDateTime } from "@/contexts/reservationcontext";
+import { supabase } from "@/lib/supabaseClient"; // Supabase クライアントをインポート
 
 moment.locale("ja"); // 日本語ロケールを設定
 
+// 修正後
+interface Reservation {
+  startTime: string;
+  endTime: string;
+  staffId: string;
+}
+
 interface DateSelectionProps {
-  onDateTimeSelect: (startTime: Date, endTime: Date) => void;
+  onDateTimeSelect: (
+    startTime: Date,
+    endTime: Date,
+    assignedStaff: { id: string; name: string }
+  ) => void;
   onBack: () => void;
   selectedStaff: { id: string; name: string } | null;
   selectedMenuId: string;
@@ -245,63 +257,103 @@ const DateSelection: React.FC<DateSelectionProps> = ({
   const [isLoading, setIsLoading] = useState(true); // ローディング状態
   const [startDate, setStartDate] = useState(moment().startOf("day")); // 表示開始日
   const [availableSlots, setAvailableSlots] = useState<
-    Record<string, string[]>
+    Record<string, Record<string, string[]>>
   >({}); // 利用可能な時間スロット
   const [reservedSlots, setReservedSlots] = useState<
-    Record<string, { startTime: string; endTime: string }[]>
-  >({}); // 予約済みの時間スロット
+    Record<string, Reservation[]>
+  >({});
   const [operatingHours, setOperatingHours] = useState<
     Record<
       string,
       { isHoliday: boolean; openTime: string | null; closeTime: string | null }
     >
   >({}); // 営業時間情報
-  const [selectedDateTime, setSelectedDateTime] = useState<SelectedDateTime | null>(null); // 選択された日時
+  const [selectedDateTime, setSelectedDateTime] =
+    useState<SelectedDateTime | null>(null); // 選択された日時
   const [isDialogOpen, setIsDialogOpen] = useState(false); // ダイアログの表示状態
   const [error, setError] = useState<string | null>(null); // エラーメッセージ
   const { selectedStaff, selectedMenus } = useReservation();
   const params = useParams();
   const salonId = params["user-id"] as string;
 
+  const [assignedStaff, setAssignedStaff] = useState<{
+    id: string;
+    name: string;
+  } | null>(null); // 自動割り当てられたスタッフ
+  const [staffList, setStaffList] = useState<{ id: string; name: string }[]>(
+    []
+  ); // スタッフリスト
+
   const isMobile = useMediaQuery(theme.breakpoints.down("sm")); // モバイル判定
   const displayDays = isMobile ? 7 : 14; // 表示する日数
 
   // データのリフレッシュ関数
   const refreshData = async () => {
-    await Promise.all([fetchAvailableSlots(), fetchReservedSlots(), fetchOperatingHours()]);
+    await Promise.all([
+      fetchAvailableSlots(),
+      fetchReservedSlots(),
+      fetchOperatingHours(),
+      fetchStaffList(), // スタッフリストの取得
+    ]);
   };
 
   // useEffect フックをコンポーネントのトップレベルに移動
   useEffect(() => {
-    if (selectedStaffProp) {
-      setIsLoading(true);
-      refreshData()
-        .then(() => setIsLoading(false))
-        .catch((error) => {
-          console.error("Error fetching data:", error);
-          setError("データの取得に失敗しました。再度お試しください。");
-          setIsLoading(false);
-        });
-    }
+    setIsLoading(true);
+    refreshData()
+      .then(() => setIsLoading(false))
+      .catch((error) => {
+        console.error("Error fetching data:", error);
+        setError("データの取得に失敗しました。再度お試しください。");
+        setIsLoading(false);
+      });
   }, [startDate, displayDays, selectedStaffProp, salonId, selectedMenuId]);
+
+  useEffect(() => {
+    // ...
+    console.log("Available Slots:", availableSlots);
+    console.log("Reserved Slots:", reservedSlots);
+  }, [availableSlots, reservedSlots]);
+
+  // スタッフリストの取得
+  const fetchStaffList = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("staff")
+        .select("id, name")
+        .eq("user_id", salonId); // サロンIDでフィルタリング
+
+      if (error) {
+        throw error;
+      }
+
+      setStaffList(data || []);
+    } catch (error) {
+      console.error("Error fetching staff list:", error);
+      setError("スタッフリストの取得に失敗しました");
+    }
+  };
 
   // 利用可能なスロットを取得
   const fetchAvailableSlots = async () => {
-    if (!selectedStaffProp) {
-      setError("スタッフが選択されていません");
-      return;
-    }
-
     const endDate = moment(startDate)
       .add(displayDays - 1, "days")
       .format("YYYY-MM-DD");
     try {
+      const queryParams = new URLSearchParams({
+        startDate: startDate.format("YYYY-MM-DD"),
+        endDate: endDate,
+        menuId: selectedMenuId,
+      });
+
+      if (selectedStaffProp) {
+        queryParams.append("staffId", selectedStaffProp.id);
+      }
+
       const response = await fetch(
-        `/api/staff-availability?staffId=${selectedStaffProp.id}&startDate=${startDate.format(
-          "YYYY-MM-DD"
-        )}&endDate=${endDate}&menuId=${selectedMenuId}`,
+        `/api/staff-availability?${queryParams.toString()}`,
         {
-          cache: 'no-cache', 
+          cache: "no-cache",
         }
       );
       if (!response.ok) {
@@ -309,13 +361,7 @@ const DateSelection: React.FC<DateSelectionProps> = ({
       }
       const data = await response.json();
 
-      const newAvailableSlots: Record<string, string[]> = {};
-      for (let i = 0; i < displayDays; i++) {
-        const date = moment(startDate).add(i, "days").format("YYYY-MM-DD");
-        const shifts = data[date] || [];
-        newAvailableSlots[date] = generateTimeSlots(shifts);
-      }
-      setAvailableSlots(newAvailableSlots);
+      setAvailableSlots(data);
     } catch (error) {
       console.error("Error fetching available slots:", error);
       setError("利用可能な時間枠の取得に失敗しました");
@@ -324,20 +370,23 @@ const DateSelection: React.FC<DateSelectionProps> = ({
 
   // 予約済みのスロットを取得
   const fetchReservedSlots = async () => {
-    if (!selectedStaffProp) {
-      return;
-    }
-
     const endDate = moment(startDate)
       .add(displayDays - 1, "days")
       .format("YYYY-MM-DD");
     try {
+      const queryParams = new URLSearchParams({
+        startDate: startDate.format("YYYY-MM-DD"),
+        endDate: endDate,
+      });
+
+      if (selectedStaffProp) {
+        queryParams.append("staffId", selectedStaffProp.id);
+      }
+
       const response = await fetch(
-        `/api/staff-reservations?staffId=${
-          selectedStaffProp.id
-        }&startDate=${startDate.format("YYYY-MM-DD")}&endDate=${endDate}`,
+        `/api/staff-reservations?${queryParams.toString()}`,
         {
-          cache: 'no-cache', // キャッシュを無効化
+          cache: "no-cache", // キャッシュを無効化
         }
       );
       if (!response.ok) {
@@ -377,59 +426,59 @@ const DateSelection: React.FC<DateSelectionProps> = ({
     }
   };
 
-  // スロットを生成
-  const generateTimeSlots = (
-    shifts: { startTime: string; endTime: string }[]
-  ): string[] => {
-    const allSlots = Array.from({ length: 28 }, (_, i) =>
-      moment("09:00", "HH:mm")
-        .add(i * slotInterval, "minutes")
-        .format("HH:mm")
-    );
-
-    return allSlots.filter((slot) =>
-      shifts.some((shift) =>
-        moment(slot, "HH:mm").isBetween(
-          moment(shift.startTime, "HH:mm"),
-          moment(shift.endTime, "HH:mm"),
-          null,
-          "[]"
-        )
-      )
-    );
-  };
-
   // スロットが利用可能かチェック
   const isSlotAvailable = (date: string, time: string): boolean => {
     const duration = selectedMenus[0]?.duration || 60;
     const requiredSlots = Math.ceil(duration / slotInterval);
+    let availableStaffIds: string[] = [];
 
     for (let i = 0; i < requiredSlots; i++) {
       const currentSlotTime = moment(time, "HH:mm")
         .add(i * slotInterval, "minutes")
         .format("HH:mm");
 
-      const isAvailableInShift = availableSlots[date]?.includes(currentSlotTime);
+      const staffIdsAtTime = availableSlots[date]?.[currentSlotTime];
 
-      if (!isAvailableInShift) {
+      if (!staffIdsAtTime || staffIdsAtTime.length === 0) {
         return false;
       }
 
-      const currentSlotDateTime = moment(`${date}T${currentSlotTime}:00`);
+      // 予約が入っていないスタッフを抽出
+      const staffIdsNotReserved = staffIdsAtTime.filter((staffId) => {
+        const reservationsForStaff =
+          reservedSlots[date]?.filter(
+            (reservation) => reservation.staffId === staffId
+          ) || [];
 
-      const isReservedOrStaffSchedule = reservedSlots[date]?.some((reservation) => {
-        const reservationStart = moment(reservation.startTime);
-        const reservationEnd = moment(reservation.endTime);
-        return currentSlotDateTime.isBetween(
-          reservationStart,
-          reservationEnd,
-          null,
-          "[)"
-        );
+        const currentSlotDateTime = moment(`${date}T${currentSlotTime}:00`);
+
+        const isStaffReserved = reservationsForStaff.some((reservation) => {
+          const reservationStart = moment(reservation.startTime);
+          const reservationEnd = moment(reservation.endTime);
+          return currentSlotDateTime.isBetween(
+            reservationStart,
+            reservationEnd,
+            null,
+            "[)"
+          );
+        });
+
+        return !isStaffReserved;
       });
 
-      if (isReservedOrStaffSchedule) {
+      if (staffIdsNotReserved.length === 0) {
         return false;
+      }
+
+      if (i === 0) {
+        availableStaffIds = staffIdsNotReserved;
+      } else {
+        availableStaffIds = availableStaffIds.filter((staffId) =>
+          staffIdsNotReserved.includes(staffId)
+        );
+        if (availableStaffIds.length === 0) {
+          return false;
+        }
       }
     }
 
@@ -438,18 +487,93 @@ const DateSelection: React.FC<DateSelectionProps> = ({
 
   // 時間スロットクリック時の処理
   const handleTimeSlotClick = (date: moment.Moment, time: string): void => {
-    const selectedDate = date.format("YYYY-MM-DD");
-    const startDateTime = moment(`${selectedDate} ${time}`).toDate();
+    const dateStr = date.format("YYYY-MM-DD");
+    const startDateTime = moment(`${dateStr} ${time}`).toDate();
     const duration = selectedMenus[0]?.duration || 60;
     const endDateTime = moment(startDateTime).add(duration, "minutes").toDate();
+
+    let selectedStaff = selectedStaffProp;
+
+    if (!selectedStaffProp) {
+      const requiredSlots = Math.ceil(duration / slotInterval);
+      let availableStaffIds: string[] = [];
+
+      for (let i = 0; i < requiredSlots; i++) {
+        const currentSlotTime = moment(time, "HH:mm")
+          .add(i * slotInterval * i, "minutes")
+          .format("HH:mm");
+
+        const staffIdsAtTime = availableSlots[dateStr]?.[currentSlotTime];
+
+        if (!staffIdsAtTime || staffIdsAtTime.length === 0) {
+          setError("この時間帯には利用可能なスタッフがいません");
+          return;
+        }
+
+        // 予約が入っていないスタッフを抽出
+        const staffIdsNotReserved = staffIdsAtTime.filter((staffId) => {
+          const reservationsForStaff =
+            reservedSlots[dateStr]?.filter(
+              (reservation) => reservation.staffId === staffId
+            ) || [];
+
+          const currentSlotDateTime = moment(
+            `${dateStr}T${currentSlotTime}:00`
+          );
+
+          const isStaffReserved = reservationsForStaff.some((reservation) => {
+            const reservationStart = moment(reservation.startTime);
+            const reservationEnd = moment(reservation.endTime);
+            return currentSlotDateTime.isBetween(
+              reservationStart,
+              reservationEnd,
+              null,
+              "[)"
+            );
+          });
+
+          return !isStaffReserved;
+        });
+
+        if (staffIdsNotReserved.length === 0) {
+          setError("この時間帯には利用可能なスタッフがいません");
+          return;
+        }
+
+        if (i === 0) {
+          availableStaffIds = staffIdsNotReserved;
+        } else {
+          availableStaffIds = availableStaffIds.filter((staffId) =>
+            staffIdsNotReserved.includes(staffId)
+          );
+          if (availableStaffIds.length === 0) {
+            setError("この時間帯には利用可能なスタッフがいません");
+            return;
+          }
+        }
+      }
+
+      // スタッフを自動的に割り当てる（ランダムに選択）
+      const randomIndex = Math.floor(Math.random() * availableStaffIds.length);
+      const assignedStaffId = availableStaffIds[randomIndex];
+      selectedStaff =
+        staffList.find((staff) => staff.id === assignedStaffId) || null;
+      setAssignedStaff(selectedStaff);
+    }
+
     setSelectedDateTime({ start: startDateTime, end: endDateTime });
+    setAssignedStaff(selectedStaff);
     setIsDialogOpen(true);
   };
 
   // 予約確認ダイアログでの確定処理
   const handleConfirm = (): void => {
-    if (selectedDateTime) {
-      onDateTimeSelect(selectedDateTime.start, selectedDateTime.end);
+    if (selectedDateTime && assignedStaff) {
+      onDateTimeSelect(
+        selectedDateTime.start,
+        selectedDateTime.end,
+        assignedStaff
+      );
     }
     setIsDialogOpen(false);
   };
@@ -458,6 +582,7 @@ const DateSelection: React.FC<DateSelectionProps> = ({
   const handleCancel = (): void => {
     setIsDialogOpen(false);
     setSelectedDateTime(null);
+    setAssignedStaff(null);
   };
 
   // 前の期間へ移動
@@ -590,10 +715,8 @@ const DateSelection: React.FC<DateSelectionProps> = ({
       >
         <TimeSlotButton
           onClick={() => isAvailable && handleTimeSlotClick(date, time)}
-          disabled={!isAvailable || isReserved}
-          className={
-            isReserved ? "reserved" : isAvailable ? "available" : "unavailable"
-          }
+          disabled={!isAvailable}
+          className={isAvailable ? "available" : "unavailable"}
         >
           {isAvailable ? "〇" : "×"}
         </TimeSlotButton>
@@ -605,7 +728,15 @@ const DateSelection: React.FC<DateSelectionProps> = ({
     // モバイルビューのレンダリング
     return (
       <ThemeProvider theme={theme}>
-        <Box sx={{ marginTop: "20px", width: "100%", minHeight: "100vh", position: "relative", paddingBottom: "60px" }}>
+        <Box
+          sx={{
+            marginTop: "20px",
+            width: "100%",
+            minHeight: "100vh",
+            position: "relative",
+            paddingBottom: "60px",
+          }}
+        >
           <Box
             sx={{
               display: "flex",
@@ -632,7 +763,14 @@ const DateSelection: React.FC<DateSelectionProps> = ({
           </Box>
 
           {isLoading ? (
-            <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", height: "50vh" }}>
+            <Box
+              sx={{
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+                height: "50vh",
+              }}
+            >
               <CircularProgress />
             </Box>
           ) : (
@@ -642,17 +780,20 @@ const DateSelection: React.FC<DateSelectionProps> = ({
               const isSaturday = date.day() === 6;
               const isSunday = date.day() === 0;
               return (
-                <Paper key={dateStr} sx={{ marginBottom: "16px", padding: "12px" }}>
-                  <Typography 
-                    variant="subtitle1" 
-                    sx={{ 
-                      marginBottom: "8px", 
+                <Paper
+                  key={dateStr}
+                  sx={{ marginBottom: "16px", padding: "12px" }}
+                >
+                  <Typography
+                    variant="subtitle1"
+                    sx={{
+                      marginBottom: "8px",
                       fontWeight: "bold",
-                      color: isSaturday 
-                        ? theme.palette.secondary.main 
-                        : isSunday 
-                        ? theme.palette.error.main 
-                        : "inherit"
+                      color: isSaturday
+                        ? theme.palette.secondary.main
+                        : isSunday
+                        ? theme.palette.error.main
+                        : "inherit",
                     }}
                   >
                     {date.format("M/D (ddd)")}
@@ -662,16 +803,23 @@ const DateSelection: React.FC<DateSelectionProps> = ({
                       休業日
                     </Typography>
                   ) : (
-                    <Box sx={{ display: "flex", flexWrap: "wrap", justifyContent: "center" }}>
+                    <Box
+                      sx={{
+                        display: "flex",
+                        flexWrap: "wrap",
+                        justifyContent: "center",
+                      }}
+                    >
                       {timeSlots.map((time) => {
                         const isAvailable = isSlotAvailable(dateStr, time);
-                        const isReserved = reservedSlots[dateStr]?.some((reservation) =>
-                          moment(`${dateStr}T${time}`).isBetween(
-                            moment(reservation.startTime),
-                            moment(reservation.endTime),
-                            null,
-                            "[)"
-                          )
+                        const isReserved = reservedSlots[dateStr]?.some(
+                          (reservation) =>
+                            moment(`${dateStr}T${time}`).isBetween(
+                              moment(reservation.startTime),
+                              moment(reservation.endTime),
+                              null,
+                              "[)"
+                            )
                         );
                         return (
                           <MobileTimeSlotButton
@@ -717,7 +865,14 @@ const DateSelection: React.FC<DateSelectionProps> = ({
                 {selectedDateTime &&
                   `${moment(selectedDateTime.start).format(
                     "YYYY年M月D日(ddd) HH:mm"
-                  )}〜${moment(selectedDateTime.end).format("HH:mm")}に予約しますか？`}
+                  )}〜${moment(selectedDateTime.end).format(
+                    "HH:mm"
+                  )}に予約しますか？`}
+                <br />
+                担当スタッフ:{" "}
+                {assignedStaff?.name ||
+                  selectedStaffProp?.name ||
+                  "自動割り当て"}
               </DialogContentText>
             </DialogContent>
             <DialogActions>
@@ -749,17 +904,17 @@ const DateSelection: React.FC<DateSelectionProps> = ({
             paddingLeft: "20px",
           }}
         >
-          <Button 
-            onClick={onBack} 
+          <Button
+            onClick={onBack}
             startIcon={<ChevronLeft />}
             variant="contained"
             color="primary"
-            sx={{ 
-              flexDirection: 'row', 
-              alignItems: 'center',
-              color: 'white',
-              '& .MuiButton-startIcon': {
-                marginRight: '4px',
+            sx={{
+              flexDirection: "row",
+              alignItems: "center",
+              color: "white",
+              "& .MuiButton-startIcon": {
+                marginRight: "4px",
               },
             }}
           >
@@ -786,7 +941,8 @@ const DateSelection: React.FC<DateSelectionProps> = ({
             戻る
           </OrangeButton>
           <Typography variant="h6" sx={{ fontWeight: "bold" }}>
-            スタッフ選択: {selectedStaffProp ? selectedStaffProp.name : "未選択"}
+            スタッフ選択:{" "}
+            {selectedStaffProp ? selectedStaffProp.name : "指名なし"}
           </Typography>
           <IconButton></IconButton>
         </Box>
@@ -799,7 +955,14 @@ const DateSelection: React.FC<DateSelectionProps> = ({
           }}
         >
           {isLoading ? (
-            <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", height: "50vh" }}>
+            <Box
+              sx={{
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+                height: "50vh",
+              }}
+            >
               <CircularProgress />
             </Box>
           ) : (
@@ -903,6 +1066,9 @@ const DateSelection: React.FC<DateSelectionProps> = ({
                 )}〜${moment(selectedDateTime.end).format(
                   "HH:mm"
                 )}に予約しますか？`}
+              <br />
+              担当スタッフ:{" "}
+              {selectedStaffProp ? selectedStaffProp.name : "指定なし"}
             </DialogContentText>
           </DialogContent>
           <DialogActions>

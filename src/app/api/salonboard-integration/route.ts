@@ -1,90 +1,62 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
-import { decrypt } from "@/utils/encryption";
-import {
-  syncReservations,
-  syncMenus,
-  syncStaffData,
-  syncCoupons,
-} from "../../../../scripts/main";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
-export async function POST(request: NextRequest) {
+export async function POST(req: NextRequest) {
   try {
-    const { haloTaroUserId, syncType } = await request.json();
+    const { haloTaroUserId } = await req.json();
 
-    if (!haloTaroUserId) {
+    // サーバーサイドの環境変数
+    const API_URL = process.env.API_URL;
+    const API_KEY = process.env.API_KEY;
+
+    if (!API_URL || !API_KEY) {
       return NextResponse.json(
-        { error: "HaloTaro User ID is required" },
-        { status: 400 }
-      );
-    }
-
-    if (
-      !syncType ||
-      !["reservations", "menus", "staff", "coupons"].includes(syncType)
-    ) {
-      return NextResponse.json(
-        { error: "Invalid or missing sync type" },
-        { status: 400 }
-      );
-    }
-
-    // サロンボードの認証情報を取得
-    const { data, error } = await supabase
-      .from("salonboard_credentials")
-      .select("username, encrypted_password")
-      .eq("user_id", haloTaroUserId)
-      .single();
-
-    if (error || !data) {
-      console.error("Error fetching salonboard credentials:", error);
-      return NextResponse.json(
-        { error: "Failed to retrieve credentials" },
+        { error: "サーバーの設定に問題があります" },
         { status: 500 }
       );
     }
 
-    const { username: salonboardUserId, encrypted_password } = data;
-    const password = decrypt(encrypted_password);
+    console.log("API_URL:", API_URL);
+    console.log("API_KEY:", API_KEY);
 
-    let result;
-    // サロンボード連携を実行
-    switch (syncType) {
-      case "reservations":
-        result = await syncReservations(
-          haloTaroUserId,
-          salonboardUserId,
-          password
-        );
-        break;
-      case "menus":
-        result = await syncMenus(haloTaroUserId, salonboardUserId, password);
-        break;
-      case "staff":
-        result = await syncStaffData(
-          haloTaroUserId,
-          salonboardUserId,
-          password
-        );
-        break;
-      case "coupons":
-        result = await syncCoupons(haloTaroUserId, salonboardUserId, password);
-        break;
-      default:
-        return NextResponse.json(
-          { error: "Invalid sync type" },
-          { status: 400 }
-        );
+    // サーバーサイドのAPIにリクエストを送信
+    const response = await fetch(`${API_URL}/salonboard-integration`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": API_KEY,
+      },
+      body: JSON.stringify({ haloTaroUserId }),
+    });
+
+    // レスポンスの処理
+    const responseText = await response.text();
+    console.log("サーバーからのレスポンスステータス:", response.status);
+    console.log("サーバーからのレスポンスボディ:", responseText);
+
+    if (!response.ok) {
+      return NextResponse.json(
+        { error: "サーバーエラーが発生しました" },
+        { status: response.status }
+      );
     }
 
-    return NextResponse.json({ message: result });
-  } catch (error) {
-    console.error("Integration error:", error);
-    return NextResponse.json({ error: "Integration failed" }, { status: 500 });
+    const data = JSON.parse(responseText);
+    return NextResponse.json({ message: data.message });
+  } catch (error: any) {
+    console.error("APIルートでのエラー:", error);
+    console.error("エラーの詳細:", {
+      message: error.message,
+      cause: error.cause,
+      code: error.code,
+      stack: error.stack,
+    });
+    return NextResponse.json(
+      {
+        error: "サーバー内部でエラーが発生しました",
+        details: error.message,
+        code: error.code,
+      },
+      { status: 500 }
+    );
   }
 }

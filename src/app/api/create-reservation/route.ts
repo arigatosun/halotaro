@@ -1,10 +1,12 @@
 //api/create-reservation/route.ts
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, PostgrestError } from "@supabase/supabase-js";
 import { Resend } from "resend";
 import { ReservationConfirmation } from "../../../emails/ReservationConfirmation";
 import { NewReservationNotification } from "../../../emails/NewReservationNotification";
+import { SynchronizationErrorNotification } from "../../../emails/SynchronizationErrorNotification";
 import { generateCancelUrl } from "../../../utils/url";
+import * as Sentry from "@sentry/nextjs";
 
 // Supabase クライアントの初期化
 const supabase = createClient(
@@ -21,23 +23,26 @@ const resend = new Resend(resendApiKey);
 // キャンセルポリシーの最長日数を取得する関数
 async function getMaxCancelPolicyDays(userId: string): Promise<number> {
   const { data, error } = await supabase
-    .from('cancel_policies')
-    .select('policies')
-    .eq('user_id', userId)
+    .from("cancel_policies")
+    .select("policies")
+    .eq("user_id", userId)
     .single();
 
   if (error) {
-    if (error.code === 'PGRST116') { // 'PGRST116' は行が見つからないエラー
-      console.log('No cancel policies found for user, using default of 7 days.');
+    if (error.code === "PGRST116") {
+      // 'PGRST116' は行が見つからないエラー
+      console.log(
+        "No cancel policies found for user, using default of 7 days."
+      );
       return 7; // デフォルトで7日
     } else {
-      throw new Error('キャンセルポリシーの取得に失敗しました');
+      throw new Error("キャンセルポリシーの取得に失敗しました");
     }
   }
 
   // policies は JSON 配列として保存されていると仮定
   const policies = data.policies as Array<{ days: number }>;
-  const maxDays = Math.max(...policies.map(policy => policy.days));
+  const maxDays = Math.max(...policies.map((policy) => policy.days));
 
   return maxDays;
 }
@@ -80,26 +85,6 @@ export async function POST(request: Request) {
       !customerInfo
     ) {
       throw new Error("必須フィールドが不足しています");
-    }
-
-    // 重複チェック
-    const { data: existingReservation, error: checkError } = await supabase
-      .from("reservations")
-      .select()
-      .eq("user_id", userId)
-      .eq("staff_id", staffId)
-      .eq("start_time", startTime)
-      .single();
-
-    if (checkError && checkError.code !== "PGRST116") { // 'PGRST116' は行が見つからないエラー
-      throw checkError;
-    }
-
-    if (existingReservation) {
-      return NextResponse.json(
-        { error: "この予約は既に存在します" },
-        { status: 409 }
-      );
     }
 
     // メニューIDが整数かどうかを判定
@@ -161,6 +146,9 @@ export async function POST(request: Request) {
     const rsvTermHour = Math.floor(duration / 60).toString();
     const rsvTermMinute = (duration % 60).toString();
 
+    // 受信者メールアドレスのセットを初期化
+    let recipientEmailSet = new Set<string>();
+
     // スタッフ用通知メールアドレスの取得
     const { data: staffNotificationEmails, error: staffEmailsError } =
       await supabase
@@ -174,7 +162,33 @@ export async function POST(request: Request) {
         "Error fetching staff notification emails:",
         staffEmailsError
       );
+    } else if (
+      staffNotificationEmails &&
+      staffNotificationEmails.email_addresses
+    ) {
+      for (const email of staffNotificationEmails.email_addresses) {
+        recipientEmailSet.add(email);
+      }
     }
+
+    // サロン運営者のメールアドレスの取得
+    const { data: userData, error: userError } = await supabase
+      .from("user_view")
+      .select("email")
+      .eq("id", userId)
+      .single();
+
+    if (userError) {
+      console.error("Error fetching user email:", userError);
+      throw userError;
+    } else if (userData && userData.email) {
+      recipientEmailSet.add(userData.email);
+    } else {
+      console.error("Salon owner email not found");
+      throw new Error("サロン運営者のメールアドレスが見つかりません");
+    }
+
+    const recipientEmails = Array.from(recipientEmailSet);
 
     // **キャンセルポリシーの最長日数を取得**
     const maxCancelPolicyDays = await getMaxCancelPolicyDays(userId);
@@ -211,12 +225,47 @@ export async function POST(request: Request) {
 
     if (reservationError) {
       console.error("Reservation creation error:", reservationError);
+
+      if (reservationError.code === "23505") {
+        // 一意制約違反のエラーコード
+        const reservationErrorMessage = reservationError.message as string;
+        console.error(
+          "Unique constraint violation message:",
+          reservationErrorMessage
+        );
+
+        // 制約の名前を取得（例: 'unique_reservation_non_cancelled'）
+        const constraintNameMatch =
+          reservationErrorMessage.match(/constraint "(.+?)"/);
+        const constraintName = constraintNameMatch
+          ? constraintNameMatch[1]
+          : "不明な制約";
+
+        return NextResponse.json(
+          {
+            error: "この予約は既に存在します",
+            details: {
+              constraintName: constraintName,
+              constraintViolation: reservationErrorMessage,
+            },
+          },
+          { status: 409 }
+        );
+      }
       throw reservationError;
     }
 
     // 予約IDとreservation_customer_idの存在を確認
-    if (!data || data.length === 0 || !data[0].reservation_id || !data[0].reservation_customer_id) {
-      console.error("Reservation created but reservation_id or reservation_customer_id is missing", data);
+    if (
+      !data ||
+      data.length === 0 ||
+      !data[0].reservation_id ||
+      !data[0].reservation_customer_id
+    ) {
+      console.error(
+        "Reservation created but reservation_id or reservation_customer_id is missing",
+        data
+      );
       throw new Error("予約IDまたは予約顧客IDの取得に失敗しました");
     }
 
@@ -228,61 +277,78 @@ export async function POST(request: Request) {
 
     // *** payment_intents テーブルを更新して reservation_id と capture_date を設定 ***
     if (paymentInfo?.stripePaymentIntentId) {
-      const { data: paymentIntentData, error: paymentIntentError } = await supabase
-        .from('payment_intents')
-        .update({
-          reservation_id: reservationId,
-          capture_date: captureDate.toISOString(),
-          status: paymentInfo.status, // ステータスを更新
-        })
-        .eq('payment_intent_id', paymentInfo.stripePaymentIntentId);
+      const { data: paymentIntentData, error: paymentIntentError } =
+        await supabase
+          .from("payment_intents")
+          .update({
+            reservation_id: reservationId,
+            capture_date: captureDate.toISOString(),
+            status: paymentInfo.status, // ステータスを更新
+          })
+          .eq("payment_intent_id", paymentInfo.stripePaymentIntentId);
 
       if (paymentIntentError) {
-        console.error('Error updating payment_intents with reservation_id and capture_date:', paymentIntentError);
-        throw new Error('Failed to update payment_intents with reservation_id and capture_date');
+        console.error(
+          "Error updating payment_intents with reservation_id and capture_date:",
+          paymentIntentError
+        );
+        throw new Error(
+          "Failed to update payment_intents with reservation_id and capture_date"
+        );
       } else {
-        console.log('Updated payment_intents with reservation_id and capture_date:', paymentIntentData);
+        console.log(
+          "Updated payment_intents with reservation_id and capture_date:",
+          paymentIntentData
+        );
       }
     } else if (paymentInfo?.isOver30Days) {
       // 30日以上先の予約の場合、新しいレコードを作成
-      const { data: newPaymentIntentData, error: newPaymentIntentError } = await supabase
-        .from('payment_intents')
-        .insert({
+      const { data: newPaymentIntentData, error: newPaymentIntentError } =
+        await supabase.from("payment_intents").insert({
           payment_intent_id: `setup_${reservationId}`, // 一意のIDを生成
           user_id: userId,
-          status: 'requires_payment_method',
+          status: "requires_payment_method",
           amount: totalPrice,
           reservation_id: reservationId,
           capture_date: captureDate.toISOString(),
         });
 
       if (newPaymentIntentError) {
-        console.error('Error creating new payment_intent record:', newPaymentIntentError);
-        throw new Error('Failed to create new payment_intent record');
+        console.error(
+          "Error creating new payment_intent record:",
+          newPaymentIntentError
+        );
+        throw new Error("Failed to create new payment_intent record");
       } else {
-        console.log('Created new payment_intent record:', newPaymentIntentData);
+        console.log("Created new payment_intent record:", newPaymentIntentData);
       }
     } else {
-      console.warn('No stripePaymentIntentId provided in paymentInfo and not over 30 days.');
+      console.warn(
+        "No stripePaymentIntentId provided in paymentInfo and not over 30 days."
+      );
     }
 
     // 新しく追加: stripe_customers テーブルを更新
     if (reservationId && paymentMethodId) {
       const { error: updateError } = await supabase
-        .from('stripe_customers')
+        .from("stripe_customers")
         .update({
           reservation_id: reservationId,
         })
-        .eq('payment_method_id', paymentMethodId);
+        .eq("payment_method_id", paymentMethodId);
 
       if (updateError) {
-        console.error('Error updating stripe_customers:', updateError);
-        throw new Error('Failed to update stripe_customers with reservation_customer_id');
+        console.error("Error updating stripe_customers:", updateError);
+        throw new Error(
+          "Failed to update stripe_customers with reservation_customer_id"
+        );
       } else {
-        console.log('Successfully updated stripe_customers table');
+        console.log("Successfully updated stripe_customers table");
       }
     } else {
-      console.warn('Missing reservationCustomerId or paymentMethodId, skipping stripe_customers update');
+      console.warn(
+        "Missing reservationCustomerId or paymentMethodId, skipping stripe_customers update"
+      );
     }
 
     // メール送信処理
@@ -320,65 +386,25 @@ export async function POST(request: Request) {
 
       console.log("Customer email result:", customerEmailResult);
 
-      // サロン運営者へのメール送信
-      const { data: userData, error: userError } = await supabase
-        .from("user_view")
-        .select("email")
-        .eq("id", userId)
-        .single();
+      // サロン運営者とスタッフへのメール送信
+      if (recipientEmails.length > 0) {
+        const notificationEmailResult = await resend.emails.send({
+          from: "Harotalo運営 <noreply@harotalo.com>",
+          to: recipientEmails,
+          subject: "新規予約のお知らせ",
+          react: NewReservationNotification({
+            customerName: customerFullName,
+            customerEmail: customerInfo.email,
+            customerPhone: customerInfo.phone,
+            dateTime: new Date(startTime).toLocaleString("ja-JP"),
+            endTime: new Date(endTime).toLocaleString("ja-JP"),
+            staffName: staffName,
+            serviceName: serviceName,
+            totalPrice: totalPrice,
+          }),
+        });
 
-      if (userError) {
-        console.error("Error fetching user email:", userError);
-        throw userError;
-      }
-
-      if (!userData || !userData.email) {
-        console.error("Salon owner email not found");
-        throw new Error("サロン運営者のメールアドレスが見つかりません");
-      }
-
-      const ownerEmailResult = await resend.emails.send({
-        from: "Harotalo運営 <noreply@harotalo.com>",
-        to: userData.email,
-        subject: "新規予約のお知らせ",
-        react: NewReservationNotification({
-          customerName: customerFullName,
-          customerEmail: customerInfo.email,
-          customerPhone: customerInfo.phone,
-          dateTime: new Date(startTime).toLocaleString("ja-JP"),
-          endTime: new Date(endTime).toLocaleString("ja-JP"),
-          staffName: staffName,
-          serviceName: serviceName,
-          totalPrice: totalPrice,
-        }),
-      });
-
-      console.log("Salon owner email result:", ownerEmailResult);
-
-      // スタッフへのメール送信
-      if (staffNotificationEmails && staffNotificationEmails.email_addresses) {
-        for (const staffEmail of staffNotificationEmails.email_addresses) {
-          const staffEmailResult = await resend.emails.send({
-            from: "Harotalo運営 <noreply@harotalo.com>",
-            to: staffEmail,
-            subject: "新規予約のお知らせ",
-            react: NewReservationNotification({
-              customerName: customerFullName,
-              customerEmail: customerInfo.email,
-              customerPhone: customerInfo.phone,
-              dateTime: new Date(startTime).toLocaleString("ja-JP"),
-              endTime: new Date(endTime).toLocaleString("ja-JP"),
-              staffName: staffName,
-              serviceName: serviceName,
-              totalPrice: totalPrice,
-            }),
-          });
-
-          console.log(
-            `Staff email result for ${staffEmail}:`,
-            staffEmailResult
-          );
-        }
+        console.log("Notification email result:", notificationEmailResult);
       }
 
       console.log("Emails sent successfully");
@@ -405,23 +431,96 @@ export async function POST(request: Request) {
       .then((automationResponse) => {
         if (!automationResponse.success) {
           console.error("Automation sync failed:", automationResponse.error);
-          // TODO: 必要に応じてエラー内容をサロンオーナーに通知
+
+          // Sentryにエラーを送信
+          Sentry.captureException(new Error(automationResponse.error), {
+            contexts: {
+              reservation: {
+                userId: userId,
+                reservationId: reservationId,
+              },
+            },
+          });
+
+          // エラーメールの送信
+          if (recipientEmails.length > 0) {
+            resend.emails
+              .send({
+                from: "Harotalo運営 <noreply@harotalo.com>",
+                to: recipientEmails,
+                subject: "【重要】予約同期エラーのお知らせ",
+                react: SynchronizationErrorNotification({
+                  adminName: "管理者",
+                  errorMessage: automationResponse.error,
+                  reservationData: {
+                    customerName: `${customerInfo.lastNameKanji} ${customerInfo.firstNameKanji}`,
+                    startTime: startTime,
+                    endTime: endTime,
+                    staffName: staffName,
+                  },
+                }),
+              })
+              .then(() => {
+                console.log(
+                  `Error notification sent to ${recipientEmails.join(", ")}`
+                );
+              })
+              .catch((error) => {
+                console.error(`Failed to send error notification:`, error);
+              });
+          }
         }
       })
       .catch((error) => {
         console.error("Error in sendReservationToAutomation:", error);
-        // TODO: 必要に応じてエラー内容をサロンオーナーに通知
+
+        // *** エラー時にサロンオーナーとスタッフへエラーメールを送信 ***
+        if (recipientEmails.length > 0) {
+          resend.emails
+            .send({
+              from: "Harotalo運営 <noreply@harotalo.com>",
+              to: recipientEmails,
+              subject: "【重要】予約同期エラーのお知らせ",
+              react: SynchronizationErrorNotification({
+                adminName: "管理者",
+                errorMessage: error.message,
+                reservationData: {
+                  customerName: `${customerInfo.lastNameKanji} ${customerInfo.firstNameKanji}`,
+                  startTime: startTime,
+                  endTime: endTime,
+                  staffName: staffName,
+                },
+              }),
+            })
+            .then(() => {
+              console.log(
+                `Error notification sent to ${recipientEmails.join(", ")}`
+              );
+            })
+            .catch((error) => {
+              console.error(`Failed to send error notification:`, error);
+            });
+        }
       });
 
     // クライアントへのレスポンスを即座に返す
     return NextResponse.json({
       success: true,
       reservationId: reservationId,
-      stripeCustomerUpdated: !!(reservationId && paymentMethodId)
+      stripeCustomerUpdated: !!(reservationId && paymentMethodId),
     });
   } catch (error: any) {
     console.error("Error saving reservation:", error);
-    return NextResponse.json({ error: error.message }, { status: 400 });
+    return NextResponse.json(
+      {
+        error: error.message,
+        details: {
+          errorCode: error.code,
+          errorDetails: error.details,
+        },
+      },
+      { status: 400 }
+    );
   }
 }
 
@@ -470,7 +569,9 @@ async function sendReservationToAutomation(reservationData: any) {
     const data = await response.json();
 
     if (!response.ok) {
-      return { success: false, error: data.error || "Automation failed" };
+      // エラーメッセージを取得
+      const errorMessage = data.detail || data.error || "Automation failed";
+      return { success: false, error: errorMessage };
     }
 
     return { success: true, data };

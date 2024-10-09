@@ -1,8 +1,7 @@
 // app/api/salonboard-automation/route.ts
 
 import { NextRequest, NextResponse } from "next/server";
-
-export const runtime = "edge";
+import * as Sentry from "@sentry/nextjs";
 
 export async function POST(request: NextRequest) {
   try {
@@ -16,13 +15,11 @@ export async function POST(request: NextRequest) {
       nm_mei_kana,
       nm_sei,
       nm_mei,
-      rsv_term_hour, // 所要時間の追加
-      rsv_term_minute, // 所要時間の追加
+      rsv_term_hour,
+      rsv_term_minute,
     } = await request.json();
 
-    // FastAPIサーバーのURL
-    // const apiUrl = process.env.PYTHON_API_URL || "http://localhost:8000";
-    const apiUrl = "http://localhost:8000";
+    const apiUrl = process.env.FASTAPI_URL || "http://localhost:8000";
 
     const response = await fetch(`${apiUrl}/run-automation`, {
       method: "POST",
@@ -34,33 +31,33 @@ export async function POST(request: NextRequest) {
         date,
         rsv_hour,
         rsv_minute,
-        staff_name, // スタッフ名を転送
+        staff_name,
         nm_sei_kana,
         nm_mei_kana,
         nm_sei,
         nm_mei,
-        rsv_term_hour, // 所要時間の追加
-        rsv_term_minute, // 所要時間の追加
+        rsv_term_hour,
+        rsv_term_minute,
       }),
     });
 
     const data = await response.json();
 
     if (!response.ok) {
-      //TODO サロンオーナーに対してエラー内容と同期が失敗した予約を通知する
-
-      // エラーレスポンスの場合
-      return NextResponse.json(
-        { error: data.detail || "Automation failed" },
-        { status: response.status }
-      );
+      // エラーメッセージを取得し、エラーを投げる
+      const errorMessage = data.detail || data.error || "Automation failed";
+      throw new Error(errorMessage);
     }
 
+    // 正常なレスポンスをクライアントに返す
     return NextResponse.json(data);
-  } catch (error) {
-    console.error("Error in salonboard-automation:", error);
+  } catch (error: any) {
+    console.error("Error in salonboard-automation API route:", error);
+    // Sentryにエラーを送信
+    Sentry.captureException(error);
+    // エラーレスポンスをクライアントに返す
     return NextResponse.json(
-      { error: "Internal Server Error" },
+      { error: error.message || "Internal Server Error" },
       { status: 500 }
     );
   }

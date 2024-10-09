@@ -1,3 +1,5 @@
+// src/sections/reservation-user/ReservationRoot.tsx
+
 import React, { useState } from "react";
 import { Box } from "@mui/material";
 import MenuSelection from "@/sections/reservation-user/menu-selection";
@@ -12,7 +14,7 @@ import Layout from "@/components/layout/reservation-layout";
 import ReservationHeader from "./reservation-header";
 import ReservationConfirmationAndPayment from "./ReservationConfirmationAndPayment";
 import DateSelection from "./DateSelection";
-import { differenceInDays } from 'date-fns';
+import { differenceInDays } from "date-fns";
 
 const steps = [
   "メニュー選択",
@@ -30,12 +32,12 @@ interface ReservationRootProps {
 function ReservationContent({ userId }: ReservationRootProps) {
   const [activeStep, setActiveStep] = useState(0);
   const [menuSelectionCompleted, setMenuSelectionCompleted] = useState(false);
-  const { 
-    selectedMenus, 
-    setSelectedMenus, 
-    selectedStaff, 
-    setSelectedStaff, 
-    setSelectedDateTime 
+  const {
+    selectedMenus,
+    setSelectedMenus,
+    selectedStaff,
+    setSelectedStaff,
+    setSelectedDateTime,
   } = useReservation();
 
   const isReservationOver30Days = (selectedDate: Date | null) => {
@@ -55,7 +57,12 @@ function ReservationContent({ userId }: ReservationRootProps) {
     }
   };
 
-  const handleMenuSelect = (menuId: string, name: string, price: number, duration: number) => {
+  const handleMenuSelect = (
+    menuId: string,
+    name: string,
+    price: number,
+    duration: number
+  ) => {
     setSelectedMenus([{ id: menuId, name, price, duration }]);
     setMenuSelectionCompleted(true);
     handleNext();
@@ -66,8 +73,13 @@ function ReservationContent({ userId }: ReservationRootProps) {
     handleNext();
   };
 
-  const handleDateTimeSelect = (startTime: Date, endTime: Date) => {
+  const handleDateTimeSelect = (
+    startTime: Date,
+    endTime: Date,
+    assignedStaff: { id: string; name: string }
+  ) => {
     setSelectedDateTime({ start: startTime, end: endTime });
+    setSelectedStaff(assignedStaff); // 自動割り当てられたスタッフを設定
     const isOver30Days = isReservationOver30Days(startTime);
     // ここで、isOver30Daysに基づいて異なる処理を行うことができます
     // 例: setIsOver30Days(isOver30Days);
@@ -85,10 +97,12 @@ function ReservationContent({ userId }: ReservationRootProps) {
     switch (step) {
       case 0:
         return (
-          <MenuSelection 
-          onSelectMenu={(menuId, name, price, duration) => handleMenuSelect(menuId, name, price, duration)} 
-          userId={userId} 
-        />
+          <MenuSelection
+            onSelectMenu={(menuId, name, price, duration) =>
+              handleMenuSelect(menuId, name, price, duration)
+            }
+            userId={userId}
+          />
         );
       case 1:
         return (
@@ -101,7 +115,7 @@ function ReservationContent({ userId }: ReservationRootProps) {
         );
       case 2:
         return (
-          <Box sx={{ width: '100%', overflowX: 'auto', margin: '0 -16px' }}>
+          <Box sx={{ width: "100%", overflowX: "auto", margin: "0 -16px" }}>
             <DateSelection
               onDateTimeSelect={handleDateTimeSelect}
               onBack={handleBack}
@@ -112,16 +126,16 @@ function ReservationContent({ userId }: ReservationRootProps) {
         );
       case 3:
         return <CustomerInfo onNext={handleNext} onBack={handleBack} />;
-        case 4:
-          return (
-            <ReservationConfirmationAndPayment
-              onNext={handleNext}
-              onBack={handleBack}
-              onPaymentComplete={handlePaymentComplete}
-              userId={userId}
-              selectedMenuId={selectedMenus[0]?.id || ""}
-            />
-          );
+      case 4:
+        return (
+          <ReservationConfirmationAndPayment
+            onNext={handleNext}
+            onBack={handleBack}
+            onPaymentComplete={handlePaymentComplete}
+            userId={userId}
+            selectedMenuId={selectedMenus[0]?.id || ""}
+          />
+        );
       case 5:
         return <ReservationComplete userId={userId} />;
       default:
@@ -131,7 +145,7 @@ function ReservationContent({ userId }: ReservationRootProps) {
 
   return (
     <Layout>
-      <Box sx={{ padding: '0 16px' }}>
+      <Box sx={{ padding: "0 16px" }}>
         <ReservationHeader currentStep={activeStep} />
         {getStepContent(activeStep)}
       </Box>
