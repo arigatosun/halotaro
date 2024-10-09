@@ -22,15 +22,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Label } from "@/components/ui/label";
-import { Upload, X } from "lucide-react";
+import { Upload, X, CheckCircle, AlertCircle } from "lucide-react";
 import { useAuth } from "@/contexts/authcontext";
 import { Toaster } from "@/components/ui/toaster";
 import { toast } from "@/components/ui/use-toast";
@@ -41,7 +36,7 @@ interface SalonData {
   salonName: string;
   phone: string;
   address: string;
-  website?: string;
+  website: string; // 必須に変更
   description?: string;
   weekdayOpen: string;
   weekdayClose: string;
@@ -56,7 +51,7 @@ const formSchema = z.object({
   salonName: z.string().min(1, { message: "サロン名は必須です" }),
   phone: z.string().min(1, { message: "電話番号は必須です" }),
   address: z.string().min(1, { message: "住所は必須です" }),
-  website: z.string().url().optional(),
+  website: z.string().url({ message: "有効なURLを入力してください" }), // 必須に変更
   description: z.string().optional(),
   weekdayOpen: z.string(),
   weekdayClose: z.string(),
@@ -110,7 +105,7 @@ const AuthenticatedListingSalonView: React.FC<{ userId: string }> = ({
       salonName: "",
       phone: "",
       address: "",
-      website: "",
+      website: "", // 必須フィールドの初期値
       description: "",
       weekdayOpen: "",
       weekdayClose: "",
@@ -146,7 +141,7 @@ const AuthenticatedListingSalonView: React.FC<{ userId: string }> = ({
             salonName: data.salon_name,
             phone: data.phone,
             address: data.address,
-            website: data.website || "",
+            website: data.website || "", // 必須フィールドの初期値
             description: data.description || "",
             weekdayOpen: data.weekday_open || "",
             weekdayClose: data.weekday_close || "",
@@ -193,10 +188,12 @@ const AuthenticatedListingSalonView: React.FC<{ userId: string }> = ({
   // 画像リストを統合（新規と既存）
   const combinedSubImages: ImageObj[] = [
     ...subImages.map((file): ImageObj => ({ type: "new", data: file })),
-    ...(form.getValues("subImageUrls") || []).map((url): ImageObj => ({
-      type: "existing",
-      data: url,
-    })),
+    ...(form.getValues("subImageUrls") || []).map(
+      (url): ImageObj => ({
+        type: "existing",
+        data: url,
+      })
+    ),
   ];
 
   // サブ画像の削除
@@ -279,7 +276,7 @@ const AuthenticatedListingSalonView: React.FC<{ userId: string }> = ({
         salonName: values.salonName,
         phone: values.phone,
         address: values.address,
-        website: values.website,
+        website: values.website, // 必須フィールド
         description: values.description,
         weekdayOpen: values.weekdayOpen,
         weekdayClose: values.weekdayClose,
@@ -312,15 +309,35 @@ const AuthenticatedListingSalonView: React.FC<{ userId: string }> = ({
 
       toast({
         title: salonId ? "更新成功" : "登録成功",
-        description: `サロン情報が正常に${salonId ? "更新" : "登録"}されました。`,
+        description: (
+          <div className="flex items-center">
+            <CheckCircle className="h-5 w-5 text-green-500 mr-2" />
+            <span>
+              サロン情報が正常に{salonId ? "更新" : "登録"}されました。
+            </span>
+          </div>
+        ),
+        variant: "default",
+        duration: 5000,
       });
     } catch (error) {
       console.error("Error saving salon data:", error);
-      setError(
+      const errorMessage =
         error instanceof Error
           ? error.message
-          : "サロン情報の保存に失敗しました"
-      );
+          : "サロン情報の保存に失敗しました";
+      setError(errorMessage);
+      toast({
+        title: "エラー",
+        description: (
+          <div className="flex items-center">
+            <AlertCircle className="h-5 w-5 text-red-500 mr-2" />
+            <span>{errorMessage}</span>
+          </div>
+        ),
+        variant: "destructive",
+        duration: 7000,
+      });
     } finally {
       setLoading(false);
     }
@@ -342,6 +359,7 @@ const AuthenticatedListingSalonView: React.FC<{ userId: string }> = ({
   // コンポーネントの描画
   return (
     <div className="container mx-auto py-10">
+      <Toaster />
       <Card className="w-full max-w-4xl mx-auto">
         <CardHeader>
           <CardTitle className="text-2xl font-bold text-foreground">
@@ -357,58 +375,87 @@ const AuthenticatedListingSalonView: React.FC<{ userId: string }> = ({
             >
               <SectionTitle>基本情報</SectionTitle>
               <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                {/* サロン名 */}
                 <FormField
                   control={form.control}
                   name="salonName"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>サロン名</FormLabel>
+                      <FormLabel>
+                        サロン名 <span className="text-red-500">*</span>
+                      </FormLabel>
                       <FormControl>
-                        <Input placeholder="サロン名" {...field} />
+                        <Input
+                          placeholder="サロン名"
+                          {...field}
+                          aria-required="true"
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
+                {/* 電話番号 */}
                 <FormField
                   control={form.control}
                   name="phone"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>電話番号</FormLabel>
+                      <FormLabel>
+                        電話番号 <span className="text-red-500">*</span>
+                      </FormLabel>
                       <FormControl>
-                        <Input placeholder="電話番号" {...field} />
+                        <Input
+                          placeholder="電話番号"
+                          {...field}
+                          aria-required="true"
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
+                {/* 住所 */}
                 <FormField
                   control={form.control}
                   name="address"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>住所</FormLabel>
+                      <FormLabel>
+                        住所 <span className="text-red-500">*</span>
+                      </FormLabel>
                       <FormControl>
-                        <Input placeholder="住所" {...field} />
+                        <Input
+                          placeholder="住所"
+                          {...field}
+                          aria-required="true"
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
+                {/* ウェブサイト */}
                 <FormField
                   control={form.control}
                   name="website"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>ウェブサイト</FormLabel>
+                      <FormLabel>
+                        ウェブサイト <span className="text-red-500">*</span>
+                      </FormLabel>
                       <FormControl>
-                        <Input placeholder="https://example.com" {...field} />
+                        <Input
+                          placeholder="https://example.com"
+                          {...field}
+                          aria-required="true"
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
+                {/* サロン説明 */}
                 <FormField
                   control={form.control}
                   name="description"
