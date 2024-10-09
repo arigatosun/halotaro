@@ -17,6 +17,7 @@ const statusLabels: { [key: string]: string } = {
   same_day_cancelled: '当日キャンセル',
   no_show: '無断キャンセル',
   cancelled: 'お客様キャンセル',
+  paid: "会計済み",
 };
 
 const ReservationDetails: React.FC<ReservationDetailsProps> = ({ reservation, onClose, onEdit, onCancel }) => {

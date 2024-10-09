@@ -1,13 +1,34 @@
-// app/api/sales-details/route.ts
-
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
+import timezone from "dayjs/plugin/timezone";
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
 
 // Supabaseクライアントの作成
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+interface AccountingInformation {
+  customer_name: string;
+  updated_at: string;
+  items: any[]; // itemsの正確な型を後で定義することをお勧めします
+  reservations: {
+    user_id: string;
+    start_time: string;
+  } | {
+    user_id: string;
+    start_time: string;
+  }[];
+  register_closings: {
+    closing_date: string;
+  } | {
+    closing_date: string;
+  }[];
+}
 
 export async function GET(req: NextRequest) {
   try {
@@ -20,6 +41,7 @@ export async function GET(req: NextRequest) {
     const menu = searchParams.get("menu");
     const page = parseInt(searchParams.get("page") || "1");
     const itemsPerPage = parseInt(searchParams.get("itemsPerPage") || "10");
+    const sortOrder = searchParams.get("sortOrder") || "desc";
 
     // AuthorizationヘッダーからBearerトークンを取得
     const authHeader = req.headers.get("Authorization");
@@ -38,42 +60,40 @@ export async function GET(req: NextRequest) {
 
     const userId = userData.user.id;
 
-    // ユーザーの予約IDを取得
-    const { data: reservations, error: reservationsError } = await supabase
-      .from('reservations')
-      .select('id')
-      .eq('user_id', userId);
-
-    if (reservationsError) {
-      throw reservationsError;
-    }
-
-    const reservationIds = reservations.map((res) => res.id);
-
-    // 該当する予約がない場合、空のデータを返す
-    if (reservationIds.length === 0) {
-      return NextResponse.json(
-        {
-          data: [],
-          totalItems: 0,
-        },
-        { status: 200 }
-      );
-    }
-
     // クエリの構築
     let query = supabase
       .from("accounting_information")
-      .select("customer_name, updated_at, items")
+      .select(`
+        customer_name,
+        updated_at,
+        items,
+        register_closing_id,
+        reservations!inner (
+          user_id,
+          start_time
+        ),
+        register_closings!fk_register_closing_id (
+          closing_date
+        )
+      `)
       .eq("is_temporary", false)
-      .in("reservation_id", reservationIds);
+      .eq("reservations.user_id", userId);
 
-    // 日付フィルターの適用
-    if (startDate) {
-      query = query.gte("updated_at", startDate);
-    }
-    if (endDate) {
-      query = query.lte("updated_at", endDate);
+    // 検索対象に応じてフィルタリング
+    if (searchTarget === "visitDate") {
+      if (startDate) {
+        query = query.gte("reservations.start_time", startDate);
+      }
+      if (endDate) {
+        query = query.lte("reservations.start_time", endDate);
+      }
+    } else if (searchTarget === "registrationDate") {
+      if (startDate) {
+        query = query.gte("register_closings.closing_date", startDate);
+      }
+      if (endDate) {
+        query = query.lte("register_closings.closing_date", endDate);
+      }
     }
 
     // お客様名のフィルター
@@ -82,33 +102,46 @@ export async function GET(req: NextRequest) {
     }
 
     // データの取得
-    const { data, error } = await query;
-    if (error) {
-      throw error;
+    const { data: accountingData, error: accountingError } = await query as { data: AccountingInformation[], error: any };
+
+    if (accountingError) {
+      console.error("Accounting data fetch error:", accountingError);
+      throw new Error(`Failed to fetch accounting data: ${accountingError.message}`);
     }
 
-    let resultData = [];
+    let resultData: any[] = [];
 
-    // データの整形とフィルタリング
-    for (const row of data) {
-      const { customer_name, updated_at, items } = row;
+    // データの整形とフラット化
+    for (const row of accountingData) {
+      const { customer_name, updated_at, items, reservations, register_closings } = row;
+
+      const reservation = Array.isArray(reservations) ? reservations[0] : reservations;
+      const start_time = reservation?.start_time;
+
+      const closing_date = register_closings && (Array.isArray(register_closings) ? register_closings[0]?.closing_date : register_closings.closing_date) || null;
+
       for (const item of items) {
         const { category, name, staff: itemStaff, price, quantity } = item;
         const amount = price * quantity;
 
-        // スタッフのフィルター
-        if (staff && staff !== "all") {
-          if (itemStaff !== staff) continue;
+        // スタッフのフィルターをここで適用
+        if (staff && staff !== "all" && itemStaff !== staff) {
+          continue; // このアイテムをスキップ
         }
 
-        // メニューのフィルター
-        if (menu && menu !== "all") {
-          if (name !== menu) continue;
+        // メニューのフィルターをここで適用
+        if (menu && menu !== "all" && name !== menu) {
+          continue; // このアイテムをスキップ
         }
+
+        // 時間の調整（9時間前）
+        const adjustedStartTime = start_time ? dayjs(start_time).subtract(9, 'hour').format('YYYY/MM/DD HH:mm') : null;
+        const adjustedClosingDate = closing_date ? dayjs(closing_date).subtract(9, 'hour').format('YYYY/MM/DD HH:mm') : null;
 
         resultData.push({
           customer_name,
-          updated_at,
+          start_time: adjustedStartTime,
+          closing_date: adjustedClosingDate,
           category,
           name,
           staff: itemStaff,
@@ -119,12 +152,20 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // 合計件数
-    const totalItems = resultData.length;
+    // ソートキーの動的設定
+    const sortKey = searchTarget === "visitDate" ? "start_time" : "closing_date";
 
-    // ページネーションの適用
+    // ソート（新しいものを上に）
+    resultData.sort((a, b) => {
+      const timeA = new Date(a[sortKey]).getTime();
+      const timeB = new Date(b[sortKey]).getTime();
+      return timeB - timeA; // 降順（新しいものを上に）
+    });
+
+    // ページネーションを適用
+    const totalItems = resultData.length;
     const startIndex = (page - 1) * itemsPerPage;
-    const endIndex = startIndex + itemsPerPage;
+    const endIndex = page * itemsPerPage;
     const paginatedData = resultData.slice(startIndex, endIndex);
 
     return NextResponse.json(

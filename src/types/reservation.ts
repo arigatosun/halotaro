@@ -36,7 +36,8 @@ export interface MenuItem {
 }
 
 export interface BusinessHour {
-  date: string; // YYYY-MM-DD形式
-  open_time: string; // HH:mm:ss形式
-  close_time: string; // HH:mm:ss形式
+  date: string;
+  open_time: string;
+  close_time: string;
+  is_holiday: boolean; // この行を追加
 }

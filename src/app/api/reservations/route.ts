@@ -1,3 +1,4 @@
+// api/reservations/route.ts
 import { NextResponse } from 'next/server';
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
@@ -19,7 +20,7 @@ export async function GET(request: Request) {
     .from('reservations')
     .select(`
       *,
-      reservation_customers (name, email, phone),
+      reservation_customers!fk_customer (name, email, phone, name_kana),
       staff (name),
       menu_items (name)
     `, { count: 'exact' });

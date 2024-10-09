@@ -1,3 +1,5 @@
+// sales-details-view.tsx
+
 "use client";
 
 import React, { useEffect, useState } from "react";
@@ -33,7 +35,7 @@ import { DateRange } from "react-day-picker";
 import axios from "axios";
 import dayjs from "dayjs";
 import { useAuth } from "@/contexts/authcontext";
-import { supabase } from "@/lib/supabaseClient"; // Supabaseクライアントをインポート
+import { supabase } from "@/lib/supabaseClient";
 
 const SalesDetailView: React.FC = () => {
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
@@ -45,8 +47,10 @@ const SalesDetailView: React.FC = () => {
   const [totalItems, setTotalItems] = useState(0);
   const itemsPerPage = 10;
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [searchTarget, setSearchTarget] = useState<string>("visitDate");
 
-  const { session, user } = useAuth(); // ユーザー情報を取得
+  const { session, user } = useAuth();
 
   // スタッフとメニューの状態変数を追加
   const [staffList, setStaffList] = useState<any[]>([]);
@@ -96,10 +100,14 @@ const SalesDetailView: React.FC = () => {
     }
 
     setLoading(true);
+    setError(null);
     try {
       const params: any = {
         page: currentPage,
         itemsPerPage,
+        sortBy: searchTarget === "visitDate" ? "start_time" : "closing_date",
+        sortOrder: "desc",
+        searchTarget,
       };
 
       if (dateRange?.from) {
@@ -130,6 +138,7 @@ const SalesDetailView: React.FC = () => {
       setTotalItems(totalItems);
     } catch (error) {
       console.error("売上データの取得エラー:", error);
+      setError("売上データの取得に失敗しました。");
     } finally {
       setLoading(false);
     }
@@ -152,6 +161,7 @@ const SalesDetailView: React.FC = () => {
     setStaff("all");
     setCustomer("");
     setMenu("all");
+    setSearchTarget("visitDate");
     setCurrentPage(1);
     fetchSalesData();
   };
@@ -162,12 +172,15 @@ const SalesDetailView: React.FC = () => {
     <div className="p-8 max-w-7xl mx-auto">
       <h2 className="text-2xl font-bold mb-6">売上明細</h2>
 
+      {/* エラーメッセージの表示 */}
+      {error && <p className="text-red-500 mb-4">{error}</p>}
+
       <Card className="mb-6">
         <CardContent className="pt-6">
           <div className="grid grid-cols-2 gap-4 mb-4">
             <div className="flex items-center space-x-2">
               <Label>検索対象:</Label>
-              <Select defaultValue="visitDate">
+              <Select value={searchTarget} onValueChange={setSearchTarget}>
                 <SelectTrigger className="w-[180px]">
                   <SelectValue placeholder="検索対象を選択" />
                 </SelectTrigger>
@@ -246,7 +259,7 @@ const SalesDetailView: React.FC = () => {
           {dateRange?.to
             ? ` 〜 ${dayjs(dateRange.to).format("YYYY年MM月DD日")}`
             : ""}{" "}
-          (来店日)
+          ({searchTarget === "visitDate" ? "来店日" : "レジ締め日"})
         </p>
         <div>
           <span className="mr-4">合計件数: {totalItems}</span>
@@ -270,7 +283,7 @@ const SalesDetailView: React.FC = () => {
                   <TableHead>
                     お客様名
                     <br />
-                    会計日時
+                    {searchTarget === "visitDate" ? "来店日時" : "レジ締め日時"}
                   </TableHead>
                   <TableHead>区分</TableHead>
                   <TableHead>
@@ -290,7 +303,13 @@ const SalesDetailView: React.FC = () => {
                     <TableCell>
                       {item.customer_name}
                       <br />
-                      {dayjs(item.updated_at).format("YYYY/MM/DD HH:mm")}
+                      {searchTarget === "visitDate"
+                        ? item.start_time
+                          ? dayjs(item.start_time).format("YYYY/MM/DD HH:mm")
+                          : ""
+                        : item.closing_date
+                        ? dayjs(item.closing_date).format("YYYY/MM/DD HH:mm")
+                        : ""}
                     </TableCell>
                     <TableCell>{item.category}</TableCell>
                     <TableCell>{item.name}</TableCell>
@@ -298,7 +317,9 @@ const SalesDetailView: React.FC = () => {
                     <TableCell className="text-right">
                       ¥{item.price.toLocaleString()}
                     </TableCell>
-                    <TableCell className="text-right">{item.quantity}</TableCell>
+                    <TableCell className="text-right">
+                      {item.quantity}
+                    </TableCell>
                     <TableCell className="text-right">
                       ¥{item.amount.toLocaleString()}
                     </TableCell>

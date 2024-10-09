@@ -16,34 +16,17 @@ import Link from "next/link";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
 
-// ステータスの型を定義
-type ReservationStatus =
-  | "confirmed"
-  | "canceled"
-  | "paid"
-  | "completed"
-  | "in_progress"
-  | "no_show";
-
-// ステータスのマッピングを定義
-const statusMapping: Record<ReservationStatus, string> = {
-  confirmed: "予約確定",
-  canceled: "キャンセル",
+// ステータスのマッピングを定義（'staff'を削除）
+const statusMapping: Record<string, string> = {
+  confirmed: "受付待ち",
+  salon_cancelled: "サロンキャンセル",
   paid: "会計済み",
-  completed: "完了",
-  in_progress: "進行中",
+  cancelled: "お客様キャンセル",
+  same_day_cancelled: "当日キャンセル",
   no_show: "無断キャンセル",
 };
 
 interface ReservationTableProps {
-  filterOptions?: {
-    dateRange: undefined | [Date, Date];
-    statuses: string[];
-    customerName: string;
-    reservationNumber: string;
-    staff: string;
-    reservationRoute: string;
-  };
   reservations: Reservation[];
   loading: boolean;
   error: Error | null;
@@ -63,11 +46,11 @@ const ReservationTable: React.FC<ReservationTableProps> = ({
   onPageChange,
 }) => {
   if (loading) {
-    return <div>Loading...</div>;
+    return <div>読み込み中...</div>;
   }
 
   if (error) {
-    return <div>Error: {error.message}</div>;
+    return <div>エラー: {error.message}</div>;
   }
 
   const totalPages = Math.ceil(totalCount / limit);
@@ -84,20 +67,18 @@ const ReservationTable: React.FC<ReservationTableProps> = ({
             <TableHead>メニュー</TableHead>
             <TableHead>担当スタッフ</TableHead>
             <TableHead>合計金額</TableHead>
-            <TableHead>操作</TableHead>
+            <TableHead>会計</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {reservations.map((reservation) => {
-            // 予約ステータスが "paid"（支払い済み）の場合
-            const isPaid = reservation.status === "paid";
-
             // 予約の開始日時が現在時刻より未来かどうかを判定
             const reservationStartTime = new Date(reservation.start_time);
             const isFutureReservation = reservationStartTime > now;
 
             // 会計ボタンを無効化する条件
-            const disableAccountingButton = isPaid || isFutureReservation;
+            const disableAccountingButton =
+              reservation.status !== "confirmed" || isFutureReservation;
 
             return (
               <TableRow key={reservation.id}>
@@ -107,8 +88,7 @@ const ReservationTable: React.FC<ReservationTableProps> = ({
                   })}
                 </TableCell>
                 <TableCell>
-                  {statusMapping[reservation.status as ReservationStatus] ||
-                    reservation.status}
+                  {statusMapping[reservation.status] || reservation.status}
                 </TableCell>
                 <TableCell>{reservation.customer_name}</TableCell>
                 <TableCell>{reservation.menu_name}</TableCell>
@@ -136,13 +116,13 @@ const ReservationTable: React.FC<ReservationTableProps> = ({
       </Table>
       <div className="mt-4 flex justify-between items-center">
         <Button onClick={() => onPageChange(page - 1)} disabled={page === 1}>
-          Previous
+          前の{limit}件
         </Button>
         <span>
-          Page {page} of {totalPages}
+          ページ {page} / {totalPages}
         </span>
         <Button onClick={() => onPageChange(page + 1)} disabled={page >= totalPages}>
-          Next
+          次の{limit}件
         </Button>
       </div>
     </>

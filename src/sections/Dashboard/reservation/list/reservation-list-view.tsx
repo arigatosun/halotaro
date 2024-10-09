@@ -1,5 +1,6 @@
+// reservation-list-view.tsx
 "use client";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,22 +17,42 @@ import ReservationTable from "@/components/ReservationTable";
 import { DateRange } from "react-day-picker";
 import { Search, X } from "lucide-react";
 import { useReservations } from "@/hooks/useReservations";
+import { useAuth } from "@/contexts/authcontext";
+import { supabase } from "@/lib/supabaseClient";
 
 interface FilterOptions {
   dateRange: DateRange | undefined;
   statuses: string[];
   customerName: string;
-  reservationNumber: string;
+  menu: string;
   staff: string;
   reservationRoute: string;
 }
 
+// Staffインターフェースを定義
+interface Staff {
+  id: string;
+  name: string;
+  // 他のフィールドがあれば追加
+}
+
+const statusOptions = [
+  { value: "paid", label: "会計済み" },
+  { value: "confirmed", label: "受付待ち" },
+  { value: "cancelled", label: "お客様キャンセル" },
+  { value: "salon_cancelled", label: "サロンキャンセル" },
+  { value: "same_day_cancelled", label: "当日キャンセル" },
+  { value: "no_show", label: "無断キャンセル" },
+];
+
 const ReservationListView: React.FC = () => {
+  const { user } = useAuth();
+  const [staffList, setStaffList] = useState<Staff[]>([]);
   const [filterOptions, setFilterOptions] = useState<FilterOptions>({
     dateRange: undefined,
     statuses: [],
     customerName: "",
-    reservationNumber: "",
+    menu: "",
     staff: "all",
     reservationRoute: "all",
   });
@@ -44,8 +65,28 @@ const ReservationListView: React.FC = () => {
     limit
   );
 
+  useEffect(() => {
+    if (user) {
+      const fetchStaffData = async () => {
+        const { data, error } = await supabase
+          .from("staff")
+          .select("*")
+          .eq("user_id", user.id);
+
+        if (error) {
+          console.error("スタッフ情報の取得エラー:", error);
+        } else if (data) {
+          setStaffList(data as Staff[]);
+        }
+      };
+
+      fetchStaffData();
+    }
+  }, [user]);
+
   const handleDateRangeChange = (range: DateRange | undefined) => {
     setFilterOptions((prev) => ({ ...prev, dateRange: range }));
+    setPage(1);
   };
 
   const handleStatusChange = (status: string, checked: boolean) => {
@@ -55,20 +96,22 @@ const ReservationListView: React.FC = () => {
         ? [...prev.statuses, status]
         : prev.statuses.filter((s) => s !== status),
     }));
+    setPage(1);
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFilterOptions((prev) => ({ ...prev, [name]: value }));
+    setPage(1);
   };
 
   const handleSelectChange = (name: string, value: string) => {
     setFilterOptions((prev) => ({ ...prev, [name]: value }));
+    setPage(1);
   };
 
   const handleSearch = () => {
-    // 検索ボタンが押されたときの処理（必要に応じて）
-    setPage(1); // 検索時にページを1にリセット
+    setPage(1);
   };
 
   const handleClear = () => {
@@ -76,7 +119,7 @@ const ReservationListView: React.FC = () => {
       dateRange: undefined,
       statuses: [],
       customerName: "",
-      reservationNumber: "",
+      menu: "",
       staff: "all",
       reservationRoute: "all",
     });
@@ -99,28 +142,20 @@ const ReservationListView: React.FC = () => {
               onDateChange={handleDateRangeChange}
             />
             <div className="flex flex-wrap gap-2">
-              {[
-                "受付待ち",
-                "受付済み",
-                "施術中",
-                "来店処理済み",
-                "お客様キャンセル",
-                "サロンキャンセル",
-                "無断キャンセル",
-              ].map((status) => (
-                <div key={status} className="flex items-center space-x-2">
+              {statusOptions.map(({ value, label }) => (
+                <div key={value} className="flex items-center space-x-2">
                   <Checkbox
-                    id={status}
-                    checked={filterOptions.statuses.includes(status)}
+                    id={value}
+                    checked={filterOptions.statuses.includes(value)}
                     onCheckedChange={(checked) =>
-                      handleStatusChange(status, checked as boolean)
+                      handleStatusChange(value, checked as boolean)
                     }
                   />
                   <label
-                    htmlFor={status}
+                    htmlFor={value}
                     className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
                   >
-                    {status}
+                    {label}
                   </label>
                 </div>
               ))}
@@ -134,10 +169,10 @@ const ReservationListView: React.FC = () => {
                 onChange={handleInputChange}
               />
               <Input
-                name="reservationNumber"
-                placeholder="予約番号"
+                name="menu"
+                placeholder="メニュー"
                 className="w-full md:w-auto"
-                value={filterOptions.reservationNumber}
+                value={filterOptions.menu}
                 onChange={handleInputChange}
               />
               <Select
@@ -149,7 +184,11 @@ const ReservationListView: React.FC = () => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">すべてのスタッフ</SelectItem>
-                  {/* スタッフの選択肢を追加 */}
+                  {staffList.map((staff) => (
+                    <SelectItem key={staff.id} value={staff.id}>
+                      {staff.name}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
               <Select
