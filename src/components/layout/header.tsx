@@ -185,12 +185,10 @@ const SubHeader: React.FC<{ pathname: string }> = ({ pathname }) => {
       { href: "/dashboard/sales/sales-details", label: "売上明細" },
       { href: "/dashboard/sales/closing", label: "レジ締め" },
       { href: "/dashboard/sales/closing-list", label: "レジ締め一覧" },
-      { href: "/dashboard/sales/withdrawal", label: "出金申請" },
+      { href: "/dashboard/sales/withdrawal", label: "Stripeダッシュボード" },
     ],
     "/dashboard/settings": [
       { href: "/dashboard/settings", label: "基本設定" },
-      { href: "/dashboard/settings/service", label: "サービス設定" },
-      { href: "/dashboard/settings/banking", label: "振込先口座設定" },
       { href: "/dashboard/settings/notification", label: "通知設定" },
       { href: "/dashboard/settings/salonboard", label: "サロンボード連携" },
     ],
