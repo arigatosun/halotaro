@@ -8,7 +8,7 @@ interface DayViewCalendarProps {
   selectedDate: Date;
   reservations: Reservation[];
   staffList: { id: string; name: string }[];
-  onEventClick: (clickInfo: EventClickArg) => void; // 修正
+  onEventClick: (clickInfo: EventClickArg) => void;
 }
 
 const DayViewCalendar: React.FC<DayViewCalendarProps> = ({
@@ -19,7 +19,7 @@ const DayViewCalendar: React.FC<DayViewCalendarProps> = ({
 }) => {
   const events: EventInput[] = reservations.map(reservation => ({
     id: reservation.id,
-    resourceId: reservation.staff_id,
+    resourceId: reservation.staff_id ?? undefined, // null の場合は undefined に変換
     start: new Date(reservation.start_time),
     end: new Date(reservation.end_time),
     title: reservation.customer_name,
@@ -38,7 +38,7 @@ const DayViewCalendar: React.FC<DayViewCalendarProps> = ({
     events: events,
     slotDuration: "00:30:00",
     headerToolbar: false,
-    eventClick: onEventClick, // 修正
+    eventClick: onEventClick,
     height: 'auto',
     schedulerLicenseKey: 'CC-Attribution-NonCommercial-NoDerivatives',
   };

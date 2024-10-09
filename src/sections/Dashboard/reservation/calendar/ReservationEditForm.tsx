@@ -1,12 +1,21 @@
+// src/sections/Dashboard/reservation/calendar/ReservationEditForm.tsx
+
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Reservation, Staff, MenuItem as MenuItemType } from '@/types/reservation';
+import { Reservation, Staff, MenuItem as MenuItemType, BusinessHour } from '@/types/reservation';
 import moment from 'moment';
 import { Alert, Snackbar, Grid, Paper, Typography, Box } from '@mui/material';
+
+interface EditingFormDataType extends Partial<Reservation> {
+  customer_first_name?: string; // 追加
+  customer_last_name?: string;  // 追加
+  customer_first_name_kana?: string; // 追加
+  customer_last_name_kana?: string;  // 追加
+}
 
 interface ReservationEditFormProps {
   reservation: Reservation;
@@ -16,6 +25,7 @@ interface ReservationEditFormProps {
   staffList: Staff[];
   menuList: MenuItemType[];
   reservations: Reservation[];
+  businessHours: BusinessHour[];
 }
 
 const ReservationEditForm: React.FC<ReservationEditFormProps> = ({
@@ -25,9 +35,10 @@ const ReservationEditForm: React.FC<ReservationEditFormProps> = ({
   onDelete,
   staffList,
   menuList,
-  reservations
+  reservations,
+  businessHours
 }) => {
-  const [editingFormData, setEditingFormData] = useState<Partial<Reservation>>({});
+  const [editingFormData, setEditingFormData] = useState<EditingFormDataType>({});
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [availableTimeSlots, setAvailableTimeSlots] = useState<string[]>([]);
   const [isOverlap, setIsOverlap] = useState<boolean>(false);
@@ -37,10 +48,24 @@ const ReservationEditForm: React.FC<ReservationEditFormProps> = ({
 
   useEffect(() => {
     if (reservation) {
+      // フルネームを姓と名に分割
+      const nameParts = (reservation.customer_name || '').split(' ');
+      const lastName = nameParts[0] || '';
+      const firstName = nameParts[1] || '';
+
+      const nameKanaParts = (reservation.customer_name_kana || '').split(' ');
+      const lastNameKana = nameKanaParts[0] || '';
+      const firstNameKana = nameKanaParts[1] || '';
+
       setEditingFormData({
         ...reservation,
+        customer_last_name: lastName,
+        customer_first_name: firstName,
+        customer_last_name_kana: lastNameKana,
+        customer_first_name_kana: firstNameKana,
         start_time: moment.utc(reservation.start_time).local().format('YYYY-MM-DDTHH:mm'),
         end_time: moment.utc(reservation.end_time).local().format('YYYY-MM-DDTHH:mm'),
+        // その他のフィールド...
       });
       setSelectedDate(moment.utc(reservation.start_time).local().format('YYYY-MM-DD'));
       setSelectedTime(moment.utc(reservation.start_time).local().format('HH:mm'));
@@ -57,17 +82,40 @@ const ReservationEditForm: React.FC<ReservationEditFormProps> = ({
     const selectedMenu = menuList.find(menu => menu.id === editingFormData.menu_id);
     if (!selectedMenu) return;
 
-    const dayStart = moment(selectedDate).startOf('day');
-    const dayEnd = moment(selectedDate).endOf('day');
+    const dateStr = selectedDate;
+    let businessHourForDate = businessHours.find(bh => bh.date === dateStr);
+
+    if (!businessHourForDate) {
+      // デフォルトの営業時間を使用
+      const isWeekend = [0, 6].includes(moment(dateStr).day());
+      businessHourForDate = {
+        date: dateStr,
+        open_time: isWeekend ? '10:00:00' : '09:00:00',
+        close_time: isWeekend ? '18:00:00' : '20:00:00',
+        is_holiday: false
+      };
+    }
+
+    if (businessHourForDate.is_holiday) {
+      console.log('This day is a holiday');
+      setAvailableTimeSlots([]);
+      return;
+    }
+
+    const openingTime = moment(`${dateStr} ${businessHourForDate.open_time}`, 'YYYY-MM-DD HH:mm:ss');
+    const closingTime = moment(`${dateStr} ${businessHourForDate.close_time}`, 'YYYY-MM-DD HH:mm:ss');
+
     const slots = [];
 
-    for (let m = moment(dayStart); m.isBefore(dayEnd); m.add(30, 'minutes')) {
-      const slotStart = m.format('HH:mm');
-      const slotEnd = m.clone().add(selectedMenu.duration, 'minutes');
+    let currentTime = openingTime.clone();
+    while (currentTime.isBefore(closingTime)) {
+      const slotStart = currentTime.format('HH:mm');
+      const slotEnd = currentTime.clone().add(selectedMenu.duration, 'minutes');
 
-      if (slotEnd.isSameOrBefore(dayEnd) && !isSlotOverlapping(m, slotEnd)) {
+      if (slotEnd.isSameOrBefore(closingTime) && !isSlotOverlapping(currentTime, slotEnd)) {
         slots.push(slotStart);
       }
+      currentTime.add(30, 'minutes');
     }
 
     setAvailableTimeSlots(slots);
@@ -77,6 +125,7 @@ const ReservationEditForm: React.FC<ReservationEditFormProps> = ({
     return reservations.some(res => {
       if (res.id === editingFormData.id) return false;
       if (res.staff_id !== editingFormData.staff_id) return false;
+      if (res.status === 'cancelled' || res.status === 'completed') return false;
       const resStart = moment.utc(res.start_time).local();
       const resEnd = moment.utc(res.end_time).local();
       return start.isBefore(resEnd) && end.isAfter(resStart);
@@ -119,6 +168,15 @@ const ReservationEditForm: React.FC<ReservationEditFormProps> = ({
       return;
     }
 
+    if (!editingFormData.menu_id) {
+      setSnackbar({ message: 'メニューを選択してください。', severity: 'error' });
+      return;
+    }
+
+    // 姓名を結合
+    const customer_name = `${editingFormData.customer_last_name || ''} ${editingFormData.customer_first_name || ''}`.trim();
+    const customer_name_kana = `${editingFormData.customer_last_name_kana || ''} ${editingFormData.customer_first_name_kana || ''}`.trim();
+
     const selectedMenu = menuList.find(menu => menu.id === editingFormData.menu_id);
     if (!selectedMenu) {
       setSnackbar({ message: 'メニューを選択してください。', severity: 'error' });
@@ -130,6 +188,8 @@ const ReservationEditForm: React.FC<ReservationEditFormProps> = ({
 
     const updatedReservation = {
       ...editingFormData,
+      customer_name,
+      customer_name_kana,
       start_time: startDateTime.toISOString(),
       end_time: endDateTime.toISOString(),
       total_price: selectedMenu.price || 0,
@@ -163,16 +223,52 @@ const ReservationEditForm: React.FC<ReservationEditFormProps> = ({
           <Box sx={{ display: 'flex', gap: 4 }}>
             <Box sx={{ flex: 1 }}>
               <div className="space-y-4">
+                {/* 顧客情報の表示 */}
                 <div className="space-y-2">
-                  <Label htmlFor="customer_name">顧客名</Label>
+                  {/* 顧客名の入力 (姓) */}
+                  <Label htmlFor="customer_last_name">顧客名（姓）</Label>
                   <Input
-                    id="customer_name"
-                    value={editingFormData.customer_name || ''}
-                    onChange={(e) => handleChange('customer_name', e.target.value)}
+                    id="customer_last_name"
+                    value={editingFormData.customer_last_name || ''}
+                    onChange={(e) => handleChange('customer_last_name', e.target.value)}
                     required
                   />
                 </div>
 
+                {/* 顧客名の入力 (名) */}
+                <div className="space-y-2">
+                  <Label htmlFor="customer_first_name">顧客名（名）</Label>
+                  <Input
+                    id="customer_first_name"
+                    value={editingFormData.customer_first_name || ''}
+                    onChange={(e) => handleChange('customer_first_name', e.target.value)}
+                    required
+                  />
+                </div>
+
+                {/* 顧客名（カナ）の入力 (姓) */}
+                <div className="space-y-2">
+                  <Label htmlFor="customer_last_name_kana">顧客名（カナ・姓）</Label>
+                  <Input
+                    id="customer_last_name_kana"
+                    value={editingFormData.customer_last_name_kana || ''}
+                    onChange={(e) => handleChange('customer_last_name_kana', e.target.value)}
+                    required
+                  />
+                </div>
+
+                {/* 顧客名（カナ）の入力 (名) */}
+                <div className="space-y-2">
+                  <Label htmlFor="customer_first_name_kana">顧客名（カナ・名）</Label>
+                  <Input
+                    id="customer_first_name_kana"
+                    value={editingFormData.customer_first_name_kana || ''}
+                    onChange={(e) => handleChange('customer_first_name_kana', e.target.value)}
+                    required
+                  />
+                </div>
+
+                {/* メールアドレスの入力 */}
                 <div className="space-y-2">
                   <Label htmlFor="customer_email">メールアドレス</Label>
                   <Input
@@ -180,9 +276,11 @@ const ReservationEditForm: React.FC<ReservationEditFormProps> = ({
                     type="email"
                     value={editingFormData.customer_email || ''}
                     onChange={(e) => handleChange('customer_email', e.target.value)}
+                    required
                   />
                 </div>
 
+                {/* 電話番号の入力 */}
                 <div className="space-y-2">
                   <Label htmlFor="customer_phone">電話番号</Label>
                   <Input
@@ -193,6 +291,7 @@ const ReservationEditForm: React.FC<ReservationEditFormProps> = ({
                   />
                 </div>
 
+                {/* メニューの選択 */}
                 <div className="space-y-2">
                   <Label htmlFor="menu_id">メニュー</Label>
                   <Select
@@ -213,6 +312,7 @@ const ReservationEditForm: React.FC<ReservationEditFormProps> = ({
                   </Select>
                 </div>
 
+                {/* 担当スタッフの選択 */}
                 <div className="space-y-2">
                   <Label htmlFor="staff_id">担当スタッフ</Label>
                   <Select
@@ -237,6 +337,7 @@ const ReservationEditForm: React.FC<ReservationEditFormProps> = ({
 
             <Box sx={{ flex: 1 }}>
               <div className="space-y-4">
+                {/* 予約日 */}
                 <div className="space-y-2">
                   <Label htmlFor="reservation_date">予約日</Label>
                   <Input
@@ -248,6 +349,7 @@ const ReservationEditForm: React.FC<ReservationEditFormProps> = ({
                   />
                 </div>
 
+                {/* 予約時間 */}
                 {selectedDate && editingFormData.staff_id && editingFormData.menu_id && (
                   <div className="space-y-2">
                     <Label>予約時間</Label>
@@ -277,9 +379,10 @@ const ReservationEditForm: React.FC<ReservationEditFormProps> = ({
                   </div>
                 )}
 
+                {/* 選択した時間帯の表示 */}
                 {selectedTime && (
                   <Typography variant="body2">
-                    予約時間: {selectedTime} - {moment(`${selectedDate}T${selectedTime}`).add(menuList.find(menu => menu.id === editingFormData.menu_id)?.duration || 0, 'minutes').format('HH:mm')}
+                    予約時間: {selectedTime} ~ {moment(`${selectedDate}T${selectedTime}`).add(menuList.find(menu => menu.id === editingFormData.menu_id)?.duration || 0, 'minutes').format('HH:mm')}
                   </Typography>
                 )}
 
@@ -292,14 +395,19 @@ const ReservationEditForm: React.FC<ReservationEditFormProps> = ({
             </Box>
           </Box>
 
+          {/* サブミットボタンと削除ボタン */}
           <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 4 }}>
             <Button type="submit" disabled={isOverlap || !selectedTime}>
               予約を更新
+            </Button>
+            <Button type="button" variant="destructive" onClick={handleDelete}>
+              予約を削除
             </Button>
           </Box>
         </form>
       </DialogContent>
 
+      {/* スナックバーによる通知 */}
       <Snackbar
         open={!!snackbar}
         autoHideDuration={6000}

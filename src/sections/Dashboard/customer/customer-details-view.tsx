@@ -1,13 +1,16 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import {
   Table,
   TableBody,
   TableCell,
-  TableHead,
-  TableHeader,
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
@@ -26,118 +29,102 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
 import {
   ArrowLeft,
-  Edit,
   Save,
   User,
   Phone,
   Mail,
   Calendar,
   AlertTriangle,
-  Plus,
   Trash2,
+  Home,
+  Gift,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import truncateText from "@/utils/truncate-text";
+import { useAuth } from "@/contexts/authcontext";
 
-function randomDate(start: Date, end: Date) {
-  return new Date(
-    start.getTime() + Math.random() * (end.getTime() - start.getTime())
-  );
-}
+// 月の選択肢
+const MONTHS = Array.from({ length: 12 }, (_, i) => ({
+  value: String(i + 1).padStart(2, "0"),
+  label: `${i + 1}月`,
+}));
 
-function generateRandomReservation() {
-  const statuses = [
-    "来店待ち",
-    "来店済み",
-    "キャンセル",
-    "無断キャンセル",
-    "当日キャンセル",
-  ];
-  const menus = [
-    "カット",
-    "カラー",
-    "パーマ",
-    "トリートメントたっぷり炭酸スパ",
-    "ヘッドスパ",
-  ];
-  const routes = ["ハロタロ", "ホットペッパー", "電話予約", "店頭予約"];
-  const staffs = [
-    "田中 花子",
-    "佐藤 太郎",
-    "鈴木 美香",
-    "高橋 健太",
-    "フリー スタッフ",
-  ];
-
-  const amount = Math.floor(Math.random() * 20000) + 5000;
-  const technicalAmount = Math.floor(amount * 0.8);
-  const productAmount = amount - technicalAmount;
-
-  return {
-    date: randomDate(new Date(2023, 0, 1), new Date()).toLocaleDateString(),
-    staff: staffs[Math.floor(Math.random() * staffs.length)],
-    status: statuses[Math.floor(Math.random() * statuses.length)],
-    menu: menus[Math.floor(Math.random() * menus.length)],
-    route: routes[Math.floor(Math.random() * routes.length)],
-    amount: amount,
-    technicalAmount: technicalAmount,
-    productAmount: productAmount,
-  };
-}
-
-async function getCustomerDetails(id: string) {
-  const reservations = Array.from({ length: 20 }, generateRandomReservation);
-  const cancelledReservations = reservations.filter(
-    (r) =>
-      r.status === "キャンセル" ||
-      r.status === "無断キャンセル" ||
-      r.status === "当日キャンセル"
-  );
-  const lastCancelDate =
-    cancelledReservations.length > 0
-      ? new Date(
-          Math.max(
-            ...cancelledReservations.map((r) => new Date(r.date).getTime())
-          )
-        ).toLocaleDateString()
-      : "なし";
-
-  return {
-    id,
-    name: "香木 誠士郎",
-    kana: "コウキ セイシロウ",
-    gender: "男性",
-    birthDate: "2005/04/07",
-    phone: "07017450086",
-    email: "seishiro@example.com",
-    visits: 5,
-    cancelCount: cancelledReservations.length,
-    lastCancelDate: lastCancelDate,
-    reservations: reservations,
-  };
-}
+// 日の選択肢
+const DAYS = Array.from({ length: 31 }, (_, i) => ({
+  value: String(i + 1).padStart(2, "0"),
+  label: `${i + 1}日`,
+}));
 
 interface CustomerDetailPageProps {
   id: string;
 }
 
+interface FieldItem {
+  label: string;
+  field: string;
+  icon: React.ReactNode;
+  type?: string;
+  editable?: boolean;
+}
+
 const CustomerDetailPage: React.FC<CustomerDetailPageProps> = ({ id }) => {
+  const { session } = useAuth();
   const [customerDetails, setCustomerDetails] = useState<any>(null);
   const [isEditing, setIsEditing] = useState(false);
+  const [isDetailEditing, setIsDetailEditing] = useState(false); // 詳細情報の編集状態
   const [editedDetails, setEditedDetails] = useState<any>(null);
-  const [dateFilter, setDateFilter] = useState({ startDate: "", endDate: "" });
-  const [customerNote, setCustomerNote] = useState("");
+  const [detailInfo, setDetailInfo] = useState<any>(null);
+  const [memo, setMemo] = useState("");
   const router = useRouter();
 
   useEffect(() => {
-    getCustomerDetails(id).then((details) => {
-      setCustomerDetails(details);
-      setEditedDetails(details);
-    });
-  }, [id]);
+    const fetchCustomerDetails = async (id: string) => {
+      if (!session) {
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/customer-details?id=${id}`, {
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          // ここでフィールド名をマッピング
+          const detailInfo = data.customerDetails.detailInfo || {};
+          const mappedDetailInfo = {
+            ...detailInfo,
+            birthDate: detailInfo.birthDate || "",
+            weddingAnniversary: detailInfo.weddingAnniversary || "",
+            // 他のフィールドも必要に応じてマッピング
+          };
+
+          setCustomerDetails(data.customerDetails);
+          setEditedDetails(data.customerDetails);
+          setDetailInfo(mappedDetailInfo);
+          setMemo(detailInfo.memo || "");
+        } else {
+          console.error("Error fetching customer details:", data.error);
+        }
+      } catch (error) {
+        console.error("Error fetching customer details:", error);
+      }
+    };
+
+    fetchCustomerDetails(id);
+  }, [id, session]);
 
   if (!customerDetails) {
     return <div>Loading...</div>;
@@ -150,47 +137,132 @@ const CustomerDetailPage: React.FC<CustomerDetailPageProps> = ({ id }) => {
     }
   };
 
+  const handleDetailEditToggle = () => {
+    setIsDetailEditing(!isDetailEditing);
+    if (!isDetailEditing) {
+      setDetailInfo({ ...customerDetails.detailInfo });
+      setMemo(customerDetails.detailInfo.memo || "");
+    }
+  };
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setEditedDetails({ ...editedDetails, [name]: value });
+  };
+
+  const handleDetailInputChange = (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const { name, value } = e.target;
+    setDetailInfo({ ...detailInfo, [name]: value });
   };
 
   const handleSelectChange = (name: string, value: string) => {
     setEditedDetails({ ...editedDetails, [name]: value });
   };
 
-  const handleSave = () => {
-    setCustomerDetails(editedDetails);
-    setIsEditing(false);
+  const handleDetailSelectChange = (name: string, value: string) => {
+    setDetailInfo({ ...detailInfo, [name]: value });
+  };
+
+  const handleMemoChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setMemo(e.target.value);
+  };
+
+  const handleSave = async () => {
+    // 詳細情報とメモの保存のみ実装
+    await handleDetailSave(); // 詳細情報とメモの保存
+  };
+
+  const handleDetailSave = async () => {
+    if (!session) return;
+
+    try {
+      // 保存するデータのフィールド名をデータベースに合わせる
+      const saveDetailInfo = {
+        ...detailInfo,
+        birth_date: detailInfo.birthDate === "00-00" ? null : detailInfo.birthDate,
+        wedding_anniversary:
+          detailInfo.weddingAnniversary === "00-00"
+            ? null
+            : detailInfo.weddingAnniversary,
+        // キャメルケースのフィールドを削除
+        birthDate: undefined,
+        weddingAnniversary: undefined,
+        memo: memo,
+      };
+
+      const response = await fetch("/api/customer-details/update", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          customerId: customerDetails.id,
+          detailInfo: saveDetailInfo,
+          memo: memo, // メモを追加
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        console.log("Detail information updated successfully");
+        setIsDetailEditing(false);
+        setCustomerDetails({
+          ...customerDetails,
+          detailInfo: { ...detailInfo, memo },
+          memo,
+        });
+      } else {
+        console.error("Error updating detail information:", data.error);
+      }
+    } catch (error) {
+      console.error("Error updating detail information:", error);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!session) return;
+
+    try {
+      const response = await fetch(
+        `/api/customer-details/delete?id=${customerDetails.id}`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        }
+      );
+
+      const data = await response.json();
+
+      if (response.ok) {
+        console.log("Customer deleted successfully");
+        router.push("/dashboard/customer"); // 削除後に顧客一覧に戻る
+      } else {
+        console.error("Error deleting customer:", data.error);
+      }
+    } catch (error) {
+      console.error("Error deleting customer:", error);
+    }
   };
 
   const handleBack = () => {
     router.push("/dashboard/customer");
   };
 
-  const filterReservations = () => {
-    if (!dateFilter.startDate && !dateFilter.endDate)
-      return customerDetails.reservations;
-    return customerDetails.reservations.filter((reservation: any) => {
-      const reservationDate = new Date(reservation.date);
-      const startDate = dateFilter.startDate
-        ? new Date(dateFilter.startDate)
-        : new Date(0);
-      const endDate = dateFilter.endDate
-        ? new Date(dateFilter.endDate)
-        : new Date();
-      return reservationDate >= startDate && reservationDate <= endDate;
-    });
-  };
-
-  const filteredReservations = filterReservations();
-
   const renderEditableField = (
     name: string,
     value: string,
     type: string = "text",
     editable: boolean = true,
-    icon?: React.ReactNode
+    icon?: React.ReactNode,
+    isEditingField: boolean = isEditing,
+    handleChange: (e: React.ChangeEvent<HTMLInputElement>) => void = handleInputChange,
+    handleSelectChangeFn: (name: string, value: string) => void = handleSelectChange
   ) => {
     const commonStyles = "w-full min-h-[2.5rem] px-2 flex items-center text-sm";
     const editStyles = `${commonStyles} border rounded`;
@@ -199,18 +271,19 @@ const CustomerDetailPage: React.FC<CustomerDetailPageProps> = ({ id }) => {
       return <div className={commonStyles}>{value}</div>;
     }
 
-    if (isEditing) {
+    if (isEditingField) {
       if (type === "select") {
         return (
           <Select
             name={name}
-            value={value}
-            onValueChange={(value) => handleSelectChange(name, value)}
+            value={value || "0"}
+            onValueChange={(value) => handleSelectChangeFn(name, value)}
           >
             <SelectTrigger className={editStyles}>
-              <SelectValue placeholder={value} />
+              <SelectValue placeholder="未選択" />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="0">未選択</SelectItem>
               <SelectItem value="男性">男性</SelectItem>
               <SelectItem value="女性">女性</SelectItem>
               <SelectItem value="その他">その他</SelectItem>
@@ -224,8 +297,9 @@ const CustomerDetailPage: React.FC<CustomerDetailPageProps> = ({ id }) => {
           <Input
             name={name}
             value={value}
-            onChange={handleInputChange}
+            onChange={handleChange}
             className={editStyles}
+            type={type}
           />
         </div>
       );
@@ -233,18 +307,89 @@ const CustomerDetailPage: React.FC<CustomerDetailPageProps> = ({ id }) => {
     return (
       <div className={`${commonStyles} flex items-center`}>
         {icon && <span className="mr-2">{icon}</span>}
-        {value}
+        {value || "未選択"}
+      </div>
+    );
+  };
+
+  const renderDateField = (
+    label: string,
+    value: string,
+    onChange: (newValue: string) => void,
+    icon: React.ReactNode,
+    isEditingField: boolean
+  ) => {
+    const [month, day] = value.split("-");
+
+    const handleMonthChange = (newMonth: string) => {
+      const updatedValue = `${newMonth}-${day || "01"}`;
+      onChange(updatedValue);
+    };
+
+    const handleDayChange = (newDay: string) => {
+      const updatedValue = `${month || "00"}-${newDay}`;
+      onChange(updatedValue);
+    };
+
+    return (
+      <div className="flex items-center space-x-2">
+        {icon && <span className="mr-2">{icon}</span>}
+        {isEditingField ? (
+          <>
+            <Select
+              value={month || "0"}
+              onValueChange={handleMonthChange}
+            >
+              <SelectTrigger className="w-20">
+                <SelectValue placeholder="月" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="0">未選択</SelectItem>
+                {MONTHS.map((m) => (
+                  <SelectItem key={m.value} value={m.value}>
+                    {m.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <span>-</span>
+            <Select
+              value={day || "0"}
+              onValueChange={handleDayChange}
+            >
+              <SelectTrigger className="w-20">
+                <SelectValue placeholder="日" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="0">未選択</SelectItem>
+                {DAYS.map((d) => (
+                  <SelectItem key={d.value} value={d.value}>
+                    {d.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </>
+        ) : (
+          <span>
+            {month && day && month !== "00" && day !== "00"
+              ? `${parseInt(month)}月${parseInt(day)}日`
+              : "未設定"}
+          </span>
+        )}
       </div>
     );
   };
 
   const renderStatusBadge = (status: string) => {
     const statusColors: { [key: string]: string } = {
-      来店待ち: "bg-blue-500",
-      来店済み: "bg-green-500",
-      キャンセル: "bg-yellow-500",
-      無断キャンセル: "bg-red-500",
-      当日キャンセル: "bg-orange-500",
+      '受付待ち': "bg-blue-500",
+      '会計済み': "bg-green-500",
+      'お客様キャンセル': "bg-yellow-500",
+      'サロンキャンセル': "bg-red-500",
+      '当日キャンセル': "bg-orange-500",
+      '無断キャンセル': "bg-red-500",
+      '不明': "bg-gray-500",
     };
     return (
       <span
@@ -257,8 +402,52 @@ const CustomerDetailPage: React.FC<CustomerDetailPageProps> = ({ id }) => {
     );
   };
 
+  const basicFields: FieldItem[] = [
+    { label: "氏名 (漢字)", field: "name", icon: <User /> },
+    { label: "氏名 (カナ)", field: "kana", icon: <User /> },
+    { label: "電話番号", field: "phone", icon: <Phone /> },
+    { label: "メールアドレス", field: "email", icon: <Mail /> },
+    {
+      label: "来店回数",
+      field: "visits",
+      editable: false,
+      icon: <Calendar />,
+    },
+    {
+      label: "キャンセル回数",
+      field: "cancelCount",
+      editable: false,
+      icon: <AlertTriangle />,
+    },
+    {
+      label: "最終キャンセル日",
+      field: "lastCancelDate",
+      editable: false,
+      icon: <AlertTriangle />,
+    },
+  ];
+
+  const detailFields: FieldItem[] = [
+    {
+      label: "性別",
+      field: "gender",
+      type: "select",
+      icon: <User />,
+    },
+    { label: "生年月日", field: "birthDate", icon: <Calendar /> },
+    { label: "住所", field: "address", icon: <Home /> },
+    {
+      label: "結婚記念日",
+      field: "weddingAnniversary",
+      icon: <Gift />,
+    },
+  ];
+
+  const filteredReservations = customerDetails.reservations;
+
   return (
     <div className="container mx-auto px-4 py-8">
+      {/* ヘッダー */}
       <header className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-bold flex items-center">
           <User className="mr-2" />
@@ -269,72 +458,292 @@ const CustomerDetailPage: React.FC<CustomerDetailPageProps> = ({ id }) => {
         </h1>
       </header>
 
+      {/* 基本情報と詳細情報 */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* 基本情報と詳細情報タブ */}
         <Card className="lg:col-span-1">
-          <CardHeader>
-            <CardTitle className="text-xl flex items-center">
-              <User className="mr-2" />
-              基本情報
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableBody>
-                {[
-                  { label: "氏名 (漢字)", field: "name", icon: <User /> },
-                  { label: "氏名 (カナ)", field: "kana", icon: <User /> },
-                  {
-                    label: "性別",
-                    field: "gender",
-                    type: "select",
-                    icon: <User />,
-                  },
-                  { label: "生年月日", field: "birthDate", icon: <Calendar /> },
-                  { label: "電話番号", field: "phone", icon: <Phone /> },
-                  { label: "メールアドレス", field: "email", icon: <Mail /> },
-                  {
-                    label: "来店回数",
-                    field: "visits",
-                    editable: false,
-                    icon: <Calendar />,
-                  },
-                  {
-                    label: "キャンセル回数",
-                    field: "cancelCount",
-                    editable: false,
-                    icon: <AlertTriangle />,
-                  },
-                  {
-                    label: "最終キャンセル日",
-                    field: "lastCancelDate",
-                    editable: false,
-                    icon: <AlertTriangle />,
-                  },
-                ].map((item) => (
-                  <TableRow key={item.field}>
-                    <TableCell className="font-medium py-2 w-1/3">
-                      {item.label}
-                    </TableCell>
-                    <TableCell className="py-2 w-2/3">
-                      {renderEditableField(
-                        item.field,
-                        item.field === "visits"
-                          ? `${customerDetails[item.field]}回`
-                          : item.field === "cancelCount"
-                          ? `${customerDetails[item.field]}回`
-                          : editedDetails[item.field],
-                        item.type,
-                        item.editable,
-                        item.icon
+          <Tabs defaultValue="basic">
+            <TabsList>
+              <TabsTrigger value="basic">基本情報</TabsTrigger>
+              <TabsTrigger value="detail">詳細情報</TabsTrigger>
+            </TabsList>
+            <TabsContent value="basic">
+              <CardHeader>
+                <CardTitle className="text-xl flex items-center">
+                  <User className="mr-2" />
+                  基本情報
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableBody>
+                    {basicFields.map((item) => (
+                      <TableRow key={item.field}>
+                        <TableCell className="font-medium py-2 w-1/3">
+                          {item.label}
+                        </TableCell>
+                        <TableCell className="py-2 w-2/3">
+                          {renderEditableField(
+                            item.field,
+                            item.field === "visits"
+                              ? `${customerDetails[item.field]}回`
+                              : item.field === "cancelCount"
+                              ? `${customerDetails[item.field]}回`
+                              : editedDetails[item.field],
+                            item.type,
+                            item.editable !== false,
+                            item.icon,
+                            isEditing,
+                            handleInputChange,
+                            handleSelectChange
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </TabsContent>
+
+            <TabsContent value="detail">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-xl flex items-center">
+                    <User className="mr-2" />
+                    詳細情報
+                  </CardTitle>
+                  <Button
+                    variant="outline"
+                    onClick={handleDetailEditToggle}
+                    className="h-10" // 高さを固定
+                  >
+                    {isDetailEditing ? "キャンセル" : "編集"}
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableBody>
+                    {detailFields.map((item) => (
+                      <TableRow key={item.field}>
+                        <TableCell className="font-medium py-2 w-1/3">
+                          {item.label}
+                        </TableCell>
+                        <TableCell className="py-2 w-2/3">
+                          {item.field === "birthDate" ||
+                          item.field === "weddingAnniversary" ? (
+                            renderDateField(
+                              item.label,
+                              detailInfo[item.field],
+                              (newValue: string) => {
+                                setDetailInfo({
+                                  ...detailInfo,
+                                  [item.field]: newValue,
+                                });
+                              },
+                              item.icon,
+                              isDetailEditing
+                            )
+                          ) : (
+                            renderEditableField(
+                              item.field,
+                              detailInfo[item.field],
+                              item.field === "birthDate" ||
+                                item.field === "weddingAnniversary"
+                                ? "date"
+                                : item.type || "text",
+                              true,
+                              item.icon,
+                              isDetailEditing,
+                              handleDetailInputChange,
+                              handleDetailSelectChange
+                            )
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+
+                {/* 子供の情報の編集フォーム */}
+                <div className="mt-4">
+                  <h3 className="text-lg font-medium">子供の情報</h3>
+                  {isDetailEditing ? (
+                    <>
+                      {detailInfo.children && detailInfo.children.length > 0 ? (
+                        detailInfo.children.map(
+                          (child: any, index: number) => (
+                            <div
+                              key={index}
+                              className="flex space-x-4 mt-2 items-center"
+                            >
+                              <Input
+                                name={`childName-${index}`}
+                                value={child.name}
+                                placeholder="名前"
+                                onChange={(e) => {
+                                  const updatedChildren = [
+                                    ...detailInfo.children,
+                                  ];
+                                  updatedChildren[index].name =
+                                    e.target.value;
+                                  setDetailInfo({
+                                    ...detailInfo,
+                                    children: updatedChildren,
+                                  });
+                                }}
+                              />
+                              {/* 子供の誕生日を月と日で選択 */}
+                              <div className="flex items-center space-x-2">
+                                <Select
+                                  value={
+                                    child.birthDate
+                                      ? child.birthDate.split("-")[0]
+                                      : "0"
+                                  }
+                                  onValueChange={(value) => {
+                                    const updatedChildren = [
+                                      ...detailInfo.children,
+                                    ];
+                                    const currentDay = child.birthDate
+                                      ? child.birthDate.split("-")[1]
+                                      : "00";
+                                    updatedChildren[index].birthDate = `${value}-${currentDay}`;
+                                    setDetailInfo({
+                                      ...detailInfo,
+                                      children: updatedChildren,
+                                    });
+                                  }}
+                                >
+                                  <SelectTrigger className="w-20">
+                                    <SelectValue placeholder="月" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="0">未選択</SelectItem>
+                                    {MONTHS.map((m) => (
+                                      <SelectItem
+                                        key={m.value}
+                                        value={m.value}
+                                      >
+                                        {m.label}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                <span>-</span>
+                                <Select
+                                  value={
+                                    child.birthDate
+                                      ? child.birthDate.split("-")[1]
+                                      : "0"
+                                  }
+                                  onValueChange={(value) => {
+                                    const updatedChildren = [
+                                      ...detailInfo.children,
+                                    ];
+                                    const currentMonth = child.birthDate
+                                      ? child.birthDate.split("-")[0]
+                                      : "00";
+                                    updatedChildren[index].birthDate = `${currentMonth}-${value}`;
+                                    setDetailInfo({
+                                      ...detailInfo,
+                                      children: updatedChildren,
+                                    });
+                                  }}
+                                >
+                                  <SelectTrigger className="w-20">
+                                    <SelectValue placeholder="日" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="0">未選択</SelectItem>
+                                    {DAYS.map((d) => (
+                                      <SelectItem
+                                        key={d.value}
+                                        value={d.value}
+                                      >
+                                        {d.label}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <Button
+                                variant="destructive"
+                                onClick={() => {
+                                  const updatedChildren =
+                                    detailInfo.children.filter(
+                                      (_: any, i: number) => i !== index
+                                    );
+                                  setDetailInfo({
+                                    ...detailInfo,
+                                    children: updatedChildren,
+                                  });
+                                }}
+                              >
+                                削除
+                              </Button>
+                            </div>
+                          )
+                        )
+                      ) : (
+                        <p className="text-sm text-gray-500 mt-2">
+                          子供の情報がありません。
+                        </p>
                       )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
+                      <Button
+                        variant="outline"
+                        className="mt-4"
+                        onClick={() => {
+                          const updatedChildren = detailInfo.children
+                            ? [...detailInfo.children, { name: "", birthDate: "0-0" }]
+                            : [{ name: "", birthDate: "0-0" }];
+                          setDetailInfo({ ...detailInfo, children: updatedChildren });
+                        }}
+                      >
+                        子供を追加
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      {detailInfo.children && detailInfo.children.length > 0 ? (
+                        detailInfo.children.map(
+                          (child: any, index: number) => (
+                            <div key={index} className="mt-2">
+                              <p>名前: {child.name || "未設定"}</p>
+                              <p>
+                                誕生日:{" "}
+                                {child.birthDate && child.birthDate !== "0-0"
+                                  ? `${parseInt(child.birthDate.split("-")[0])}月${parseInt(
+                                      child.birthDate.split("-")[1]
+                                    )}日`
+                                  : "未設定"}
+                              </p>
+                            </div>
+                          )
+                        )
+                      ) : (
+                        <p className="text-sm text-gray-500 mt-2">
+                          子供の情報がありません。
+                        </p>
+                      )}
+                    </>
+                  )}
+                </div>
+
+                {/* 保存ボタン */}
+                {isDetailEditing && (
+                  <div className="flex justify-end mt-4">
+                    <Button onClick={handleDetailSave}>
+                      <Save className="mr-2" /> 保存する
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </TabsContent>
+          </Tabs>
         </Card>
 
+        {/* 予約履歴とメモ */}
         <Card className="lg:col-span-2">
           <Tabs defaultValue="reservations">
             <TabsList>
@@ -342,7 +751,7 @@ const CustomerDetailPage: React.FC<CustomerDetailPageProps> = ({ id }) => {
               <TabsTrigger value="notes">メモ</TabsTrigger>
             </TabsList>
             <TabsContent value="reservations">
-              {/* フィルター部分 */}
+              {/* 予約履歴テーブル */}
               <div className="overflow-x-auto">
                 <div style={{ height: "500px", overflow: "auto" }}>
                   <table className="w-full border-collapse">
@@ -354,7 +763,7 @@ const CustomerDetailPage: React.FC<CustomerDetailPageProps> = ({ id }) => {
                         <th className="p-3 text-center font-semibold text-sm w-1/7">
                           メニュー
                         </th>
-                        <th className="p-3 text-center font-semibold text-sm w-/7">
+                        <th className="p-3 text-center font-semibold text-sm w-1/7">
                           技術売上
                         </th>
                         <th className="p-3 text-center font-semibold text-sm w-1/7">
@@ -374,16 +783,23 @@ const CustomerDetailPage: React.FC<CustomerDetailPageProps> = ({ id }) => {
                     <tbody>
                       {filteredReservations.map(
                         (reservation: any, index: number) => (
-                          <tr key={index} className="border-b hover:bg-gray-50">
-                            <td className="p-3 text-sm">{reservation.date}</td>
+                          <tr
+                            key={index}
+                            className="border-b hover:bg-gray-50"
+                          >
+                            <td className="p-3 text-sm">
+                              {reservation.date ? reservation.date : ""}
+                            </td>
                             <td className="p-3 text-sm">
                               {truncateText(reservation.menu, 10)}
                             </td>
                             <td className="p-3 text-sm text-center">
-                              ¥{reservation.technicalAmount.toLocaleString()}
+                              ¥
+                              {reservation.technicalAmount.toLocaleString()}
                             </td>
                             <td className="p-3 text-sm text-center">
-                              ¥{reservation.productAmount.toLocaleString()}
+                              ¥
+                              {reservation.productAmount.toLocaleString()}
                             </td>
                             <td className="p-3 text-sm text-center">
                               ¥{reservation.amount.toLocaleString()}
@@ -401,31 +817,92 @@ const CustomerDetailPage: React.FC<CustomerDetailPageProps> = ({ id }) => {
                   </table>
                 </div>
               </div>
+              {/* 合計金額の表示 */}
               <div className="bg-white border-t border-gray-200 p-5 flex justify-end items-center space-x-4">
                 <span className="font-semibold whitespace-nowrap">
                   合計技術売上: ¥
                   {filteredReservations
-                    .reduce((sum: number, r: any) => sum + r.technicalAmount, 0)
+                    .reduce(
+                      (sum: number, r: any) => sum + r.technicalAmount,
+                      0
+                    )
                     .toLocaleString()}
                 </span>
                 <span className="font-semibold whitespace-nowrap">
                   合計商品売上: ¥
                   {filteredReservations
-                    .reduce((sum: number, r: any) => sum + r.productAmount, 0)
+                    .reduce(
+                      (sum: number, r: any) => sum + r.productAmount,
+                      0
+                    )
                     .toLocaleString()}
                 </span>
                 <span className="font-semibold whitespace-nowrap">
                   合計支払金額: ¥
                   {filteredReservations
-                    .reduce((sum: number, r: any) => sum + r.amount, 0)
+                    .reduce(
+                      (sum: number, r: any) => sum + r.amount,
+                      0
+                    )
                     .toLocaleString()}
                 </span>
               </div>
+            </TabsContent>
+            <TabsContent value="notes">
+              <CardHeader>
+                <CardTitle className="text-xl flex items-center">
+                  メモ
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-col h-full">
+                  <Textarea
+                    value={memo}
+                    onChange={handleMemoChange}
+                    placeholder="メモを入力してください"
+                    className="w-full flex-grow mb-4"
+                  />
+                  <div className="flex justify-end space-x-4">
+                    <Dialog>
+                      <DialogTrigger asChild>
+                        <Button variant="destructive">
+                          <Trash2 className="mr-2" /> 削除
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>本当に削除しますか？</DialogTitle>
+                        </DialogHeader>
+                        <p>この操作は取り消せません。</p>
+                        <div className="flex justify-end space-x-2 mt-4">
+                          <Button variant="outline">
+                            キャンセル
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            onClick={handleDelete} // 削除機能を実装
+                          >
+                            削除
+                          </Button>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
+                    <Button
+                      variant="outline"
+                      onClick={handleDetailSave} // 詳細情報とメモの保存
+                      className="h-10" // 高さを固定
+                    >
+                      <Save className="mr-2" /> 保存
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
             </TabsContent>
           </Tabs>
         </Card>
       </div>
 
+      {/* ボタン群 */}
       <div className="flex justify-between items-center mt-8">
         <Button
           variant="outline"
@@ -434,42 +911,6 @@ const CustomerDetailPage: React.FC<CustomerDetailPageProps> = ({ id }) => {
         >
           <ArrowLeft className="mr-2" /> 戻る
         </Button>
-        <div className="space-x-4">
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button variant="destructive">
-                <Trash2 className="mr-2" /> 削除する
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>本当に削除しますか？</DialogTitle>
-              </DialogHeader>
-              <p>この操作は取り消せません。</p>
-              <div className="flex justify-end space-x-2 mt-4">
-                <Button variant="outline">キャンセル</Button>
-                <Button
-                  variant="destructive"
-                  onClick={() => console.log("削除実行")}
-                >
-                  削除
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
-          {isEditing ? (
-            <Button
-              onClick={handleSave}
-              className="bg-green-500 hover:bg-green-600"
-            >
-              <Save className="mr-2" /> 保存する
-            </Button>
-          ) : (
-            <Button variant="outline" onClick={handleEditToggle}>
-              <Edit className="mr-2" /> 変更する
-            </Button>
-          )}
-        </div>
       </div>
     </div>
   );

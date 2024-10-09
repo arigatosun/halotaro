@@ -1,5 +1,7 @@
-import React, { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+"use client";
+
+import React, { useEffect, useState } from "react";
+import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   ComposedChart,
@@ -12,48 +14,120 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
+import { useAuth } from "@/contexts/authcontext";
+import dayjs from "dayjs";
 
 interface CancellationData {
   date: string;
   count: number;
+  totalCount: number; // 総予約数を追加
   rate: number;
 }
 
-const dailyData: CancellationData[] = [
-  { date: "6/1", count: 2, rate: 5 },
-  { date: "6/2", count: 1, rate: 2.5 },
-  { date: "6/3", count: 3, rate: 7.5 },
-  { date: "6/4", count: 2, rate: 5 },
-  { date: "6/5", count: 4, rate: 10 },
-  { date: "6/6", count: 1, rate: 2.5 },
-  { date: "6/7", count: 2, rate: 5 },
-  { date: "6/8", count: 2, rate: 5 },
-  { date: "6/9", count: 1, rate: 2.5 },
-  { date: "6/10", count: 3, rate: 7.5 },
-  { date: "6/11", count: 2, rate: 5 },
-  { date: "6/12", count: 4, rate: 10 },
-  { date: "6/13", count: 1, rate: 2.5 },
-  { date: "6/14", count: 2, rate: 5 },
-];
-
-const weeklyData: CancellationData[] = [
-  { date: "1週目", count: 15, rate: 5.4 },
-  { date: "2週目", count: 12, rate: 4.3 },
-  { date: "3週目", count: 18, rate: 6.5 },
-  { date: "4週目", count: 10, rate: 3.6 },
-];
-
-const monthlyData: CancellationData[] = [
-  { date: "1月", count: 62, rate: 5.2 },
-  { date: "2月", count: 58, rate: 4.8 },
-  { date: "3月", count: 71, rate: 5.9 },
-  { date: "4月", count: 65, rate: 5.4 },
-  { date: "5月", count: 60, rate: 5.0 },
-  { date: "6月", count: 55, rate: 4.6 },
-];
-
 const CancellationCard: React.FC = () => {
-  const [activeTab, setActiveTab] = useState("daily");
+  const { user, session, loading: authLoading } = useAuth();
+
+  const [activeTab, setActiveTab] = useState<"daily" | "weekly" | "monthly">("daily");
+  const [dailyData, setDailyData] = useState<CancellationData[]>([]);
+  const [weeklyData, setWeeklyData] = useState<CancellationData[]>([]);
+  const [monthlyData, setMonthlyData] = useState<CancellationData[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // 期間の説明を定義
+  const periodDescriptions: Record<"daily" | "weekly" | "monthly", string> = {
+    daily: "過去14日間",
+    weekly: "過去4週間",
+    monthly: "過去6か月間",
+  };
+
+  const fetchCancellationData = async (period: "daily" | "weekly" | "monthly") => {
+    try {
+      let endpoint = "";
+      switch (period) {
+        case "daily":
+          endpoint = "/api/cancellations/daily";
+          break;
+        case "weekly":
+          endpoint = "/api/cancellations/weekly";
+          break;
+        case "monthly":
+          endpoint = "/api/cancellations/monthly";
+          break;
+        default:
+          endpoint = "/api/cancellations/daily";
+      }
+
+      const response = await fetch(endpoint, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${session?.access_token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `${period}キャンセルデータの取得に失敗しました`);
+      }
+
+      const data: CancellationData[] = await response.json();
+
+      switch (period) {
+        case "daily":
+          setDailyData(data);
+          break;
+        case "weekly":
+          setWeeklyData(data);
+          break;
+        case "monthly":
+          setMonthlyData(data);
+          break;
+        default:
+          setDailyData(data);
+      }
+    } catch (err: any) {
+      console.error(`${activeTab}キャンセルデータ取得エラー:`, err);
+      setError(err.message || "キャンセルデータの取得に失敗しました");
+    }
+  };
+
+  useEffect(() => {
+    if (authLoading) return; // 認証情報がロード中の場合は待機
+    if (!user || !session) {
+      setError("ユーザーがログインしていません。");
+      setLoading(false);
+      return;
+    }
+
+    const loadData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        // 初期表示のタブのデータを取得
+        await fetchCancellationData(activeTab);
+      } catch (err: any) {
+        console.error("キャンセルデータの取得エラー:", err);
+        setError(err.message || "データの取得に失敗しました");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadData();
+  }, [user, session, authLoading]);
+
+  useEffect(() => {
+    if (!session) return;
+    if (activeTab === "daily" && dailyData.length === 0) {
+      fetchCancellationData("daily");
+    } else if (activeTab === "weekly" && weeklyData.length === 0) {
+      fetchCancellationData("weekly");
+    } else if (activeTab === "monthly" && monthlyData.length === 0) {
+      fetchCancellationData("monthly");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
 
   const getDataForTab = () => {
     switch (activeTab) {
@@ -68,32 +142,69 @@ const CancellationCard: React.FC = () => {
     }
   };
 
+  // キャンセル数の合計
+  const getTotalCancellations = () => {
+    return getDataForTab().reduce((sum, item) => sum + item.count, 0);
+  };
+
+  // 総予約数の合計
+  const getTotalReservations = () => {
+    return getDataForTab().reduce((sum, item) => sum + item.totalCount, 0);
+  };
+
+  // 平均キャンセル率の計算を修正
+  const getAverageRate = () => {
+    const totalCancellations = getTotalCancellations();
+    const totalReservations = getTotalReservations();
+    if (totalReservations === 0) return 0;
+    return parseFloat(((totalCancellations / totalReservations) * 100).toFixed(1));
+  };
+
+  if (authLoading || loading) {
+    return (
+      <Card className="bg-white border-none shadow-lg mt-10">
+        <CardContent>
+          <p>読み込み中...</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card className="bg-white border-none shadow-lg mt-10">
+        <CardContent>
+          <p className="text-red-500">エラー: {error}</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Card className="bg-white border-none shadow-lg mt-10">
       <CardContent>
+        {/* 期間の説明を表示 */}
+        <div className="mb-4">
+          <h2 className="text-lg font-semibold">キャンセル状況 ({periodDescriptions[activeTab]})</h2>
+        </div>
         <div className="grid grid-cols-2 gap-8 mb-6">
           <div className="text-center">
             <h3 className="text-sm font-medium text-gray-600">キャンセル数</h3>
-            <p className="text-2xl font-bold">
-              {getDataForTab().reduce((sum, item) => sum + item.count, 0)}
-            </p>
+            <p className="text-2xl font-bold">{getTotalCancellations()}</p>
           </div>
           <div className="text-center">
-            <h3 className="text-sm font-medium text-gray-600">
-              平均キャンセル率
-            </h3>
-            <p className="text-2xl font-bold">
-              {(
-                getDataForTab().reduce((sum, item) => sum + item.rate, 0) /
-                getDataForTab().length
-              ).toFixed(1)}
-              %
-            </p>
+            <h3 className="text-sm font-medium text-gray-600">平均キャンセル率</h3>
+            <p className="text-2xl font-bold">{getAverageRate()}%</p>
           </div>
         </div>
         <Tabs
-          defaultValue="daily"
-          onValueChange={(value) => setActiveTab(value)}
+          value={activeTab}
+          onValueChange={(value) => {
+            if (value === "daily" || value === "weekly" || value === "monthly") {
+              setActiveTab(value);
+            }
+          }}
+          className="w-full"
         >
           <TabsList className="grid w-full grid-cols-3 mb-4">
             <TabsTrigger

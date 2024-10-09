@@ -1,3 +1,4 @@
+// accounting-view.tsx
 "use client";
 import React, { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -22,6 +23,7 @@ import {
 import { useAuth } from "@/contexts/authcontext";
 import { PlusIcon, MinusIcon, XIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { Label } from "@/components/ui/label";
 
 // Item interface
 interface Item {
@@ -72,6 +74,8 @@ interface ReservationCustomer {
   created_at: string;
   updated_at: string;
   name_kana: string | null;
+  reservation_count: number;
+  cancellation_count: number;
 }
 
 // Reservation interface
@@ -93,7 +97,7 @@ interface Reservation {
   event: string | null;
   menu_items: MenuItem | null;
   staff: Staff | null;
-  reservation_customers: ReservationCustomer[] | null;
+  reservation_customers: ReservationCustomer | null; // 修正: 配列から単一オブジェクトに変更
 }
 
 interface AccountingPageProps {
@@ -186,11 +190,8 @@ export const AccountingPage: React.FC<AccountingPageProps> = ({
         const data: Reservation = await response.json();
         setReservation(data);
 
-        if (
-          data.reservation_customers &&
-          data.reservation_customers.length > 0
-        ) {
-          setCustomerName(data.reservation_customers[0].name);
+        if (data.reservation_customers) {
+          setCustomerName(data.reservation_customers.name);
         } else {
           setCustomerName("不明");
         }
@@ -702,37 +703,54 @@ export const AccountingPage: React.FC<AccountingPageProps> = ({
           <div className="space-y-6">
             <div className="flex justify-between items-center">
               <h3 className="text-2xl font-bold">
-                {customerName || "ダミー予約"} 様
+                {customerName || ""} 様
               </h3>
               <div className="flex items-center space-x-4">
-                <Select value={selectedStaff} onValueChange={setSelectedStaff}>
-                  <SelectTrigger className="w-[200px]">
-                    <SelectValue placeholder="指名スタッフ" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {staffList.map((staff) => (
-                      <SelectItem key={staff.id} value={staff.name}>
-                        {staff.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Select
-                  value={selectedCashier}
-                  onValueChange={setSelectedCashier}
-                >
-                  <SelectTrigger className="w-[200px]">
-                    <SelectValue placeholder="レジ担当者" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {staffList.map((staff) => (
-                      <SelectItem key={staff.id} value={staff.name}>
-                        {staff.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {/* 既存の一時保存ボタンにhandleTemporarySaveを割り当て */}
+                {/* 指名スタッフ */}
+                <div className="flex flex-col">
+                <Label htmlFor="selectedStaff" className="mb-1">
+  指名スタッフ
+</Label>
+<Select
+  value={selectedStaff}
+  onValueChange={setSelectedStaff}
+>
+  <SelectTrigger id="selectedStaff" className="w-[200px]">
+    <SelectValue placeholder="選択してください" />
+  </SelectTrigger>
+  <SelectContent>
+    {staffList.map((staff) => (
+      <SelectItem key={staff.id} value={staff.name}>
+        {staff.name}
+      </SelectItem>
+    ))}
+  </SelectContent>
+</Select>
+
+                </div>
+                {/* レジ担当者 */}
+                <div className="flex flex-col">
+                  <Label htmlFor="selectedCashier" className="mb-1">
+                    レジ担当者
+                  </Label>
+                  <Select
+                    
+                    value={selectedCashier}
+                    onValueChange={setSelectedCashier}
+                  >
+                    <SelectTrigger className="w-[200px]" aria-labelledby="selectedCashierLabel">
+                      <SelectValue placeholder="選択してください" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {staffList.map((staff) => (
+                        <SelectItem key={staff.id} value={staff.name}>
+                          {staff.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {/* 一時保存ボタン */}
                 <Button onClick={handleTemporarySave}>一時保存</Button>
               </div>
             </div>

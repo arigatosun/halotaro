@@ -17,10 +17,10 @@ const ReservationConfirmationAndPayment: React.FC<ReservationConfirmationAndPaym
   onBack,
   onPaymentComplete,
   userId,
-  selectedMenuId
+  selectedMenuId,
 }) => {
   const [showPayment, setShowPayment] = useState(false);
-  const { selectedDateTime } = useReservation();
+  const { selectedDateTime, reservationCustomerId, customerInfo, selectedMenus } = useReservation();
 
   const handleConfirmation = () => {
     setShowPayment(true);
@@ -34,6 +34,12 @@ const ReservationConfirmationAndPayment: React.FC<ReservationConfirmationAndPaym
     ? differenceInDays(selectedDateTime.start, new Date()) >= 30
     : false;
 
+  const totalAmount = selectedMenus.reduce((total, menu) => total + menu.price, 0);
+
+  if (!reservationCustomerId) {
+    console.warn('reservationCustomerId is undefined at this stage.');
+  }
+
   return (
     <div>
       {!showPayment ? (
@@ -45,8 +51,10 @@ const ReservationConfirmationAndPayment: React.FC<ReservationConfirmationAndPaym
             onPaymentComplete(status, paymentIntent);
           }}
           userId={userId}
-          selectedMenuId={selectedMenuId}
+          //selectedMenuId={selectedMenuId}
           isOver30Days={isOver30Days}
+          //reservationCustomerId={reservationCustomerId}
+          totalAmount={totalAmount}
         />
       )}
     </div>

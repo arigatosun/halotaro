@@ -11,28 +11,33 @@ import { Separator } from "@/components/ui/separator";
 import Image from "next/image";
 import { LockIcon, CreditCardIcon, ShieldCheckIcon, AlertCircleIcon } from "lucide-react";
 import { CircularProgress } from "@mui/material";
-import { PaymentIntent, SetupIntent } from '@stripe/stripe-js';
 
-// PaymentFormProps の修正
+// PaymentFormコンポーネントのプロパティ定義
 interface PaymentFormProps {
   onBack: () => void;
   onPaymentComplete: (status: string, intent?: any) => void;
   clientSecret: string;
   isSetupIntent: boolean;
+  stripeCustomerId: string;
+  userId: string;
 }
 
-// PaymentFormコンポーネントを修正
+// PaymentFormコンポーネント
 const PaymentForm: React.FC<PaymentFormProps> = ({
   onBack,
   onPaymentComplete,
   clientSecret,
   isSetupIntent,
+  stripeCustomerId,
+  userId,
 }) => {
   const stripe = useStripe();
   const elements = useElements();
   const [error, setError] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
+  const { setPaymentInfo, customerInfo } = useReservation();
 
+  // フォーム送信時の処理
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setProcessing(true);
@@ -46,6 +51,7 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
     try {
       let result;
       if (isSetupIntent) {
+        // SetupIntentの確認処理
         result = await stripe.confirmSetup({
           elements,
           confirmParams: {
@@ -53,7 +59,45 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
           },
           redirect: "if_required",
         });
+
+        if (result.error) {
+          setError(result.error.message || "決済中にエラーが発生しました");
+          onPaymentComplete("failed");
+        } else if (result.setupIntent) {
+          const setupIntent = result.setupIntent;
+          const paymentMethodId = setupIntent.payment_method;
+
+          if (typeof paymentMethodId === 'string') {
+            setPaymentInfo((prev) => ({
+              ...prev!,
+              paymentMethodId,
+              status: setupIntent.status,
+            }));
+          } else {
+            console.error('Unexpected paymentMethodId type:', paymentMethodId);
+          }
+
+          // バックエンドにpaymentMethodIdを送信して保存
+          const response = await fetch('/api/save-payment-method', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              customerEmail: customerInfo.email,
+              paymentMethodId,
+              stripeCustomerId,
+              userId,
+              status: 'request',
+            }),
+          });
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Failed to save payment method');
+          }
+
+          onPaymentComplete("succeeded", setupIntent);
+        }
       } else {
+        // PaymentIntentの確認処理
         result = await stripe.confirmPayment({
           elements,
           confirmParams: {
@@ -61,31 +105,24 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
           },
           redirect: "if_required",
         });
-      }
 
-      if (result.error) {
-        setError(result.error.message || "決済中にエラーが発生しました");
-        onPaymentComplete("failed");
-      } else {
-        // 型ガードを使用して result の型を判別
-        if ('paymentIntent' in result) {
-          onPaymentComplete("succeeded", result.paymentIntent);
-        } else if ('setupIntent' in result) {
-          onPaymentComplete("succeeded", result.setupIntent);
-        } else {
-          // 予期しないケース
-          console.error("Unexpected result type", result);
+        if (result.error) {
+          setError(result.error.message || "決済中にエラーが発生しました");
           onPaymentComplete("failed");
+        } else if (result.paymentIntent) {
+          onPaymentComplete("succeeded", result.paymentIntent);
         }
       }
     } catch (err: any) {
       console.error("Error confirming payment or setup:", err);
       setError(`決済の確認中にエラーが発生しました: ${err.message}. もう一度お試しください。`);
+      onPaymentComplete("failed");
     } finally {
       setProcessing(false);
     }
   };
 
+  // フォームのレンダリング
   return (
     <form onSubmit={handleSubmit} className="w-full max-w-md mx-auto">
       <Card className="shadow-lg">
@@ -149,31 +186,32 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
   );
 };
 
-// PaymentProps の修正
+// Paymentコンポーネントのプロパティ定義
 interface PaymentProps {
   onBack: () => void;
   onPaymentComplete: (status: string, intent?: any) => void;
   userId: string;
-  selectedMenuId: string;
   isOver30Days: boolean;
+  totalAmount: number;
 }
 
-
-// Paymentコンポーネントを修正
+// Paymentコンポーネント
 const Payment: React.FC<PaymentProps> = ({
   onBack,
   onPaymentComplete,
   userId,
-  selectedMenuId,
-  isOver30Days, // 新しいprop
+  isOver30Days,
+  totalAmount,
 }) => {
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [connectedAccountId, setConnectedAccountId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const { setPaymentInfo, selectedMenus } = useReservation();
+  const { setPaymentInfo, selectedMenus, customerInfo } = useReservation();
   const didFetch = useRef(false);
+  const [stripeCustomerId, setStripeCustomerId] = useState<string | null>(null);
 
+  // クライアントシークレットの取得
   useEffect(() => {
     if (didFetch.current) return;
     didFetch.current = true;
@@ -182,12 +220,15 @@ const Payment: React.FC<PaymentProps> = ({
       try {
         setIsLoading(true);
         const endpoint = isOver30Days ? "/api/create-setup-intent" : "/api/create-payment-intent";
+        
         const response = await fetch(endpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
+            customerEmail: customerInfo.email,
             userId,
             selectedMenuIds: selectedMenus.map(menu => menu.id.toString()),
+            totalAmount,
           }),
         });
         
@@ -199,6 +240,7 @@ const Payment: React.FC<PaymentProps> = ({
         const data = await response.json();
         setClientSecret(data.clientSecret);
         setConnectedAccountId(data.connectedAccountId);
+        setStripeCustomerId(data.customerId);
 
         if (!isOver30Days) {
           setPaymentInfo((prev) => ({
@@ -215,48 +257,22 @@ const Payment: React.FC<PaymentProps> = ({
     };
   
     fetchIntent();
-  }, [isOver30Days, userId, selectedMenus, setPaymentInfo]);
+  }, [isOver30Days, customerInfo.email, selectedMenus, setPaymentInfo, totalAmount, userId]);
 
-  async function updatePaymentIntentStatus({
-    paymentIntentId,
-    status,
-  }: {
-    paymentIntentId: string;
-    status: string;
-  }) {
-    const response = await fetch('/api/update-payment-intent-status', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ paymentIntentId, status }),
-    });
-  
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error('Error updating PaymentIntent status:', errorData);
-      throw new Error(errorData.error || 'Failed to update PaymentIntent status');
-    }
-  }
-
+  // 決済完了時の処理
   const handlePaymentComplete = async (status: string, paymentIntent?: any) => {
     if (paymentIntent) {
-      // サーバーにステータス更新をリクエスト
-      await updatePaymentIntentStatus({
-        paymentIntentId: paymentIntent.id,
+      setPaymentInfo((prev) => ({
+        ...prev!,
+        method: "credit_card",
         status: paymentIntent.status,
-      });
-  
-      if (status === "succeeded") {
-        setPaymentInfo((prev) => ({
-          ...prev!,
-          method: "credit_card",
-          status: paymentIntent.status,
-          amount: paymentIntent.amount,
-        }));
-      }
+        amount: paymentIntent.amount,
+      }));
     }
     onPaymentComplete(status, paymentIntent);
   };
 
+  // ローディング中の表示
   if (isLoading) {
     return (
       <div className="w-full max-w-md mx-auto mt-8 space-y-4">
@@ -268,6 +284,7 @@ const Payment: React.FC<PaymentProps> = ({
     );
   }
 
+  // エラー表示
   if (error) {
     return (
       <Alert variant="destructive" className="mt-4">
@@ -281,6 +298,7 @@ const Payment: React.FC<PaymentProps> = ({
     return null;
   }
 
+  // Stripeエレメントのレンダリング
   return (
     <Elements
       stripe={getStripe(connectedAccountId ?? undefined)}
@@ -291,6 +309,8 @@ const Payment: React.FC<PaymentProps> = ({
         onPaymentComplete={handlePaymentComplete}
         clientSecret={clientSecret}
         isSetupIntent={isOver30Days}
+        stripeCustomerId={stripeCustomerId!}
+        userId={userId}
       />
     </Elements>
   );

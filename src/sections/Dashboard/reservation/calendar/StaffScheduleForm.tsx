@@ -1,3 +1,5 @@
+// StaffScheduleForm.tsx
+
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -31,6 +33,7 @@ const StaffScheduleForm: React.FC<StaffScheduleFormProps> = ({
     start_time: '',
     end_time: '',
     is_staff_schedule: true,
+    status: 'staff',
   });
 
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
@@ -44,6 +47,7 @@ const StaffScheduleForm: React.FC<StaffScheduleFormProps> = ({
         event: staffSchedule.event || '',
         staff_id: staffSchedule.staff_id || '',
         is_staff_schedule: true,
+        status: 'staff',
       });
     } else {
       setFormData({
@@ -52,6 +56,7 @@ const StaffScheduleForm: React.FC<StaffScheduleFormProps> = ({
         start_time: '',
         end_time: '',
         is_staff_schedule: true,
+        status: 'staff',
       });
     }
   }, [staffSchedule]);
@@ -62,41 +67,47 @@ const StaffScheduleForm: React.FC<StaffScheduleFormProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-
+  
     let newErrors: { [key: string]: string } = {};
-
+  
     if (!formData.staff_id) {
       newErrors.staff_id = 'スタッフを選択してください。';
     }
-
-    if (!formData.event) {
-      newErrors.event = 'イベントを選択してください。';
-    }
-
+  
     if (!formData.start_time) {
       newErrors.start_time = '開始時間を入力してください。';
     }
-
+  
     if (!formData.end_time) {
-      newErrors.end_time = '終了時間を入力してください。';
+      newErrors.end_time = '終了時間を入力してください。'; // 追加
     }
-
+  
+    if (formData.start_time && formData.end_time) {
+      const start = moment(formData.start_time);
+      const end = moment(formData.end_time);
+      if (!end.isAfter(start)) {
+        newErrors.end_time = '終了時間は開始時間より後に設定してください。';
+      }
+    }
+  
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       return;
     } else {
       setErrors({});
     }
-
+  
     const updatedSchedule = {
       ...formData,
+      event: formData.event || '予定あり',
       start_time: formData.start_time ? moment(formData.start_time).utc().format() : '',
       end_time: formData.end_time ? moment(formData.end_time).utc().format() : '',
       is_staff_schedule: true,
+      status: 'staff',
     };
-
-    console.log('Updated Schedule:', updatedSchedule); // デバッグ用
-
+  
+    console.log('Updated Schedule:', updatedSchedule);
+  
     onSubmit(updatedSchedule, isNew);
   };
 
@@ -145,7 +156,7 @@ const StaffScheduleForm: React.FC<StaffScheduleFormProps> = ({
                   <SelectItem value="その他">その他</SelectItem>
                 </SelectContent>
               </Select>
-              {errors.event && <p className="text-red-500 text-sm">{errors.event}</p>}
+              {/* イベントが未入力でもエラーを表示しない */}
             </div>
 
             {/* 開始時間 */}

@@ -12,11 +12,12 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 // 有効なステータスのリスト
 const validStatuses = [
   "confirmed",
-  "canceled",
+  "cancelled",
   "paid", // 必要に応じて "paid" に変更
-  "completed",
-  "in_progress",
+  "salon_cancelled",
+  "same_day_cancelled",
   "no_show",
+  "staff",
 ];
 
 export async function GET(
@@ -54,7 +55,7 @@ export async function GET(
         staff (
           *
         ),
-        reservation_customers (
+        reservation_customers!fk_customer (
           *
         )
       `)

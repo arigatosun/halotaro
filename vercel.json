@@ -1,6 +1,12 @@
 {
-  "crons": [{
-    "path": "/api/cron-capture-payment-intents",
-    "schedule": "0 * * * *"
-  }]
+  "crons": [
+    {
+      "path": "/api/cron-payments-intents",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/cron-capture-payment-intents",
+      "schedule": "* * * * *"
+    }
+  ]
 }

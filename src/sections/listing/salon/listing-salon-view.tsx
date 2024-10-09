@@ -35,6 +35,23 @@ import { useAuth } from "@/contexts/authcontext";
 import { Toaster } from "@/components/ui/toaster";
 import { toast } from "@/components/ui/use-toast";
 
+interface SalonData {
+  id?: string;
+  user_id: string;
+  salonName: string;
+  phone: string;
+  address: string;
+  website?: string;
+  description?: string;
+  weekdayOpen: string;
+  weekdayClose: string;
+  weekendOpen: string;
+  weekendClose: string;
+  closedDays: string[];
+  mainImageUrl?: string;
+  subImageUrls?: string[];
+}
+
 const formSchema = z.object({
   salonName: z.string().min(1, { message: "サロン名は必須です" }),
   phone: z.string().min(1, { message: "電話番号は必須です" }),
@@ -72,10 +89,9 @@ const ListingSalonView: React.FC = () => {
   return <AuthenticatedListingSalonView userId={user.id} />;
 };
 
-type ImageObj = 
+type ImageObj =
   | { type: "new"; data: File }
   | { type: "existing"; data: string };
-
 
 const AuthenticatedListingSalonView: React.FC<{ userId: string }> = ({
   userId,
@@ -116,24 +132,31 @@ const AuthenticatedListingSalonView: React.FC<{ userId: string }> = ({
             "user-id": userId,
           },
         });
-        if (!response.ok) throw new Error("Failed to fetch salon data");
-        const data = await response.json();
 
-        setSalonId(data.id);
-        form.reset({
-          salonName: data.salon_name,
-          phone: data.phone,
-          address: data.address,
-          website: data.website || "",
-          description: data.description || "",
-          weekdayOpen: data.weekday_open || "",
-          weekdayClose: data.weekday_close || "",
-          weekendOpen: data.weekend_open || "",
-          weekendClose: data.weekend_close || "",
-          closedDays: data.closed_days || [],
-          mainImageUrl: data.main_image_url || "",
-          subImageUrls: data.sub_image_urls || [],
-        });
+        if (response.status === 404) {
+          // サロン情報が存在しない場合
+          setSalonId(null);
+          // フォームはデフォルトの空の値を使用するので、リセットは不要
+        } else if (!response.ok) {
+          throw new Error("Failed to fetch salon data");
+        } else {
+          const data = await response.json();
+          setSalonId(data.id);
+          form.reset({
+            salonName: data.salon_name,
+            phone: data.phone,
+            address: data.address,
+            website: data.website || "",
+            description: data.description || "",
+            weekdayOpen: data.weekday_open || "",
+            weekdayClose: data.weekday_close || "",
+            weekendOpen: data.weekend_open || "",
+            weekendClose: data.weekend_close || "",
+            closedDays: data.closed_days || [],
+            mainImageUrl: data.main_image_url || "",
+            subImageUrls: data.sub_image_urls || [],
+          });
+        }
       } catch (error) {
         console.error("Error fetching salon data:", error);
         setError("サロン情報の取得に失敗しました");
@@ -213,6 +236,8 @@ const AuthenticatedListingSalonView: React.FC<{ userId: string }> = ({
     });
 
     if (!response.ok) {
+      const errorData = await response.json();
+      console.error(`Error uploading image: ${errorData.message}`);
       throw new Error("Failed to upload image");
     }
 
@@ -227,12 +252,7 @@ const AuthenticatedListingSalonView: React.FC<{ userId: string }> = ({
       let mainImageUrl = values.mainImageUrl;
       let subImageUrls = values.subImageUrls || [];
 
-      // メイン画像が削除された場合
-      if (!mainImage && !mainImageUrl) {
-        mainImageUrl = "";
-      }
-
-      // 新しいメイン画像をアップロード
+      // メイン画像のアップロード
       if (mainImage) {
         mainImageUrl = await uploadImage(
           mainImage,
@@ -240,19 +260,21 @@ const AuthenticatedListingSalonView: React.FC<{ userId: string }> = ({
         );
       }
 
-      // サブ画像の処理
+      // サブ画像のアップロード
       if (subImages.length > 0) {
-        for (const subImage of subImages) {
+        const uploadedSubImages: string[] = [];
+        for (let index = 0; index < subImages.length; index++) {
+          const subImage = subImages[index];
           const subImageUrl = await uploadImage(
             subImage,
-            `${userId}/sub-image-${Date.now()}-${subImages.indexOf(subImage)}`
+            `${userId}/sub-image-${Date.now()}-${index}`
           );
-          subImageUrls.push(subImageUrl);
+          uploadedSubImages.push(subImageUrl);
         }
+        subImageUrls = [...subImageUrls, ...uploadedSubImages];
       }
 
-      const updatedValues = {
-        id: salonId,
+      const updatedValues: SalonData = {
         user_id: userId,
         salonName: values.salonName,
         phone: values.phone,
@@ -268,7 +290,9 @@ const AuthenticatedListingSalonView: React.FC<{ userId: string }> = ({
         subImageUrls: subImageUrls,
       };
 
-      const response = await fetch("/api/update-salon", {
+      const apiEndpoint = "/api/listing-salon";
+
+      const response = await fetch(apiEndpoint, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -277,18 +301,25 @@ const AuthenticatedListingSalonView: React.FC<{ userId: string }> = ({
         body: JSON.stringify(updatedValues),
       });
 
-      if (!response.ok) throw new Error("Failed to update salon data");
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error(`Error saving salon data: ${errorData.message}`);
+        throw new Error("Failed to save salon data");
+      }
+
+      const responseData = await response.json();
+      setSalonId(responseData.id); // サロンIDを更新
 
       toast({
-        title: "更新成功",
-        description: "サロン情報が正常に更新されました。",
+        title: salonId ? "更新成功" : "登録成功",
+        description: `サロン情報が正常に${salonId ? "更新" : "登録"}されました。`,
       });
     } catch (error) {
-      console.error("Error updating salon data:", error);
+      console.error("Error saving salon data:", error);
       setError(
         error instanceof Error
           ? error.message
-          : "サロン情報の更新に失敗しました"
+          : "サロン情報の保存に失敗しました"
       );
     } finally {
       setLoading(false);
@@ -304,7 +335,7 @@ const AuthenticatedListingSalonView: React.FC<{ userId: string }> = ({
     );
   }
 
-  if (error) {
+  if (error && !salonId) {
     return <div className="text-red-500 text-center">{error}</div>;
   }
 
@@ -399,91 +430,129 @@ const AuthenticatedListingSalonView: React.FC<{ userId: string }> = ({
               <SectionTitle>営業時間</SectionTitle>
               <Separator className="my-4" />
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-  <div>
-    <Label>平日</Label>
-    <div className="flex items-center space-x-2">
-      <Select
-        value={form.getValues("weekdayOpen")}
-        onValueChange={(value) => form.setValue("weekdayOpen", value)}
-      >
-        <SelectTrigger>
-          <SelectValue placeholder="開店時間" />
-        </SelectTrigger>
-        <SelectContent>
-          {[...Array(24)].map((_, i) => (
-            <SelectItem
-              key={i}
-              value={`${String(i).padStart(2, "0")}:00:00`}
-            >
-              {`${String(i).padStart(2, "0")}:00`}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      <span>-</span>
-      <Select
-        value={form.getValues("weekdayClose")}
-        onValueChange={(value) => form.setValue("weekdayClose", value)}
-      >
-        <SelectTrigger>
-          <SelectValue placeholder="閉店時間" />
-        </SelectTrigger>
-        <SelectContent>
-          {[...Array(24)].map((_, i) => (
-            <SelectItem
-              key={i}
-              value={`${String(i).padStart(2, "0")}:00:00`}
-            >
-              {`${String(i).padStart(2, "0")}:00`}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </div>
-  </div>
-  <div>
-    <Label>週末</Label>
-    <div className="flex items-center space-x-2">
-      <Select
-        value={form.getValues("weekendOpen")}
-        onValueChange={(value) => form.setValue("weekendOpen", value)}
-      >
-        <SelectTrigger>
-          <SelectValue placeholder="開店時間" />
-        </SelectTrigger>
-        <SelectContent>
-          {[...Array(24)].map((_, i) => (
-            <SelectItem
-              key={i}
-              value={`${String(i).padStart(2, "0")}:00:00`}
-            >
-              {`${String(i).padStart(2, "0")}:00`}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      <span>-</span>
-      <Select
-        value={form.getValues("weekendClose")}
-        onValueChange={(value) => form.setValue("weekendClose", value)}
-      >
-        <SelectTrigger>
-          <SelectValue placeholder="閉店時間" />
-        </SelectTrigger>
-        <SelectContent>
-          {[...Array(24)].map((_, i) => (
-            <SelectItem
-              key={i}
-              value={`${String(i).padStart(2, "0")}:00:00`}
-            >
-              {`${String(i).padStart(2, "0")}:00`}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </div>
-  </div>
-</div>
+                {/* 平日の営業時間 */}
+                <FormField
+                  control={form.control}
+                  name="weekdayOpen"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>平日 開店時間</FormLabel>
+                      <FormControl>
+                        <Select
+                          value={field.value}
+                          onValueChange={field.onChange}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="開店時間" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {[...Array(24)].map((_, i) => (
+                              <SelectItem
+                                key={i}
+                                value={`${String(i).padStart(2, "0")}:00:00`}
+                              >
+                                {`${String(i).padStart(2, "0")}:00`}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="weekdayClose"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>平日 閉店時間</FormLabel>
+                      <FormControl>
+                        <Select
+                          value={field.value}
+                          onValueChange={field.onChange}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="閉店時間" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {[...Array(24)].map((_, i) => (
+                              <SelectItem
+                                key={i}
+                                value={`${String(i).padStart(2, "0")}:00:00`}
+                              >
+                                {`${String(i).padStart(2, "0")}:00`}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                {/* 週末の営業時間 */}
+                <FormField
+                  control={form.control}
+                  name="weekendOpen"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>週末 開店時間</FormLabel>
+                      <FormControl>
+                        <Select
+                          value={field.value}
+                          onValueChange={field.onChange}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="開店時間" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {[...Array(24)].map((_, i) => (
+                              <SelectItem
+                                key={i}
+                                value={`${String(i).padStart(2, "0")}:00:00`}
+                              >
+                                {`${String(i).padStart(2, "0")}:00`}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="weekendClose"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>週末 閉店時間</FormLabel>
+                      <FormControl>
+                        <Select
+                          value={field.value}
+                          onValueChange={field.onChange}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="閉店時間" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {[...Array(24)].map((_, i) => (
+                              <SelectItem
+                                key={i}
+                                value={`${String(i).padStart(2, "0")}:00:00`}
+                              >
+                                {`${String(i).padStart(2, "0")}:00`}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
               <FormField
                 control={form.control}
                 name="closedDays"
@@ -579,30 +648,28 @@ const AuthenticatedListingSalonView: React.FC<{ userId: string }> = ({
                   </div>
                   {/* サブ画像 */}
                   <div>
-        <Label>サブ画像（最大5枚）</Label>
-        <div className="mt-2 flex flex-wrap items-center gap-4">
-          {combinedSubImages.slice(0, 5).map((imageObj, index) => (
-            <div key={index} className="relative">
-              <img
-                src={
-                  imageObj.type === "new"
-                    ? URL.createObjectURL(imageObj.data)
-                    : imageObj.data
-                }
-                alt={`Sub ${index + 1}`}
-                className="h-24 w-24 object-cover rounded-lg"
-              />
-              <button
-                type="button"
-                onClick={() =>
-                  removeSubImage(index, imageObj.type)
-                }
-                className="absolute -top-2 -right-2 bg-red-500 rounded-full p-1"
-              >
-                <X className="h-4 w-4 text-white" />
-              </button>
-            </div>
-          ))}
+                    <Label>サブ画像（最大5枚）</Label>
+                    <div className="mt-2 flex flex-wrap items-center gap-4">
+                      {combinedSubImages.slice(0, 5).map((imageObj, index) => (
+                        <div key={index} className="relative">
+                          <img
+                            src={
+                              imageObj.type === "new"
+                                ? URL.createObjectURL(imageObj.data)
+                                : imageObj.data
+                            }
+                            alt={`Sub ${index + 1}`}
+                            className="h-24 w-24 object-cover rounded-lg"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => removeSubImage(index, imageObj.type)}
+                            className="absolute -top-2 -right-2 bg-red-500 rounded-full p-1"
+                          >
+                            <X className="h-4 w-4 text-white" />
+                          </button>
+                        </div>
+                      ))}
                       {combinedSubImages.length < 5 && (
                         <Label
                           htmlFor="subImages"

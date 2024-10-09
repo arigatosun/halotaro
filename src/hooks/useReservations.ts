@@ -1,11 +1,16 @@
+// useReservations.ts
 import { useState, useEffect } from 'react';
 import { getReservations, Reservation } from '@/app/actions/reservationActions';
 import { DateRange } from "react-day-picker";
+import { format } from 'date-fns';
 
 interface FilterOptions {
   dateRange: DateRange | undefined;
   statuses: string[];
+  customerName: string;
+  menu: string;
   staff: string;
+  reservationRoute: string;
 }
 
 export const useReservations = (filterOptions: FilterOptions, page: number, limit: number) => {
@@ -20,13 +25,23 @@ export const useReservations = (filterOptions: FilterOptions, page: number, limi
         setLoading(true);
         let date: string | undefined;
         if (filterOptions.dateRange?.from) {
-          date = filterOptions.dateRange.from.toISOString().split('T')[0];
+          // 日本時間に合わせて日付をフォーマット
+          date = format(filterOptions.dateRange.from, 'yyyy-MM-dd');
         }
-        const { data, count } = await getReservations(date, filterOptions.staff, page, limit);
-        
-        // ステータスによるフィルタリング（クライアントサイド）
-        const filteredData = filterOptions.statuses.length > 0
-          ? data.filter(reservation => filterOptions.statuses.includes(reservation.status))
+        const { data, count } = await getReservations(
+          date,
+          filterOptions.staff,
+          filterOptions.menu,
+          filterOptions.statuses, // ステータスを追加
+          page,
+          limit
+        );
+
+        // お客様名によるフィルタリング（クライアントサイド）
+        const filteredData = filterOptions.customerName
+          ? data.filter(reservation =>
+              reservation.customer_name.includes(filterOptions.customerName)
+            )
           : data;
 
         console.log("Filtered reservations:", filteredData);

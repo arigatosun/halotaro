@@ -1,3 +1,4 @@
+// ReservationComplete.tsx
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -11,7 +12,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/use-toast";
 import {
   CalendarIcon,
@@ -60,6 +60,8 @@ export default function ReservationComplete({
         ),
         customerInfo,
         paymentInfo,
+        paymentMethodId: paymentInfo?.paymentMethodId, // 追加
+        customerEmail: customerInfo.email, // 追加
       };
 
       console.log("予約情報です。", reservationData);
@@ -90,12 +92,39 @@ export default function ReservationComplete({
         );
       }
 
+      const result = await response.json();
+      const {
+        reservation_id: reservationId,
+        reservation_customer_id: reservationCustomerId,
+      } = result;
+
+      // 30日以上先の予約の場合の処理
+      if (paymentInfo?.isOver30Days && reservationCustomerId) {
+        const setupIntentResponse = await fetch("/api/create-setup-intent", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            reservationCustomerId,
+            customerEmail: customerInfo.email, // customerEmailを追加
+          }),
+        });
+
+        if (!setupIntentResponse.ok) {
+          const errorData = await setupIntentResponse.json();
+          throw new Error(errorData.error || "Failed to create Setup Intent");
+        }
+
+        const { clientSecret } = await setupIntentResponse.json();
+        // 必要に応じてclientSecretを保存または使用
+        console.log("Setup Intent created with client secret:", clientSecret);
+      }
+
       setStatus("予約が完了しました");
       toast({
         title: "予約が保存されました",
-        description: `予約ID: ${responseData.reservationId}`,
+        description: `予約ID: ${reservationId}`,
       });
-    } catch (error) {
+    } catch (error: any) {
       hasSaved.current = false;
       console.error("予約の保存中にエラーが発生しました:", error);
       setStatus("予約の保存中にエラーが発生しました");
