@@ -1,4 +1,6 @@
+// listing-staff-view.tsx
 "use client";
+
 import React, { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/authcontext";
 import { Button } from "@/components/ui/button";
@@ -23,8 +25,18 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/use-toast";
 import { Toaster } from "@/components/ui/toaster";
-import { PlusCircle, Pencil, Trash2, Upload } from "lucide-react";
-import { Staff, useStaffManagement } from "@/hooks/useStaffManagement";
+import { PlusCircle, Pencil, Trash2 } from "lucide-react";
+
+interface Staff {
+  id: string;
+  user_id: string;
+  name: string;
+  role: string;
+  experience?: string;
+  description?: string;
+  is_published: boolean;
+  image?: string | null;
+}
 
 interface ErrorWithMessage {
   message: string;
@@ -55,23 +67,41 @@ const StaffManagement: React.FC = () => {
 const AuthenticatedStaffManagement: React.FC<{ userId: string }> = ({
   userId,
 }) => {
-  const {
-    staffList,
-    setStaffList,
-    loading,
-    error,
-    addStaff,
-    updateStaff,
-    deleteStaff,
-    toggleStaffPublish,
-    refreshStaff,
-  } = useStaffManagement(userId);
-
+  const [staffList, setStaffList] = useState<Staff[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [editingStaff, setEditingStaff] = useState<Staff | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [currentImageUrl, setCurrentImageUrl] = useState<string | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchStaffList();
+  }, []);
+
+  const fetchStaffList = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch("/api/salonstaff", {
+        method: "GET",
+        headers: {
+          "user-id": userId,
+        },
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to fetch staff");
+      }
+      const data: Staff[] = await response.json();
+      setStaffList(data);
+    } catch (error) {
+      console.error("Error fetching staff:", error);
+      setError(error instanceof Error ? error : new Error("Unknown error"));
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleEdit = (staff: Staff) => {
     setEditingStaff(staff);
@@ -90,7 +120,25 @@ const AuthenticatedStaffManagement: React.FC<{ userId: string }> = ({
 
   const handleTogglePublish = async (id: string, is_published: boolean) => {
     try {
-      await toggleStaffPublish(id, is_published);
+      const formData = new FormData();
+      formData.append("id", id);
+      formData.append("is_published", is_published.toString());
+
+      const response = await fetch("/api/salonstaff", {
+        method: "PATCH",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to update publish status");
+      }
+
+      const updatedStaff: Staff = await response.json();
+      setStaffList((prev) =>
+        prev.map((staff) => (staff.id === updatedStaff.id ? updatedStaff : staff))
+      );
+
       toast({
         title: "成功",
         description: "公開状態を更新しました",
@@ -104,68 +152,93 @@ const AuthenticatedStaffManagement: React.FC<{ userId: string }> = ({
     }
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (confirm("スタッフを削除しますか？この操作は取り消せません。")) {
-      deleteStaff(id)
-        .then(() => {
-          toast({
-            title: "成功",
-            description: "スタッフを削除しました",
-          });
-        })
-        .catch(() => {
-          toast({
-            variant: "destructive",
-            title: "エラー",
-            description: "スタッフの削除に失敗しました",
-          });
+      try {
+        const response = await fetch(`/api/salonstaff?id=${id}`, {
+          method: "DELETE",
         });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || "Failed to delete staff");
+        }
+
+        setStaffList((prev) => prev.filter((staff) => staff.id !== id));
+
+        toast({
+          title: "成功",
+          description: "スタッフを削除しました",
+        });
+      } catch (err) {
+        toast({
+          variant: "destructive",
+          title: "エラー",
+          description: "スタッフの削除に失敗しました",
+        });
+      }
     }
   };
 
   const handleModalSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
-    const values = Object.fromEntries(formData.entries()) as unknown as Omit<
-      Staff,
-      "id"
-    >;
 
     try {
+      let response: Response;
       if (editingStaff) {
-        const updatedStaff = await updateStaff(
-          { ...editingStaff, ...values, image: currentImageUrl },
-          imageFile
-        );
-        setStaffList(
-          staffList.map((staff) =>
-            staff.id === updatedStaff.id ? updatedStaff : staff
-          )
+        // 編集時
+        if (imageFile) {
+          formData.append("image", imageFile);
+        }
+        response = await fetch("/api/salonstaff", {
+          method: "PATCH",
+          body: formData,
+        });
+      } else {
+        // 追加時
+        if (imageFile) {
+          formData.append("image", imageFile);
+        }
+        formData.append("user_id", userId); // 追加時のみ user_id を送信
+        response = await fetch("/api/salonstaff", {
+          method: "POST",
+          body: formData,
+        });
+      }
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to save staff");
+      }
+
+      const savedStaff: Staff = await response.json();
+
+      if (editingStaff) {
+        setStaffList((prev) =>
+          prev.map((staff) => (staff.id === savedStaff.id ? savedStaff : staff))
         );
         toast({
           title: "成功",
           description: "スタッフ情報を更新しました",
         });
       } else {
-        const newStaff = await addStaff(
-          { ...values, user_id: userId },
-          imageFile
-        );
-        setStaffList([...staffList, newStaff]);
+        setStaffList((prev) => [savedStaff, ...prev]);
         toast({
           title: "成功",
           description: "新しいスタッフを追加しました",
         });
       }
+
       setIsModalOpen(false);
       setImageFile(null);
       setPreviewImage(null);
       setCurrentImageUrl(null);
-    } catch (error) {
+    } catch (error: any) {
       toast({
         variant: "destructive",
         title: "エラー",
-        description: "操作に失敗しました",
+        description: `操作に失敗しました: ${error.message}`,
       });
       console.error("Error details:", error);
     }
@@ -183,7 +256,11 @@ const AuthenticatedStaffManagement: React.FC<{ userId: string }> = ({
       reader.readAsDataURL(file);
     }
   };
-  if (loading) return <div>スタッフデータを読み込み中...</div>;
+
+  if (loading) {
+    return <div>スタッフデータを読み込み中...</div>;
+  }
+
   if (error) {
     const errorWithMessage = error as ErrorWithMessage;
     if (errorWithMessage.message === "Unauthorized") {
@@ -211,6 +288,9 @@ const AuthenticatedStaffManagement: React.FC<{ userId: string }> = ({
             </DialogHeader>
             <form onSubmit={handleModalSubmit}>
               <div className="grid gap-4 py-4">
+                {editingStaff && (
+                  <input type="hidden" name="id" value={editingStaff.id} />
+                )}
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor="name" className="text-right">
                     氏名
@@ -218,7 +298,8 @@ const AuthenticatedStaffManagement: React.FC<{ userId: string }> = ({
                   <Input
                     id="name"
                     name="name"
-                    defaultValue={editingStaff?.name ?? undefined}
+                    defaultValue={editingStaff?.name ?? ""}
+                    required
                     className="col-span-3"
                   />
                 </div>
@@ -229,7 +310,8 @@ const AuthenticatedStaffManagement: React.FC<{ userId: string }> = ({
                   <Input
                     id="role"
                     name="role"
-                    defaultValue={editingStaff?.role ?? undefined}
+                    defaultValue={editingStaff?.role ?? ""}
+                    required
                     className="col-span-3"
                   />
                 </div>
@@ -240,7 +322,7 @@ const AuthenticatedStaffManagement: React.FC<{ userId: string }> = ({
                   <Input
                     id="experience"
                     name="experience"
-                    defaultValue={editingStaff?.experience ?? undefined}
+                    defaultValue={editingStaff?.experience ?? ""}
                     className="col-span-3"
                   />
                 </div>
@@ -251,7 +333,7 @@ const AuthenticatedStaffManagement: React.FC<{ userId: string }> = ({
                   <Textarea
                     id="description"
                     name="description"
-                    defaultValue={editingStaff?.description ?? undefined}
+                    defaultValue={editingStaff?.description ?? ""}
                     className="col-span-3"
                   />
                 </div>

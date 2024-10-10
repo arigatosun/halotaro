@@ -1,4 +1,3 @@
-// customer-list-view.tsx
 "use client";
 
 import React, { useState, useMemo, useEffect } from "react";
@@ -216,7 +215,6 @@ const CustomerListPage: React.FC = () => {
   
     setLoading(false);
   };
-  
 
   useEffect(() => {
     fetchCustomers();

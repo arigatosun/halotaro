@@ -1,22 +1,32 @@
+// useStaffManagement.ts
 import { supabase } from "@/lib/supabaseClient";
 import { useState, useEffect, useCallback } from "react";
 
 export interface Staff {
   id: string;
+  user_id: string;
   name: string;
   role: string;
-  experience: string | null;
+  experience?: string;
+  description?: string;
   is_published: boolean;
-  image: string | null;
-  description: string | null;
-  user_id: string;
+  image?: string | null;
+}
+
+export interface NewStaff {
+  name: string;
+  role: string;
+  experience?: string;
+  description?: string;
+  image?: string | null; // `null` を許容
+  is_published?: boolean;
 }
 
 interface ErrorWithMessage {
   message: string;
 }
 
-export function useStaffManagement(userId?: string) {
+export function useStaffManagement(userId: string) { // userId を必須に変更
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<ErrorWithMessage | null>(null);
@@ -38,11 +48,19 @@ export function useStaffManagement(userId?: string) {
 
       if (error) throw error;
 
-      setStaffList(data || []);
+      // 受信データの `image` フィールドを文字列または null に変換
+      const sanitizedData = (data || []).map((staff) => ({
+        ...staff,
+        image: typeof staff.image === "string" ? staff.image : null,
+      }));
+
+      console.log("Sanitized staff data:", sanitizedData); // デバッグ用ログ
+
+      setStaffList(sanitizedData);
       setError(null);
-    } catch (err) {
-      setError({ message: "スタッフデータの取得に失敗しました" });
-      console.error(err);
+    } catch (err: any) {
+      setError({ message: err.message || "スタッフデータの取得に失敗しました" });
+      console.error("Fetch Staff Error:", err);
     } finally {
       setLoading(false);
     }
@@ -75,30 +93,38 @@ export function useStaffManagement(userId?: string) {
       }
 
       return data.publicUrl;
-    } catch (error) {
-      console.error("画像のアップロードに失敗しました: ", error);
+    } catch (error: any) {
+      console.error("画像のアップロードに失敗しました: ", error.message);
       return null;
     }
   };
 
   const addStaff = async (
-    newStaff: Omit<Staff, "id">,
+    newStaff: NewStaff, // user_id を含めない
     imageFile: File | null
   ): Promise<Staff> => {
     try {
-      let imageUrl = newStaff.image;
+      let imageUrl = newStaff.image ?? null;
       if (imageFile) {
-        imageUrl = await uploadStaffImage(imageFile);
-        if (!imageUrl) {
+        const uploadedImageUrl = await uploadStaffImage(imageFile);
+        if (!uploadedImageUrl) {
           throw new Error("画像のアップロードに失敗しました");
         }
+        imageUrl = uploadedImageUrl;
       }
+
+      const staffData: NewStaff = { ...newStaff, image: imageUrl };
+
+      console.log("Inserting staff data:", staffData); // デバッグ用ログ
 
       const { data, error } = await supabase
         .from("staff")
-        .insert({ ...newStaff, image: imageUrl })
+        .insert(staffData)
         .select()
         .single();
+
+      console.log("Insert response data:", data); // デバッグ用ログ
+      console.log("Insert response error:", error); // デバッグ用ログ
 
       if (error) throw error;
       if (!data) throw new Error("スタッフの追加に失敗しました");
@@ -107,21 +133,25 @@ export function useStaffManagement(userId?: string) {
       setStaffList([...staffList, addedStaff]);
       setError(null);
       return addedStaff;
-    } catch (err) {
-      setError({ message: "スタッフの追加に失敗しました" });
-      console.error(err);
+    } catch (err: any) { // any 型に変更
+      setError({ message: err.message || "スタッフの追加に失敗しました" });
+      console.error("Add Staff Error:", err);
       throw err;
     }
   };
 
-  const updateStaff = async (updatedStaff: Staff, imageFile: File | null) => {
+  const updateStaff = async (
+    updatedStaff: Staff,
+    imageFile: File | null
+  ): Promise<Staff> => { // 戻り値の型を明示
     try {
       let imageUrl = updatedStaff.image;
       if (imageFile) {
-        imageUrl = await uploadStaffImage(imageFile);
-        if (!imageUrl) {
+        const uploadedImageUrl = await uploadStaffImage(imageFile);
+        if (!uploadedImageUrl) {
           throw new Error("画像のアップロードに失敗しました");
         }
+        imageUrl = uploadedImageUrl;
       }
 
       const { error } = await supabase
@@ -131,18 +161,17 @@ export function useStaffManagement(userId?: string) {
 
       if (error) throw error;
 
+      const updatedStaffWithImage: Staff = { ...updatedStaff, image: imageUrl };
       setStaffList(
         staffList.map((staff) =>
-          staff.id === updatedStaff.id
-            ? { ...updatedStaff, image: imageUrl }
-            : staff
+          staff.id === updatedStaff.id ? updatedStaffWithImage : staff
         )
       );
       setError(null);
-      return { ...updatedStaff, image: imageUrl };
-    } catch (err) {
-      setError({ message: "スタッフ情報の更新に失敗しました" });
-      console.error(err);
+      return updatedStaffWithImage;
+    } catch (err: any) {
+      setError({ message: err.message || "スタッフ情報の更新に失敗しました" });
+      console.error("Update Staff Error:", err);
       throw err;
     }
   };
@@ -155,9 +184,9 @@ export function useStaffManagement(userId?: string) {
 
       setStaffList(staffList.filter((staff) => staff.id !== id));
       setError(null);
-    } catch (err) {
-      setError({ message: "スタッフの削除に失敗しました" });
-      console.error(err);
+    } catch (err: any) {
+      setError({ message: err.message || "スタッフの削除に失敗しました" });
+      console.error("Delete Staff Error:", err);
       throw err;
     }
   };
@@ -177,9 +206,9 @@ export function useStaffManagement(userId?: string) {
         )
       );
       setError(null);
-    } catch (err) {
-      setError({ message: "公開状態の変更に失敗しました" });
-      console.error(err);
+    } catch (err: any) {
+      setError({ message: err.message || "公開状態の変更に失敗しました" });
+      console.error("Toggle Publish Error:", err);
       throw err;
     }
   };
