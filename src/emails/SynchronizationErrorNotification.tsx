@@ -1,3 +1,5 @@
+// emails/SynchronizationErrorNotification.tsx
+
 import * as React from "react";
 import { Html } from "@react-email/html";
 import { Head } from "@react-email/head";
@@ -6,78 +8,51 @@ import { Container } from "@react-email/container";
 import { Section } from "@react-email/section";
 import { Text } from "@react-email/text";
 
-interface NewReservationNotificationProps {
-  customerName: string;
-  customerEmail: string;
-  customerPhone: string;
-  dateTime: string;
-  endTime: string;
-  staffName: string;
-  serviceName: string;
-  totalPrice: number;
+interface SynchronizationErrorNotificationProps {
+  adminName: string;
+  errorMessage: string;
+  reservationData: {
+    customerName: string;
+    startTime: string;
+    endTime: string;
+    staffName: string;
+  };
 }
 
-export const NewReservationNotification: React.FC<
-  NewReservationNotificationProps
-> = ({
-  customerName,
-  customerEmail,
-  customerPhone,
-  dateTime,
-  endTime,
-  staffName,
-  serviceName,
-  totalPrice,
-}) => (
+export const SynchronizationErrorNotification: React.FC<
+  SynchronizationErrorNotificationProps
+> = ({ adminName, errorMessage, reservationData }) => (
   <Html>
     <Head />
-    <Preview>新規予約のお知らせ - 予約詳細をご確認ください</Preview>
+    <Preview>【重要】予約の同期に失敗しました</Preview>
     <Container style={containerStyle}>
       <Section style={headerStyle}>
-        <Text style={headerTextStyle}>新規予約のお知らせ</Text>
+        <Text style={headerTextStyle}>予約同期エラー通知</Text>
       </Section>
       <Section style={contentStyle}>
+        <Text style={greetingStyle}>{adminName}様</Text>
         <Text style={textStyle}>
-          新しい予約が入りました。以下の予約詳細をご確認ください：
+          予約のサロンボードへの同期に失敗しました。以下の詳細をご確認ください。
         </Text>
         <Section style={detailsStyle}>
           <Text style={detailTextStyle}>
-            <strong style={labelStyle}>顧客名:</strong>
+            <strong style={labelStyle}>エラーメッセージ:</strong>
             <br />
-            {customerName}
+            {errorMessage}
           </Text>
           <Text style={detailTextStyle}>
-            <strong style={labelStyle}>顧客メール:</strong>
+            <strong style={labelStyle}>予約情報:</strong>
             <br />
-            {customerEmail}
-          </Text>
-          <Text style={detailTextStyle}>
-            <strong style={labelStyle}>顧客電話番号:</strong>
+            お客様: {reservationData.customerName} 様
             <br />
-            {customerPhone}
-          </Text>
-          <Text style={detailTextStyle}>
-            <strong style={labelStyle}>日時:</strong>
+            予約日時: {formatDateTime(reservationData.startTime)} -{" "}
+            {formatDateTime(reservationData.endTime)}
             <br />
-            {formatDateTime(dateTime)} - {formatTime(endTime)}
-          </Text>
-          <Text style={detailTextStyle}>
-            <strong style={labelStyle}>担当スタッフ:</strong>
-            <br />
-            {staffName}
-          </Text>
-          <Text style={detailTextStyle}>
-            <strong style={labelStyle}>サービス:</strong>
-            <br />
-            {serviceName}
-          </Text>
-          <Text style={detailTextStyle}>
-            <strong style={labelStyle}>料金:</strong>
-            <br />¥{totalPrice.toLocaleString()}
+            スタッフ: {reservationData.staffName}
           </Text>
         </Section>
         <Text style={textStyle}>
-          予約内容を確認し、必要に応じて顧客にご連絡ください。
+          早急にご確認いただき、対応をお願いいたします。
         </Text>
       </Section>
       <Section style={footerStyle}>
@@ -88,6 +63,11 @@ export const NewReservationNotification: React.FC<
     </Container>
   </Html>
 );
+
+const formatDateTime = (dateTimeString: string) => {
+  const date = new Date(dateTimeString);
+  return date.toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" });
+};
 
 const containerStyle: React.CSSProperties = {
   margin: "0 auto",
@@ -114,6 +94,14 @@ const contentStyle: React.CSSProperties = {
   padding: "20px",
 };
 
+const greetingStyle: React.CSSProperties = {
+  fontSize: "18px",
+  lineHeight: "26px",
+  color: "#333333",
+  fontWeight: "bold",
+  marginBottom: "16px",
+};
+
 const textStyle: React.CSSProperties = {
   fontSize: "16px",
   lineHeight: "24px",
@@ -133,6 +121,12 @@ const detailTextStyle: React.CSSProperties = {
   lineHeight: "22px",
   color: "#333333",
   marginBottom: "12px",
+  wordWrap: "break-word",
+};
+
+const preStyle: React.CSSProperties = {
+  whiteSpace: "pre-wrap",
+  wordWrap: "break-word",
 };
 
 const labelStyle: React.CSSProperties = {
@@ -151,24 +145,4 @@ const footerStyle: React.CSSProperties = {
 const footerTextStyle: React.CSSProperties = {
   fontSize: "12px",
   color: "#666666",
-};
-
-const formatDateTime = (dateTimeString: string) => {
-  const date = new Date(dateTimeString);
-  return date.toLocaleString("ja-JP", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-    weekday: "long",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-};
-
-const formatTime = (timeString: string) => {
-  const date = new Date(timeString);
-  return date.toLocaleString("ja-JP", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
 };

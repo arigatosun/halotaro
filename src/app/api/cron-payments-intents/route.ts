@@ -1,16 +1,19 @@
-import dotenv from 'dotenv';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { dirname } from 'node:path';
-import cron from 'node-cron';
+import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import Stripe from 'stripe';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+// 環境変数の確認
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY!;
+const CRON_SECRET = process.env.CRON_SECRET!;
 
-dotenv.config({
-  path: path.resolve(__dirname, '../.env'),
+// Supabaseクライアントの初期化
+const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+// Stripeクライアントの初期化
+const stripe = new Stripe(STRIPE_SECRET_KEY, {
+  apiVersion: '2024-06-20',
 });
 
 interface Reservation {
@@ -31,15 +34,36 @@ interface StripeCustomer {
   reservations: Reservation;
 }
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2024-06-20',
-});
+async function getMaxCancelPolicyDays(userId: string): Promise<number> {
+  const { data, error } = await supabase
+    .from('cancel_policies')
+    .select('policies')
+    .eq('user_id', userId)
+    .single();
 
-cron.schedule('* * * * *', async () => {
+  if (error) {
+    console.error('キャンセルポリシーの取得中にエラーが発生しました:', error);
+    return 7;
+  }
+
+  if (!data || !data.policies || !Array.isArray(data.policies)) {
+    console.error('キャンセルポリシーのデータが無効です:', data);
+    return 7;
+  }
+
+  const policies = data.policies as Array<{ days: number }>;
+  const maxDays = Math.max(...policies.map((policy) => policy.days));
+
+  return maxDays;
+}
+
+export async function GET(request: NextRequest) {
+  // 認証チェック
+  if (request.headers.get('Authorization') !== `Bearer ${CRON_SECRET}`) {
+    console.error('不正なアクセス試行がありました');
+    return NextResponse.json({ error: '認証されていません' }, { status: 401 });
+  }
+
   console.log(`[${new Date().toISOString()}] PaymentIntent作成タスクを開始します...`);
 
   try {
@@ -64,14 +88,14 @@ cron.schedule('* * * * *', async () => {
 
     if (error) {
       console.error('stripe_customersの取得中にエラーが発生しました:', error);
-      return;
+      return NextResponse.json({ error: 'stripe_customersの取得に失敗しました' }, { status: 500 });
     }
 
-    console.log(`"request"ステータスの stripe_customer を ${stripeCustomers?.length}件 取得しました。`);
+    console.log(`"request"ステータスのstripe_customerを${stripeCustomers?.length}件取得しました。`);
 
     if (!stripeCustomers || stripeCustomers.length === 0) {
       console.log('現時点でPaymentIntentの作成が必要なstripe_customersはありません。');
-      return;
+      return NextResponse.json({ message: 'PaymentIntentの作成が必要なstripe_customersはありません。' }, { status: 200 });
     }
 
     let processedCount = 0;
@@ -177,32 +201,12 @@ cron.schedule('* * * * *', async () => {
       }
     }
 
-    console.log(`処理が必要な stripe_customers ${processedCount}件 のうち、${successCount}件 の PaymentIntent を作成・保存しました。`);
-    console.log('処理に成功した stripe_customers の ID:', successfulIds.join(', '));
+    console.log(`処理が必要なstripe_customers ${processedCount}件のうち、${successCount}件のPaymentIntentを作成・保存しました。`);
+    console.log('処理に成功したstripe_customersのID:', successfulIds.join(', '));
+
+    return NextResponse.json({ message: 'PaymentIntent作成タスクが完了しました。' }, { status: 200 });
   } catch (err) {
     console.error('PaymentIntent作成タスク中にエラーが発生しました:', err);
+    return NextResponse.json({ error: 'PaymentIntent作成タスク中にエラーが発生しました' }, { status: 500 });
   }
-});
-
-async function getMaxCancelPolicyDays(userId: string): Promise<number> {
-  const { data, error } = await supabase
-    .from('cancel_policies')
-    .select('policies')
-    .eq('user_id', userId)
-    .single();
-
-  if (error) {
-    console.error('キャンセルポリシーの取得中にエラーが発生しました:', error);
-    return 7;
-  }
-
-  if (!data || !data.policies || !Array.isArray(data.policies)) {
-    console.error('キャンセルポリシーのデータが無効です:', data);
-    return 7;
-  }
-
-  const policies = data.policies as Array<{ days: number }>;
-  const maxDays = Math.max(...policies.map((policy) => policy.days));
-
-  return maxDays;
 }

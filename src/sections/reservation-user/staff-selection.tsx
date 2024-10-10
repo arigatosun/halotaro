@@ -22,10 +22,8 @@ export default function StaffSelection({
   const { setSelectedStaff } = useReservation();
   const { staffList, loading, error } = useStaffManagement(userId);
 
-  console.log("Fetched staffList:", staffList);
-
-  const handleStaffSelect = (staff: Staff) => {
-    console.log("Selected staff:", staff);
+  // スタッフ選択時の処理
+  const handleStaffSelect = (staff: Staff | null) => {
     setSelectedStaff(staff);
     onSelectStaff(staff);
   };
@@ -93,10 +91,28 @@ export default function StaffSelection({
       <h2 className="text-2xl font-bold mb-4 whitespace-nowrap">
         スタッフを選択してください
       </h2>
+      <Card key="no-staff" className="mb-4">
+        <CardContent className="p-4 relative min-h-[180px]">
+          <div className="flex flex-col sm:flex-row sm:items-start">
+            <div className="flex-grow pr-24 sm:pr-4 mb-4 sm:mb-0">
+              <h3 className="text-lg font-semibold mb-1">
+                スタッフを指名しない
+              </h3>
+            </div>
+          </div>
+          <div className="absolute bottom-4 right-4">
+            <Button
+              onClick={() => handleStaffSelect(null)}
+              className="bg-orange-500 hover:bg-orange-600 text-white text-xs py-1 px-2 h-auto sm:text-sm sm:py-2 sm:px-4 w-20"
+            >
+              選択
+              <ChevronRight className="ml-1 w-3 h-3 sm:w-4 sm:h-4" />
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {staffList
-          .filter((staff) => staff.is_published)
-          .map(renderStaff)}
+        {staffList.filter((staff) => staff.is_published).map(renderStaff)}
       </div>
       <div className="text-center mt-8">
         <Button onClick={onBack} variant="outline" className="text-base">

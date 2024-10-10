@@ -44,19 +44,27 @@ const NotificationSettingsView: React.FC = () => {
   }
 
   if (!user) {
-    return <div className="text-red-500 text-center">認証に失敗しました。ページをリロードしてください。</div>;
+    return (
+      <div className="text-red-500 text-center">
+        認証に失敗しました。ページをリロードしてください。
+      </div>
+    );
   }
 
   return <AuthenticatedNotificationSettings userId={user.id} />;
 };
 
-const AuthenticatedNotificationSettings: React.FC<{ userId: string }> = ({ userId }) => {
+const AuthenticatedNotificationSettings: React.FC<{ userId: string }> = ({
+  userId,
+}) => {
   const [staffEmails, setStaffEmails] = useState<StaffEmail[]>([
     { id: "1", email: "" },
   ]);
 
   const [notificationTime, setNotificationTime] = useState("immediately");
-  const [notificationSettings, setNotificationSettings] = useState<NotificationSetting[]>([
+  const [notificationSettings, setNotificationSettings] = useState<
+    NotificationSetting[]
+  >([
     { id: "1", name: "新規予約", email: true, push: true },
     { id: "2", name: "予約変更", email: true, push: true },
     { id: "3", name: "予約キャンセル", email: true, push: true },
@@ -71,30 +79,35 @@ const AuthenticatedNotificationSettings: React.FC<{ userId: string }> = ({ userI
     fetchStaffEmails();
   }, [userId]);
 
-   const fetchStaffEmails = async () => {
+  const fetchStaffEmails = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`/api/staff-notification-emails?userId=${userId}`);
+      const response = await fetch(
+        `/api/staff-notification-emails?userId=${userId}`
+      );
       if (!response.ok) {
         throw new Error("Failed to fetch staff emails");
       }
       const data = await response.json();
       if (data.emailAddresses && data.emailAddresses.length > 0) {
-        setStaffEmails(data.emailAddresses.map((email: string, index: number) => ({
-          id: (index + 1).toString(),
-          email
-        })));
+        setStaffEmails(
+          data.emailAddresses.map((email: string, index: number) => ({
+            id: (index + 1).toString(),
+            email,
+          }))
+        );
       } else {
         // データが空の場合、デフォルトの空のメールアドレス入力欄を表示
         setStaffEmails([{ id: "1", email: "" }]);
       }
     } catch (error) {
-      console.error('Error fetching staff emails:', error);
+      console.error("Error fetching staff emails:", error);
       // エラーが発生しても、ユーザーには空のフォームを表示
       setStaffEmails([{ id: "1", email: "" }]);
       toast({
         title: "注意",
-        description: "スタッフメールの取得中に問題が発生しました。空のフォームを表示します。",
+        description:
+          "スタッフメールの取得中に問題が発生しました。空のフォームを表示します。",
       });
     } finally {
       setLoading(false);
@@ -128,14 +141,16 @@ const AuthenticatedNotificationSettings: React.FC<{ userId: string }> = ({ userI
 
   const handleSave = async () => {
     try {
-      const response = await fetch('/api/staff-notification-emails', {
-        method: 'POST',
+      const response = await fetch("/api/staff-notification-emails", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           userId,
-          emailAddresses: staffEmails.map(email => email.email).filter(email => email.trim() !== '')
+          emailAddresses: staffEmails
+            .map((email) => email.email)
+            .filter((email) => email.trim() !== ""),
         }),
       });
 
@@ -146,13 +161,16 @@ const AuthenticatedNotificationSettings: React.FC<{ userId: string }> = ({ userI
         });
       } else {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to save staff emails');
+        throw new Error(errorData.error || "Failed to save staff emails");
       }
     } catch (error) {
-      console.error('Error saving staff emails:', error);
+      console.error("Error saving staff emails:", error);
       toast({
         title: "エラー",
-        description: error instanceof Error ? error.message : "設定の保存中にエラーが発生しました。",
+        description:
+          error instanceof Error
+            ? error.message
+            : "設定の保存中にエラーが発生しました。",
         variant: "destructive",
       });
     }
@@ -185,7 +203,7 @@ const AuthenticatedNotificationSettings: React.FC<{ userId: string }> = ({ userI
       <Tabs defaultValue="general" className="mb-6">
         <TabsList>
           <TabsTrigger value="general">一般設定</TabsTrigger>
-          <TabsTrigger value="notifications">通知項目</TabsTrigger>
+          {/* <TabsTrigger value="notifications">通知項目</TabsTrigger> */}
         </TabsList>
 
         <TabsContent value="general">
@@ -232,7 +250,7 @@ const AuthenticatedNotificationSettings: React.FC<{ userId: string }> = ({ userI
           </Card>
         </TabsContent>
 
-        <TabsContent value="notifications">
+        {/* <TabsContent value="notifications">
           <Card>
             <CardHeader>
               <CardTitle className="text-lg">通知項目設定</CardTitle>
@@ -276,7 +294,7 @@ const AuthenticatedNotificationSettings: React.FC<{ userId: string }> = ({ userI
               </table>
             </CardContent>
           </Card>
-        </TabsContent>
+        </TabsContent> */}
       </Tabs>
 
       <Alert className="mb-6">

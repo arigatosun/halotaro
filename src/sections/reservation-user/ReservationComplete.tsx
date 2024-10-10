@@ -74,25 +74,36 @@ export default function ReservationComplete({
         body: JSON.stringify(reservationData),
       });
 
+      const responseData = await response.json();
+
       if (!response.ok) {
-        const errorData = await response.json();
+        console.error("Server responded with an error:", responseData);
         if (response.status === 409) {
-          throw new Error("この予約は既に存在します");
+          console.error(
+            "Unique constraint violation details:",
+            responseData.details
+          );
+          const constraintName =
+            responseData.details?.constraintName || "不明な制約";
+          throw new Error(`この予約は既に存在します。制約: ${constraintName}`);
         }
         throw new Error(
-          errorData.error || "予約の保存中にエラーが発生しました"
+          responseData.error || "予約の保存中にエラーが発生しました"
         );
       }
 
       const result = await response.json();
-      const { reservation_id: reservationId, reservation_customer_id: reservationCustomerId } = result;
+      const {
+        reservation_id: reservationId,
+        reservation_customer_id: reservationCustomerId,
+      } = result;
 
       // 30日以上先の予約の場合の処理
       if (paymentInfo?.isOver30Days && reservationCustomerId) {
-        const setupIntentResponse = await fetch('/api/create-setup-intent', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
+        const setupIntentResponse = await fetch("/api/create-setup-intent", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
             reservationCustomerId,
             customerEmail: customerInfo.email, // customerEmailを追加
           }),
@@ -100,7 +111,7 @@ export default function ReservationComplete({
 
         if (!setupIntentResponse.ok) {
           const errorData = await setupIntentResponse.json();
-          throw new Error(errorData.error || 'Failed to create Setup Intent');
+          throw new Error(errorData.error || "Failed to create Setup Intent");
         }
 
         const { clientSecret } = await setupIntentResponse.json();
@@ -147,7 +158,9 @@ export default function ReservationComplete({
       <div className="w-full max-w-2xl mx-auto mt-8 space-y-4">
         <div className="flex flex-col items-center justify-center space-y-4">
           <CircularProgress size={60} style={{ color: "#F9802D" }} />
-          <p className="text-lg font-semibold text-[#F9802D]">予約を作成中...</p>
+          <p className="text-lg font-semibold text-[#F9802D]">
+            予約を作成中...
+          </p>
         </div>
       </div>
     );
@@ -243,7 +256,7 @@ export default function ReservationComplete({
         </p>
       </CardContent>
       <CardFooter className="flex justify-center pt-6">
-        <Button 
+        <Button
           onClick={() => router.push("/")}
           className="w-full sm:w-auto bg-[#F9802D] hover:bg-[#E67321] text-white"
         >

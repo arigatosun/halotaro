@@ -1,3 +1,5 @@
+// pages/api/listing-salon.ts
+
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
@@ -26,10 +28,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(data);
     } else {
       // サロン情報が存在しない場合
-      return NextResponse.json(
-        { message: "Salon not found" },
-        { status: 404 }
-      );
+      return NextResponse.json({ message: "Salon not found" }, { status: 404 });
     }
   } catch (error) {
     console.error("Error fetching salon data:", error);
@@ -58,26 +57,32 @@ export async function POST(request: NextRequest) {
 
     if (fetchError) throw fetchError;
 
+    // 空文字列をnullに変換する関数
+    const cleanTimeValue = (value: string) => (value === "" ? null : value);
+
+    // データのクリーンアップ
+    const cleanedData = {
+      salon_name: body.salonName,
+      phone: body.phone,
+      address: body.address,
+      website: body.website || null,
+      description: body.description || null,
+      weekday_open: cleanTimeValue(body.weekdayOpen),
+      weekday_close: cleanTimeValue(body.weekdayClose),
+      weekend_open: cleanTimeValue(body.weekendOpen),
+      weekend_close: cleanTimeValue(body.weekendClose),
+      closed_days: body.closedDays || [],
+      main_image_url: body.mainImageUrl || null,
+      sub_image_urls: body.subImageUrls || [],
+    };
+
     let responseData;
 
     if (existingSalon) {
       // サロン情報が存在する場合は更新
       const { data, error } = await supabase
         .from("salons")
-        .update({
-          salon_name: body.salonName,
-          phone: body.phone,
-          address: body.address,
-          website: body.website,
-          description: body.description,
-          weekday_open: body.weekdayOpen,
-          weekday_close: body.weekdayClose,
-          weekend_open: body.weekendOpen,
-          weekend_close: body.weekendClose,
-          closed_days: body.closedDays,
-          main_image_url: body.mainImageUrl,
-          sub_image_urls: body.subImageUrls,
-        })
+        .update(cleanedData)
         .eq("user_id", userId)
         .select()
         .single();
@@ -91,18 +96,7 @@ export async function POST(request: NextRequest) {
         .from("salons")
         .insert({
           user_id: userId,
-          salon_name: body.salonName,
-          phone: body.phone,
-          address: body.address,
-          website: body.website,
-          description: body.description,
-          weekday_open: body.weekdayOpen,
-          weekday_close: body.weekdayClose,
-          weekend_open: body.weekendOpen,
-          weekend_close: body.weekendClose,
-          closed_days: body.closedDays,
-          main_image_url: body.mainImageUrl,
-          sub_image_urls: body.subImageUrls,
+          ...cleanedData,
         })
         .select()
         .single();
