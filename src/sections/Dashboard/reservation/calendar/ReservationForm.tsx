@@ -112,12 +112,11 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
   }, [reservation, isCreatingFromButton, menuList]);
 
   const handleChange = (name: string, value: string) => {
-  setFormData(prev => ({
-    ...prev,
-    [name]: name === 'menu_id' ? (value ? Number(value) : undefined) : value,
-  }));
-};
-
+    setFormData(prev => ({
+      ...prev,
+      [name]: name === 'menu_id' ? (value ? Number(value) : undefined) : value,
+    }));
+  };
 
   useEffect(() => {
     if (formData.menu_id) {
@@ -133,7 +132,7 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
   }, [formData.menu_id, menuList]);
 
   useEffect(() => {
-    if (selectedDate && formData.staff_id && formData.menu_id) {
+    if (selectedDate && formData.staff_id && formData.menu_id && formType === 'reservation') {
       const selectedMenu = menuList.find(menu => menu.id === formData.menu_id);
       if (selectedMenu) {
         const menuDuration = selectedMenu.duration;
@@ -195,10 +194,10 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
     } else {
       setAvailableTimes([]);
     }
-  }, [selectedDate, formData.staff_id, formData.menu_id, reservations, menuList, businessHours]);
+  }, [selectedDate, formData.staff_id, formData.menu_id, reservations, menuList, businessHours, formType]);
 
   useEffect(() => {
-    if (selectedTimeSlot && selectedDate && formData.menu_id) {
+    if (selectedTimeSlot && selectedDate && formData.menu_id && formType === 'reservation') {
       const selectedMenu = menuList.find(menu => menu.id === formData.menu_id);
       if (selectedMenu) {
         const start = moment(`${moment(selectedDate).format('YYYY-MM-DD')}T${selectedTimeSlot}`);
@@ -213,7 +212,7 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
         setComputedEndTime(end.format('YYYY-MM-DDTHH:mm'));
       }
     }
-  }, [selectedTimeSlot, selectedDate, formData.menu_id, menuList]);
+  }, [selectedTimeSlot, selectedDate, formData.menu_id, menuList, formType]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -231,12 +230,22 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
       customer_name,
       customer_name_kana,
       start_time: formData.start_time ? moment(formData.start_time).utc().format() : undefined,
-      end_time: computedEndTime ? moment(computedEndTime).utc().format() : undefined,
-      total_price: selectedMenuPrice,
+      // formTypeに応じてend_timeを設定
+      end_time: formType === 'reservation'
+        ? (computedEndTime ? moment(computedEndTime).utc().format() : undefined)
+        : (formData.end_time ? moment(formData.end_time).utc().format() : undefined),
+      total_price: formType === 'reservation' ? selectedMenuPrice : 0,
       is_staff_schedule: formType === 'staffSchedule',
-      // menu_id は既に number 型なので変換不要
-      // その他のフィールドは既に含まれている
     };
+
+    // スタッフスケジュールの場合、顧客関連フィールドを除外
+    if (formType === 'staffSchedule') {
+      // 顧客関連フィールドは既に設定されていないため、特に追加の処理は不要
+      // 今回の修正ではスプレッド演算子を使用しないため、不要なフィールドが含まれない
+    }
+
+    // デバッグ用ログ
+    console.log('Updated Reservation:', updatedReservation);
 
     onSubmit(updatedReservation, isNew);
     onClose();
@@ -279,7 +288,28 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
               )}
               {formType === 'reservation' ? (
                 // Reservation form
-                <>
+                <> {/* スタッフの選択 */}
+                <div className="space-y-2">
+                  <Label htmlFor="staff_id">担当スタッフ</Label>
+                  <Select
+                    value={formData.staff_id || ''}
+                    onValueChange={(value) => handleChange('staff_id', value)}
+                    required
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="スタッフを選択" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {staffList.map((staff) => (
+                        <SelectItem key={staff.id} value={staff.id}>
+                          {staff.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+
                   {/* 顧客名の入力 (姓) */}
                   <div className="space-y-2">
                     <Label htmlFor="customer_last_name">顧客名（姓）</Label>
@@ -376,26 +406,6 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
                     </div>
                   )}
 
-                  {/* スタッフの選択 */}
-                  <div className="space-y-2">
-                    <Label htmlFor="staff_id">担当スタッフ</Label>
-                    <Select
-                      value={formData.staff_id || ''}
-                      onValueChange={(value) => handleChange('staff_id', value)}
-                      required
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="スタッフを選択" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {staffList.map((staff) => (
-                          <SelectItem key={staff.id} value={staff.id}>
-                            {staff.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
 
                   {/* 日付の選択 */}
                   <div className="space-y-2">
@@ -428,14 +438,14 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
                   ) : selectedDate && formData.staff_id && formData.menu_id ? (
                     <p>この日に予約可能な時間帯はありません。</p>
                   ) : null}
-
+                  
                   {/* 選択した時間帯の表示 */}
                   {selectedTimeSlot && (
                     <div className="space-y-2">
                       <Label>選択した時間帯</Label>
                       <p>
                         {selectedTimeSlot} ~{' '}
-                        {moment(selectedTimeSlot, 'HH:mm')
+                        {moment(`${selectedDate?.toISOString().split('T')[0]}T${selectedTimeSlot}`, 'YYYY-MM-DDTHH:mm')
                           .add(menuList.find(menu => menu.id === formData.menu_id)?.duration || 0, 'minutes')
                           .format('HH:mm')}
                       </p>
@@ -451,6 +461,7 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
               ) : (
                 // Staff Schedule Form
                 <>
+                  {/* スタッフの選択 */}
                   <div className="space-y-2">
                     <Label htmlFor="staff_id">担当スタッフ</Label>
                     <Select
@@ -471,6 +482,7 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
                     </Select>
                   </div>
 
+                  {/* イベントの選択 */}
                   <div className="space-y-2">
                     <Label htmlFor="event">イベント</Label>
                     <Select
@@ -523,7 +535,7 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
                   (isOverlap || (!selectedTimeSlot))
                 }
               >
-                {isNew ? '予約を作成' : '予約を更新'}
+                {isNew ? (formType === 'reservation' ? '予約を作成' : 'スタッフスケジュールを作成') : (formType === 'reservation' ? '予約を更新' : 'スタッフスケジュールを更新')}
               </Button>
               {!isNew && formData.id && (
                 <Button type="button" variant="destructive" onClick={handleDelete}>

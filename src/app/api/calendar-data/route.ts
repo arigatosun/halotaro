@@ -54,16 +54,17 @@ export async function GET(request: Request) {
     const endDate = moment(endDateStr, 'YYYY-MM-DD').endOf('day').toISOString();
 
     // スタッフリストの取得
-    const { data: staffList, error: staffError } = await supabase
-  .from('staff')
-  .select('id, name')
-  .eq('user_id', userId) // ここでuser_idでフィルタリング
-  .order('name', { ascending: true });
+const { data: staffList, error: staffError } = await supabase
+.from('staff')
+.select('id, name')
+.eq('user_id', userId) // ここでuser_idでフィルタリング
+.order('name', { ascending: true });
 
 if (staffError) {
-  console.error('Error fetching staff list:', staffError);
-  return NextResponse.json({ error: staffError.message }, { status: 500 });
+console.error('Error fetching staff list:', staffError);
+return NextResponse.json({ error: staffError.message }, { status: 500 });
 }
+
 
     // メニューリストの取得
     const { data: menuList, error: menuError } = await supabase

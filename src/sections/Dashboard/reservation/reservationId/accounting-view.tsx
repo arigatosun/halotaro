@@ -826,9 +826,9 @@ export const AccountingPage: React.FC<AccountingPageProps> = ({
                     <TabsTrigger value="retail" className="flex-1">
                       店販
                     </TabsTrigger>
-                    <TabsTrigger value="discount" className="flex-1">
-                      割引・サービス・オプション
-                    </TabsTrigger>
+                    {/*<TabsTrigger value="discount" className="flex-1">
+                      //{/* 割引・サービス・オプション
+                    </TabsTrigger>*/}
                   </TabsList>
                   <TabsContent value="treatment">
                     <div className="space-y-4">
