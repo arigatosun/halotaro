@@ -1,8 +1,5 @@
 // reservationActions.ts
-"use server";
-
-import { createServerComponentClient } from "@supabase/auth-helpers-nextjs";
-import { cookies } from "next/headers";
+import { SupabaseClient } from "@supabase/supabase-js";
 
 export interface Reservation {
   id: string;
@@ -24,6 +21,8 @@ export interface Reservation {
 }
 
 export async function getReservations(
+  supabase: SupabaseClient,
+  user_id: string,
   date?: string,
   staff?: string,
   menu?: string,
@@ -31,11 +30,16 @@ export async function getReservations(
   page: number = 1,
   limit: number = 30
 ): Promise<{ data: Reservation[]; count: number }> {
-  console.log("getReservations called with:", { date, staff, menu, statuses, page, limit });
+  console.log("getReservations called with:", {
+    date,
+    staff,
+    menu,
+    statuses,
+    page,
+    limit,
+  });
 
-  const supabase = createServerComponentClient({ cookies });
-
-  // リレーションシップを明示的に指定
+  // クエリの構築
   let query = supabase.from("reservations").select(
     `
       *,
@@ -47,13 +51,17 @@ export async function getReservations(
     { count: "exact" }
   );
 
+  console.log("user_id:", user_id);
+
+  // user_idでフィルタリング
+  query = query.eq("user_id", user_id);
+
+  // その他のフィルタを適用
   if (date) {
     const dateStart = `${date}T00:00:00+09:00`;
     const dateEnd = `${date}T23:59:59+09:00`;
 
-    query = query
-      .gte("start_time", dateStart)
-      .lte("start_time", dateEnd);
+    query = query.gte("start_time", dateStart).lte("start_time", dateEnd);
   }
 
   if (staff && staff !== "all") {
@@ -71,17 +79,17 @@ export async function getReservations(
     query = query.in("status", statuses);
   }
 
-  // ステータスが 'staff' の予約を除外
+  // 'staff' ステータスの予約を除外
   query = query.neq("status", "staff");
 
   const { data, error, count } = await query
     .order("start_time", { ascending: false })
     .range((page - 1) * limit, page * limit - 1);
 
-  console.log("Query result:", { data, error, count });
+  console.log("クエリ結果:", { data, error, count });
 
   if (error) {
-    console.error("Error fetching reservations:", error);
+    console.error("予約の取得エラー:", error);
     throw new Error("予約の取得に失敗しました");
   }
 
@@ -106,7 +114,7 @@ export async function getReservations(
     );
   }
 
-  console.log("Formatted data:", formattedData);
+  console.log("フォーマット後のデータ:", formattedData);
 
   return {
     data: formattedData as Reservation[],
