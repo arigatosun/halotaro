@@ -55,14 +55,15 @@ export async function GET(request: Request) {
 
     // スタッフリストの取得
     const { data: staffList, error: staffError } = await supabase
-      .from('staff')
-      .select('id, name')
-      .order('name', { ascending: true });
+  .from('staff')
+  .select('id, name')
+  .eq('user_id', userId) // ここでuser_idでフィルタリング
+  .order('name', { ascending: true });
 
-    if (staffError) {
-      console.error('Error fetching staff list:', staffError);
-      return NextResponse.json({ error: staffError.message }, { status: 500 });
-    }
+if (staffError) {
+  console.error('Error fetching staff list:', staffError);
+  return NextResponse.json({ error: staffError.message }, { status: 500 });
+}
 
     // メニューリストの取得
     const { data: menuList, error: menuError } = await supabase

@@ -17,7 +17,7 @@ import ReservationEditForm from "./ReservationEditForm";
 import useReservationCalendar from "./useReservationCalendar";
 import { EventClickArg, EventDropArg, DateSelectArg, } from "@fullcalendar/core";
 import { Reservation } from "@/types/reservation";
-import { useAuth } from "@/lib/useAuth";
+import { useAuth } from "@/contexts/authcontext"; // インポートパスを修正
 import FullCalendar from '@fullcalendar/react';
 
 
