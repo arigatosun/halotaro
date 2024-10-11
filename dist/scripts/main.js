@@ -31,37 +31,39 @@ const supabase = (0, supabase_js_1.createClient)(
 
 const { decrypt } = require("./utils/encryption");
 
-async function saveSession(userId, context) {
+async function saveSession(userId, salonType, context) {
   const cookies = await context.cookies();
   const sessionData = { cookies };
-  const encryptedSession = (0, encryption_1.encrypt)(
-    JSON.stringify(sessionData)
-  );
+  const encryptedSession = encryption_1.encrypt(JSON.stringify(sessionData));
   const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24時間後
+
   const { error } = await supabase.from("salonboard_sessions").upsert({
     user_id: userId,
     session_data: encryptedSession,
     expires_at: expiresAt.toISOString(),
+    salon_type: salonType, // サロンタイプを保存
     updated_at: new Date().toISOString(),
   });
+
   if (error) throw error;
 }
 
 async function loadSession(userId, context) {
   const { data, error } = await supabase
     .from("salonboard_sessions")
-    .select("session_data, expires_at")
+    .select("session_data, expires_at, salon_type")
     .eq("user_id", userId)
     .single();
-  if (error || !data) return false;
+  if (error || !data) return { sessionLoaded: false, salonType: null };
   if (new Date(data.expires_at) < new Date()) {
     // セッションの有効期限切れ
+    console.log("セッションの有効期限切れ");
     await supabase.from("salonboard_sessions").delete().eq("user_id", userId);
-    return false;
+    return { sessionLoaded: false, salonType: null };
   }
-  const sessionData = JSON.parse((0, encryption_1.decrypt)(data.session_data));
+  const sessionData = JSON.parse(decrypt(data.session_data));
   await context.addCookies(sessionData.cookies);
-  return true;
+  return { sessionLoaded: true, salonType: data.salon_type };
 }
 
 async function setupBrowser() {
@@ -133,12 +135,20 @@ async function loginWithManualCaptcha(page, userId, password) {
   await page.fill('input[name="userId"]', userId);
   await page.fill('input[name="password"]', password);
   await Promise.all([page.click(".common-CNCcommon__primaryBtn.loginBtnSize")]);
-  await page.waitForEvent("load");
-  const isLoggedIn = await page.isVisible("#todayReserve");
-  if (!isLoggedIn) {
-    throw new Error("Login failed: Dashboard element not found");
+  await page.waitForNavigation({ waitUntil: "networkidle" });
+
+  // ログインが成功したか確認
+  const currentUrl = page.url();
+  if (currentUrl.includes("login")) {
+    throw new Error("ログインに失敗しました。");
   }
   console.log("ログイン完了");
+
+  // サロンタイプを判別
+  const salonType = await getSalonType(page);
+  console.log(`サロンタイプを判別しました: ${salonType}`);
+
+  return salonType;
 }
 
 // サロンボードの予約情報を同期する
@@ -251,39 +261,63 @@ async function syncStaffData(
   haloTaroUserId,
   salonboardUserId,
   password,
-  context
+  context,
+  salonType
 ) {
-  logger_1.logger.log("スタッフ情報同期 user_id:", haloTaroUserId);
+  logger_1.logger.log("スタッフ情報同期 開始 user_id:", haloTaroUserId);
   logger_1.logger.log(new Date().toISOString());
   const page = await context.newPage();
   try {
+    // サロンタイプに応じたスタッフリストURLを設定
+    const staffListUrls = {
+      hair: "https://salonboard.com/CNB/draft/stylistList/",
+      kirei: "https://salonboard.com/CNK/draft/staffList/",
+    };
+    const staffListUrl = staffListUrls[salonType];
+    if (!staffListUrl) {
+      throw new Error("スタッフリストのURLが見つかりません。");
+    }
+
+    // スタッフリストページに移動
     await loginAndNavigate(
       page,
       context,
       haloTaroUserId,
       salonboardUserId,
       password,
-      "https://salonboard.com/CNK/draft/staffList/"
+      staffListUrl
     );
-    await page.waitForSelector('table tbody tr[name="staff_info"]', {
-      timeout: 10000,
-    });
-    console.log("スタッフ情報を取得中...");
-    const rawStaffData = await (0, scrapeStaff_1.scrapeStaff)(page);
-    console.log("スタッフ情報を取得しました");
-    const processedStaffData = (0, processStaffData_1.processStaffData)(
+
+    // スタッフ行のセレクタを設定
+    const staffRowSelector =
+      salonType === "hair"
+        ? 'tr[name="stylist_info"]'
+        : 'tr[name="staff_info"]';
+
+    // スタッフ情報を取得
+    logger_1.logger.log("スタッフ情報を取得中...");
+    const rawStaffData = await scrapeStaff_1.scrapeStaff(page, salonType);
+    logger_1.logger.log("スタッフ情報を取得しました");
+
+    // スタッフ情報を処理
+    const processedStaffData = processStaffData_1.processStaffData(
       rawStaffData,
       haloTaroUserId
     );
-    console.log("スタッフ情報を同期中...");
-    const result = await (0, syncStaff_1.syncStaff)(
+    logger_1.logger.log("スタッフ情報を処理しました");
+
+    // スタッフ情報を同期
+    const result = await syncStaff_1.syncStaff(
       processedStaffData,
       haloTaroUserId
     );
-    console.log("スタッフ情報の同期が完了しました");
-    return `Successfully processed staff data. Updated: ${result.updated}, Inserted: ${result.inserted}, Deactivated: ${result.deactivated}`;
+    logger_1.logger.log("スタッフ情報の同期が完了しました");
+    logger_1.logger.log(
+      `スタッフデータの処理が完了しました。更新: ${result.updated}, 追加: ${result.inserted}, 非活性化: ${result.deactivated}`
+    );
+    return `スタッフデータの処理が完了しました。更新: ${result.updated}, 追加: ${result.inserted}, 非活性化: ${result.deactivated}`;
   } catch (error) {
-    console.error("An error occurred during staff sync:", error);
+    logger_1.logger.error("スタッフ同期中にエラーが発生しました:", error);
     throw error;
   } finally {
     await page.close();
@@ -445,6 +479,17 @@ async function getStaffIdByName(page, staffName) {
   return null;
 }
 
+async function getSalonType(page) {
+  const currentUrl = page.url();
+  if (currentUrl.includes("/CLP/") || currentUrl.includes("/CNB/")) {
+    return "hair"; // ヘアサロン
+  } else if (currentUrl.includes("/KLP/") || currentUrl.includes("/CNK/")) {
+    return "kirei"; // キレイサロン
+  } else {
+    throw new Error("サロンタイプを判別できませんでした。");
+  }
+}
+
 async function syncAllData(haloTaroUserId) {
   // サロンボードの認証情報を取得
   const { data, error } = await supabase
@@ -480,27 +525,112 @@ async function syncAllData(haloTaroUserId) {
     const page = await context.newPage();
 
     // セッションをロードまたはログイン
-    const sessionLoaded = await loadSession(haloTaroUserId, context);
+    const { sessionLoaded, salonType } = await loadSession(
+      haloTaroUserId,
+      context
+    );
+    let currentSalonType = salonType;
+
+    // ログインページにアクセスしてセッションを適用
+    await page.goto("https://salonboard.com/login/", {
+      waitUntil: "load",
+    });
+
     if (sessionLoaded) {
-      console.log("保存された認証情報を使用してブラウザを開きました。");
-      await page.goto("https://salonboard.com/");
-      if (await page.isVisible('input[name="userId"]')) {
-        console.log("セッションが無効になっています。再ログインが必要です。");
-        await loginWithManualCaptcha(page, salonboardUserId, password);
-        await saveSession(haloTaroUserId, context);
+      console.log("保存されたセッションを使用しています。");
+
+      // サロンタイプをデータベースから取得
+      if (!currentSalonType) {
+        throw new Error("サロンタイプがデータベースに保存されていません。");
+      }
+
+      // サロンタイプに応じてトップページのURLを設定
+      const salonTypeUrls = {
+        hair: "https://salonboard.com/CLP/bt/top/",
+        kirei: "https://salonboard.com/KLP/top/",
+      };
+      const topPageUrl = salonTypeUrls[currentSalonType];
+
+      if (!topPageUrl) {
+        throw new Error("未知のサロンタイプです。");
+      }
+
+      // サロンタイプ別のトップページに遷移
+      await page.goto(topPageUrl, { waitUntil: "networkidle" });
+
+      // セッションが有効か確認するために特定の要素をチェック
+      const isLoggedIn = await page.isVisible("#todayReserve");
+      if (isLoggedIn) {
+        console.log("セッションは有効です。");
+        // そのまま同期処理へ
+      } else {
+        console.log("セッションが無効です。再ログインを行います。");
+        await page.goto("https://salonboard.com/login/", {
+          waitUntil: "networkidle",
+        });
+        currentSalonType = await loginWithManualCaptcha(
+          page,
+          salonboardUserId,
+          password
+        );
+        await saveSession(haloTaroUserId, currentSalonType, context);
       }
     } else {
-      console.log("新規ログインを行います。");
-      await loginWithManualCaptcha(page, salonboardUserId, password);
-      await saveSession(haloTaroUserId, context);
+      console.log("セッションが存在しません。新規ログインを行います。");
+      currentSalonType = await loginWithManualCaptcha(
+        page,
+        salonboardUserId,
+        password
+      );
+      await saveSession(haloTaroUserId, currentSalonType, context);
     }
-    await page.close();
 
-    // 各同期関数に context を渡す
-    await syncReservations(haloTaroUserId, salonboardUserId, password, context);
-    await syncMenus(haloTaroUserId, salonboardUserId, password, context);
-    await syncStaffData(haloTaroUserId, salonboardUserId, password, context);
-    await syncCoupons(haloTaroUserId, salonboardUserId, password, context);
+    console.log(`サロンタイプ: ${currentSalonType}`);
+
+    // サロンタイプに応じてトップページのURLを設定（再度確認）
+    const salonTypeUrls = {
+      hair: "https://salonboard.com/CLP/bt/top/",
+      kirei: "https://salonboard.com/KLP/top/",
+    };
+
+    const topPageUrl = salonTypeUrls[currentSalonType];
+    if (!topPageUrl) {
+      throw new Error("未知のサロンタイプです。");
+    }
+
+    // サロンタイプ別のトップページに遷移
+    await page.goto(topPageUrl, { waitUntil: "networkidle" });
+
+    // 以下、サロンタイプに応じた同期処理
+    if (currentSalonType === "hair") {
+      // ヘアサロンの場合
+      await syncStaffData(
+        haloTaroUserId,
+        salonboardUserId,
+        password,
+        context,
+        currentSalonType
+      );
+    } else if (currentSalonType === "kirei") {
+      // キレイサロンの場合
+      await syncReservations(
+        haloTaroUserId,
+        salonboardUserId,
+        password,
+        context
+      );
+      await syncMenus(haloTaroUserId, salonboardUserId, password, context);
+      await syncStaffData(
+        haloTaroUserId,
+        salonboardUserId,
+        password,
+        context,
+        currentSalonType
+      );
+      await syncCoupons(haloTaroUserId, salonboardUserId, password, context);
+    } else {
+      throw new Error("未知のサロンタイプです。");
+    }
 
     console.log("全データの同期が完了しました。");
 
