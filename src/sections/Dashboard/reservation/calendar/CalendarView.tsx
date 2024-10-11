@@ -1,7 +1,7 @@
 import React, { forwardRef, useRef, useEffect } from "react";
 import FullCalendar from "@fullcalendar/react";
 import resourceTimelinePlugin from "@fullcalendar/resource-timeline";
-import interactionPlugin from "@fullcalendar/interaction";
+import interactionPlugin, { DateClickArg } from "@fullcalendar/interaction";
 import { styled } from "@mui/system";
 import {
   EventClickArg,
@@ -26,6 +26,7 @@ interface CalendarViewProps {
   onEventDrop: (dropInfo: EventDropArg) => void;
   handleDatesSet: (arg: any) => void;
   currentDate: moment.Moment;
+  onDateClick: (clickInfo: DateClickArg) => void;
 }
 
 const StyledFullCalendar = styled(FullCalendar)<CalendarOptions>(
@@ -150,6 +151,7 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
       onEventDrop,
       handleDatesSet,
       currentDate,
+      onDateClick,
     },
     ref
   ) => {
@@ -303,6 +305,7 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
           viewDidMount={handleViewDidMount}
           eventDisplay="block"
           eventOverlap={false}
+          selectMinDistance={10}
           eventDidMount={(info) => {
             console.log("Event mounted:", info.event.toPlainObject());
           }}
@@ -313,6 +316,7 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
               startTime: bh.open_time || "00:00", // NULLの場合のデフォルト値
               endTime: bh.close_time || "24:00",
             }))}
+          dateClick={onDateClick}
         />
       </Box>
     );

@@ -15,28 +15,29 @@ import StaffScheduleForm from "./StaffScheduleForm";
 import StaffScheduleDetails from "./StaffScheduleDetails";
 import ReservationEditForm from "./ReservationEditForm";
 import useReservationCalendar from "./useReservationCalendar";
-import { EventClickArg, EventDropArg, DateSelectArg, } from "@fullcalendar/core";
+import { EventClickArg, EventDropArg, DateSelectArg } from "@fullcalendar/core";
+import { DateClickArg } from "@fullcalendar/interaction";
 import { Reservation } from "@/types/reservation";
-import { useAuth } from "@/contexts/authcontext"; // インポートパスを修正
-import FullCalendar from '@fullcalendar/react';
-
-
+import { useAuth } from "@/contexts/authcontext";
+import FullCalendar from "@fullcalendar/react";
 // サーバーアクションのインポート
 import {
   getCalendarData,
   createReservation,
   updateReservation,
   deleteReservation,
-} from "@/app/actions/reservationCalendarActions"; 
+} from "@/app/actions/reservationCalendarActions";
 
 moment.locale("ja"); // 日本語ロケールを設定
 
 const ReservationCalendar: React.FC = () => {
-  const [selectedReservation, setSelectedReservation] = useState<Reservation | null>(null);
+  const [selectedReservation, setSelectedReservation] =
+    useState<Reservation | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isNewReservation, setIsNewReservation] = useState(false);
   const [isStaffScheduleFormOpen, setIsStaffScheduleFormOpen] = useState(false);
-  const [selectedStaffSchedule, setSelectedStaffSchedule] = useState<Reservation | null>(null);
+  const [selectedStaffSchedule, setSelectedStaffSchedule] =
+    useState<Reservation | null>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [isEditFormOpen, setIsEditFormOpen] = useState(false);
   const [currentDate, setCurrentDate] = useState(moment());
@@ -74,18 +75,21 @@ const ReservationCalendar: React.FC = () => {
 
   const { user, session } = useAuth();
 
-  // 日付選択ハンドラ
-  const handleDateSelect = (selectInfo: DateSelectArg) => {
-    const { start, end, resource } = selectInfo;
+  // 日付クリックハンドラ（予約追加）
+  const handleDateClick = (dateClickInfo: DateClickArg) => {
+    const { date, resource } = dateClickInfo;
 
     if (!resource) {
-      setSnackbar({ message: "スタッフを選択してください", severity: "error" });
+      setSnackbar({
+        message: "スタッフを選択してください",
+        severity: "error",
+      });
       return;
     }
 
     const newReservation: Partial<Reservation> = {
-      start_time: start.toISOString(),
-      end_time: end.toISOString(),
+      start_time: date.toISOString(),
+      end_time: moment(date).add(1, "hours").toISOString(), // デフォルトの予約時間を1時間に設定
       staff_id: resource.id,
       is_staff_schedule: false,
     };
@@ -94,6 +98,34 @@ const ReservationCalendar: React.FC = () => {
     setIsNewReservation(true);
     setIsFormOpen(true);
     setIsCreatingFromButton(false);
+  };
+
+  // 日付選択ハンドラ（スタッフスケジュール追加）
+  const handleDateSelect = (selectInfo: DateSelectArg) => {
+    const { start, end, resource } = selectInfo;
+
+    // 開始時間と終了時間が同じ場合は処理をスキップ
+    if (start.getTime() == end.getTime()) {
+      return;
+    }
+
+    if (!resource) {
+      setSnackbar({
+        message: "スタッフを選択してください",
+        severity: "error",
+      });
+      return;
+    }
+
+    const newStaffSchedule: Partial<Reservation> = {
+      start_time: start.toISOString(),
+      end_time: end.toISOString(),
+      staff_id: resource.id,
+      is_staff_schedule: true,
+    };
+
+    setSelectedStaffSchedule(newStaffSchedule as Reservation);
+    setIsStaffScheduleFormOpen(true);
   };
 
   // イベントクリックハンドラ
@@ -132,7 +164,12 @@ const ReservationCalendar: React.FC = () => {
       if (!res.staff_id || res.staff_id !== staffId) return false;
       if (excludeReservationId && res.id === excludeReservationId) return false;
       // キャンセルされた予約を除外
-      const excludedStatuses = ["cancelled", "salon_cancelled", "same_day_cancelled", "no_show"];
+      const excludedStatuses = [
+        "cancelled",
+        "salon_cancelled",
+        "same_day_cancelled",
+        "no_show",
+      ];
       if (res.status && excludedStatuses.includes(res.status)) return false;
       const resStart = moment.utc(res.start_time).local();
       const resEnd = moment.utc(res.end_time).local();
@@ -149,13 +186,17 @@ const ReservationCalendar: React.FC = () => {
     const eventData = dropInfo.event.extendedProps as Reservation;
     const newStart = dropInfo.event.start;
     const newEnd = dropInfo.event.end;
-    const staffId = dropInfo.newResource?.id || dropInfo.event.getResources()[0]?.id;
+    const staffId =
+      dropInfo.newResource?.id || dropInfo.event.getResources()[0]?.id;
     const reservationId = eventData.id;
 
     // 重複チェック
     if (isSlotOverlapping(newStart, newEnd, staffId, reservationId)) {
       dropInfo.revert();
-      setSnackbar({ message: "この時間帯は既に予約が入っています", severity: "error" });
+      setSnackbar({
+        message: "この時間帯は既に予約が入っています",
+        severity: "error",
+      });
       return;
     }
 
@@ -171,19 +212,29 @@ const ReservationCalendar: React.FC = () => {
       const response = await updateReservation(updatedReservation);
       await loadData();
 
-      const message = eventData.is_staff_schedule ? "スタッフスケジュールが更新されました" : "予約が更新されました";
+      const message = eventData.is_staff_schedule
+        ? "スタッフスケジュールが更新されました"
+        : "予約が更新されました";
 
       setSnackbar({ message, severity: "success" });
     } catch (error) {
-      const errorMessage = eventData.is_staff_schedule ? "スタッフスケジュールの更新に失敗しました" : "予約の更新に失敗しました";
+      const errorMessage = eventData.is_staff_schedule
+        ? "スタッフスケジュールの更新に失敗しました"
+        : "予約の更新に失敗しました";
       setSnackbar({ message: errorMessage, severity: "error" });
     }
   };
 
   // フォーム送信ハンドラ
-  const handleFormSubmit = async (data: Partial<Reservation>, isNew: boolean) => {
+  const handleFormSubmit = async (
+    data: Partial<Reservation>,
+    isNew: boolean
+  ) => {
     if (!session || !user) {
-      setSnackbar({ message: "セッションが無効です。再度ログインしてください。", severity: "error" });
+      setSnackbar({
+        message: "セッションが無効です。再度ログインしてください。",
+        severity: "error",
+      });
       return;
     }
 
@@ -197,19 +248,30 @@ const ReservationCalendar: React.FC = () => {
       }
       await loadData();
       setIsFormOpen(false);
-      setSnackbar({ message: `予約が${isNew ? "作成" : "更新"}されました`, severity: "success" });
+      setSnackbar({
+        message: `予約が${isNew ? "作成" : "更新"}されました`,
+        severity: "success",
+      });
     } catch (error: any) {
       console.error("handleFormSubmit エラー:", error);
-      setSnackbar({ message: `予約の${isNew ? "作成" : "更新"}に失敗しました`, severity: "error" });
+      setSnackbar({
+        message: `予約の${isNew ? "作成" : "更新"}に失敗しました`,
+        severity: "error",
+      });
     }
   };
 
   // 予約編集ハンドラ
-  const handleEditFormSubmit = async (updatedReservation: Partial<Reservation>) => {
+  const handleEditFormSubmit = async (
+    updatedReservation: Partial<Reservation>
+  ) => {
     console.log("Calendar: Edit form submit received", updatedReservation);
     if (!session || !user) {
       console.log("Calendar: No session or user");
-      setSnackbar({ message: "セッションが無効です。再度ログインしてください。", severity: "error" });
+      setSnackbar({
+        message: "セッションが無効です。再度ログインしてください。",
+        severity: "error",
+      });
       return;
     }
 
@@ -219,17 +281,29 @@ const ReservationCalendar: React.FC = () => {
       await loadData();
 
       setIsEditFormOpen(false);
-      setSnackbar({ message: "予約が更新されました", severity: "success" });
+      setSnackbar({
+        message: "予約が更新されました",
+        severity: "success",
+      });
     } catch (error) {
       console.error("Calendar: Error in handleEditFormSubmit", error);
-      setSnackbar({ message: "予約の更新に失敗しました", severity: "error" });
+      setSnackbar({
+        message: "予約の更新に失敗しました",
+        severity: "error",
+      });
     }
   };
 
   // 予約キャンセルハンドラ
-  const handleCancelReservation = async (reservationId: string, cancellationType: string) => {
+  const handleCancelReservation = async (
+    reservationId: string,
+    cancellationType: string
+  ) => {
     if (!session || !user) {
-      setSnackbar({ message: "セッションが無効です。再度ログインしてください。", severity: "error" });
+      setSnackbar({
+        message: "セッションが無効です。再度ログインしてください。",
+        severity: "error",
+      });
       return;
     }
 
@@ -241,20 +315,29 @@ const ReservationCalendar: React.FC = () => {
         await loadData();
         setIsFormOpen(false);
         setIsDetailsOpen(false);
-        setSnackbar({ message: "予約がキャンセルされました", severity: "success" });
+        setSnackbar({
+          message: "予約がキャンセルされました",
+          severity: "success",
+        });
       } else {
         throw new Error("予約のキャンセルに失敗しました");
       }
     } catch (error) {
       console.error("Error in handleCancelReservation:", error);
-      setSnackbar({ message: "予約のキャンセルに失敗しました", severity: "error" });
+      setSnackbar({
+        message: "予約のキャンセルに失敗しました",
+        severity: "error",
+      });
     }
   };
 
   // 予約削除ハンドラ（キャンセル処理）
   const handleDeleteReservation = async (id: string) => {
     if (!session || !user) {
-      setSnackbar({ message: "セッションが無効です。再度ログインしてください。", severity: "error" });
+      setSnackbar({
+        message: "セッションが無効です。再度ログインしてください。",
+        severity: "error",
+      });
       return;
     }
 
@@ -265,13 +348,19 @@ const ReservationCalendar: React.FC = () => {
         await loadData();
         setIsFormOpen(false);
         setIsDetailsOpen(false);
-        setSnackbar({ message: "予約がキャンセルされました", severity: "success" });
+        setSnackbar({
+          message: "予約がキャンセルされました",
+          severity: "success",
+        });
       } else {
         throw new Error("予約のキャンセルに失敗しました");
       }
     } catch (error) {
       console.error("Error in handleDeleteReservation:", error);
-      setSnackbar({ message: "予約のキャンセルに失敗しました", severity: "error" });
+      setSnackbar({
+        message: "予約のキャンセルに失敗しました",
+        severity: "error",
+      });
     }
   };
 
@@ -282,9 +371,15 @@ const ReservationCalendar: React.FC = () => {
   };
 
   // スタッフスケジュールフォーム送信ハンドラ
-  const handleStaffScheduleFormSubmit = async (data: Partial<Reservation>, isNew: boolean) => {
+  const handleStaffScheduleFormSubmit = async (
+    data: Partial<Reservation>,
+    isNew: boolean
+  ) => {
     if (!session || !user) {
-      setSnackbar({ message: "セッションが無効です。再度ログインしてください。", severity: "error" });
+      setSnackbar({
+        message: "セッションが無効です。再度ログインしてください。",
+        severity: "error",
+      });
       return;
     }
 
@@ -294,17 +389,28 @@ const ReservationCalendar: React.FC = () => {
       await loadData();
       setIsStaffScheduleFormOpen(false);
       setSelectedStaffSchedule(null);
-      setSnackbar({ message: `スタッフスケジュールが${isNew ? "作成" : "更新"}されました`, severity: "success" });
+      setSnackbar({
+        message: `スタッフスケジュールが${isNew ? "作成" : "更新"}されました`,
+        severity: "success",
+      });
     } catch (error) {
       console.error("Error in handleStaffScheduleFormSubmit:", error);
-      setSnackbar({ message: `スタッフスケジュールの${isNew ? "作成" : "更新"}に失敗しました`, severity: "error" });
+      setSnackbar({
+        message: `スタッフスケジュールの${
+          isNew ? "作成" : "更新"
+        }に失敗しました`,
+        severity: "error",
+      });
     }
   };
 
   // スタッフスケジュール削除ハンドラ
   const handleDeleteStaffSchedule = async (id: string) => {
     if (!session || !user) {
-      setSnackbar({ message: "セッションが無効です。再度ログインしてください。", severity: "error" });
+      setSnackbar({
+        message: "セッションが無効です。再度ログインしてください。",
+        severity: "error",
+      });
       return;
     }
 
@@ -315,13 +421,19 @@ const ReservationCalendar: React.FC = () => {
         await loadData();
         setSelectedStaffSchedule(null);
         setIsStaffScheduleFormOpen(false);
-        setSnackbar({ message: "スタッフスケジュールが削除されました", severity: "success" });
+        setSnackbar({
+          message: "スタッフスケジュールが削除されました",
+          severity: "success",
+        });
       } else {
         throw new Error("スタッフスケジュールの削除に失敗しました");
       }
     } catch (error) {
       console.error("Error in handleDeleteStaffSchedule:", error);
-      setSnackbar({ message: "スタッフスケジュールの削除に失敗しました", severity: "error" });
+      setSnackbar({
+        message: "スタッフスケジュールの削除に失敗しました",
+        severity: "error",
+      });
     }
   };
 
@@ -413,12 +525,13 @@ const ReservationCalendar: React.FC = () => {
         staffList={staffList}
         closedDays={closedDays}
         businessHours={businessHours}
+        onDateClick={handleDateClick} // この行を追加
         onDateSelect={handleDateSelect}
         onEventClick={handleEventClick}
         onEventDrop={handleEventDrop}
         handleDatesSet={handleDatesSet}
         ref={calendarRef}
-        currentDate={currentDate} // 追加
+        currentDate={currentDate}
       />
 
       {/* 予約フォームモーダル */}
@@ -448,7 +561,7 @@ const ReservationCalendar: React.FC = () => {
             setSelectedStaffSchedule(null);
           }}
           onSubmit={handleStaffScheduleFormSubmit}
-          onDelete={handleDeleteStaffSchedule} // 変更なし
+          onDelete={handleDeleteStaffSchedule}
           staffList={staffList}
         />
       )}
@@ -470,7 +583,7 @@ const ReservationCalendar: React.FC = () => {
           reservation={selectedReservation}
           onClose={() => setIsDetailsOpen(false)}
           onEdit={() => handleEditReservation(selectedReservation)}
-          onCancel={handleCancelReservation} // ここを追加
+          onCancel={handleCancelReservation}
         />
       )}
 
@@ -484,12 +597,15 @@ const ReservationCalendar: React.FC = () => {
           staffList={staffList}
           menuList={menuList}
           reservations={reservations}
-          businessHours={businessHours} // この行を追加
+          businessHours={businessHours}
         />
       )}
 
       {/* スナックバー */}
-      <NotificationSnackbar snackbar={snackbar} onClose={() => setSnackbar(null)} />
+      <NotificationSnackbar
+        snackbar={snackbar}
+        onClose={() => setSnackbar(null)}
+      />
     </Box>
   );
 };
