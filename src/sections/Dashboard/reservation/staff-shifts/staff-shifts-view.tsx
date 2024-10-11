@@ -1,3 +1,4 @@
+// staff-shifts-view.tsx
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
@@ -32,8 +33,10 @@ import moment from "moment";
 import 'moment/locale/ja';
 import Link from "next/link";
 import BulkInputModal from "@/components/ui/BulkInputModal";
-import { getStaffs, getStaffShifts, upsertStaffShift, getSalonBusinessHours } from "@/lib/api";
+import { getStaffShifts, upsertStaffShift, getSalonBusinessHours } from "@/lib/api";
 import { Staff, ShiftData, DBStaffShift } from "./types";
+import { useAuth } from "@/contexts/authcontext"; // 追加
+import { supabase } from "@/lib/supabaseClient"; // 追加
 
 moment.locale('ja');
 
@@ -55,10 +58,16 @@ const formatTimeForDatabase = (time: string | null | undefined): string | null =
   return time + ":00";
 };
 
+// シフトが全て設定されているかを確認する関数
+const isAllShiftsSet = (shifts: ShiftData[]): boolean => {
+  return shifts.every(shift => shift.type !== '');
+};
+
 const StaffShiftSettings: React.FC = () => {
   const popoverRef = useRef<HTMLDivElement>(null);
   const params = useParams();
   const { year, month } = params;
+  const { user, loading: authLoading } = useAuth(); // 追加
   const [currentDate, setCurrentDate] = useState(moment());
   const [staffShifts, setStaffShifts] = useState<Staff[]>([]);
   const [shiftPopover, setShiftPopover] = useState<ShiftPopoverData>({
@@ -73,18 +82,26 @@ const StaffShiftSettings: React.FC = () => {
   const [salonBusinessHours, setSalonBusinessHours] = useState<{ [date: string]: boolean }>({});
 
   useEffect(() => {
-    if (year && month) {
+    if (year && month && user) { // user の存在を確認
       setCurrentDate(moment(`${year}-${month}-01`));
-      fetchStaffsAndShifts();
+      fetchStaffsAndShifts(user.id); // user.id を渡す
       fetchSalonBusinessHours();
     }
-  }, [year, month]);
+  }, [year, month, user]);
 
-  const fetchStaffsAndShifts = async () => {
+  const fetchStaffsAndShifts = async (userId: string) => { // userId を受け取る
     setIsLoading(true);
     try {
-      const staffs = await getStaffs();
-      const daysInMonth = moment(`${year}-${month}-01`).daysInMonth();
+      // Supabase を使用して user_id に基づいてスタッフを取得
+      const { data: staffs, error } = await supabase
+        .from('staff')
+        .select('*')
+        .eq('user_id', userId) // user_id でフィルタリング
+        .eq('is_published', true); // 必要に応じて追加のフィルタリング
+
+      if (error) throw error;
+
+      const daysInMonth = currentDate.daysInMonth();
       const shifts = await Promise.all(staffs.map(async (staff) => {
         const dbShifts = await getStaffShifts(staff.id.toString(), parseInt(year as string), parseInt(month as string));
         return {
@@ -171,7 +188,7 @@ const StaffShiftSettings: React.FC = () => {
     setShiftPopover({ ...shiftPopover, visible: false, anchorEl: null });
   };
 
-  const handleBulkInputSubmit = async (newShifts: Record<number, ShiftData[]>) => {
+  const handleBulkInputSubmit = async (newShifts: Record<string, ShiftData[]>) => { // 型を Record<string, ShiftData[]> に変更
     setIsLoading(true);
     try {
       await Promise.all(Object.entries(newShifts).flatMap(([staffId, shifts]) =>
@@ -183,8 +200,8 @@ const StaffShiftSettings: React.FC = () => {
                 staff_id: staffId,
                 date,
                 shift_status: shift.type === '出' ? '出勤' : '休日',
-                start_time: shift.type === '出' ? shift.startTime || null : null,
-                end_time: shift.type === '出' ? shift.endTime || null : null,
+                start_time: shift.type === '出' ? formatTimeForDatabase(shift.startTime) : null,
+                end_time: shift.type === '出' ? formatTimeForDatabase(shift.endTime) : null,
                 memo: shift.memo || null,
               });
             }
@@ -203,7 +220,7 @@ const StaffShiftSettings: React.FC = () => {
             }
             return newShifts[staff.id] && newShifts[staff.id][index] 
               ? newShifts[staff.id][index] 
-              : { type: '' };
+              : shift; // 既存のシフトデータを保持
           })
         }))
       );
@@ -395,7 +412,7 @@ const StaffShiftSettings: React.FC = () => {
     </Box>
   );
 
-  if (isLoading) {
+  if (authLoading || isLoading) { // 両方の状態を確認
     return (
       <Box display="flex" justifyContent="center" alignItems="center" height="100vh">
         <CircularProgress />
@@ -454,7 +471,11 @@ const StaffShiftSettings: React.FC = () => {
                   fontWeight: 'bold', 
                   padding: '10px',
                   width: '150px',
-                  whiteSpace: 'nowrap'
+                  whiteSpace: 'nowrap',
+                  position: 'sticky', // 追加
+                  left: 0, // 追加
+                  background: '#f5f5f5', // 追加
+                  zIndex: 2, // 追加
                 }}>スタッフ名</TableCell>
                 <TableCell style={{ fontWeight: 'bold', padding: '10px', width: '100px' }}>設定状況</TableCell>
                 <TableCell style={{ fontWeight: 'bold', padding: '10px', width: '80px' }}>設定</TableCell>
@@ -480,10 +501,24 @@ const StaffShiftSettings: React.FC = () => {
                     width: '150px',
                     whiteSpace: 'nowrap',
                     overflow: 'hidden',
-                    textOverflow: 'ellipsis'
-                  }}>{staff.name}</TableCell>
+                    textOverflow: 'ellipsis',
+                    position: 'sticky', // 追加
+                    left: 0, // 追加
+                    background: '#ffffff', // 追加
+                    zIndex: 1, // 追加
+                  }}>
+                    {staff.name}
+                  </TableCell>
                   <TableCell style={{ padding: '10px' }}>
-                    <Button variant="contained" size="small" style={{ backgroundColor: '#1976d2', boxShadow: 'none' }}>設定済</Button>
+                    {isAllShiftsSet(staff.shifts) ? (
+                      <Button variant="contained" size="small" style={{ backgroundColor: '#1976d2', boxShadow: 'none' }}>
+                        設定済
+                      </Button>
+                    ) : (
+                      <Button variant="contained" size="small" style={{ backgroundColor: '#f44336', boxShadow: 'none' }}>
+                        未設定
+                      </Button>
+                    )}
                   </TableCell>
                   <TableCell style={{ padding: '10px' }}>
                     <Button variant="contained" size="small" style={{ backgroundColor: '#1976d2', boxShadow: 'none' }}>設定</Button>

@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from "next/headers";
 import { Reservation, Staff, MenuItem, BusinessHour } from '@/types/reservation';
-import moment from 'moment';
+import moment from 'moment-timezone';
 import { createClient } from '@supabase/supabase-js';
 import * as Sentry from "@sentry/nextjs";
 
@@ -47,8 +47,8 @@ function formatReservation(reservation: any) {
     customer_name_kana: reservation.reservation_customers?.name_kana || 'Unknown',
     menu_name: reservation.menu_items?.name || 'Unknown',
     staff_name: reservation.staff?.name || 'Unknown',
-    start_time: moment.utc(reservation.start_time).local().format(),
-    end_time: moment.utc(reservation.end_time).local().format(),
+    start_time: moment.utc(reservation.start_time).tz('Asia/Tokyo').format('YYYY-MM-DDTHH:mm'),
+    end_time: moment.utc(reservation.end_time).tz('Asia/Tokyo').format('YYYY-MM-DDTHH:mm'),
     is_staff_schedule: reservation.is_staff_schedule || false,
     editable: reservation.is_staff_schedule === true,
   };
@@ -228,8 +228,8 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Missing required parameters: startDate or endDate' }, { status: 400 });
     }
 
-    const startDate = moment(startDateStr, 'YYYY-MM-DD').startOf('day').toISOString();
-    const endDate = moment(endDateStr, 'YYYY-MM-DD').endOf('day').toISOString();
+    const startDate = moment.tz(startDateStr, 'YYYY-MM-DD', 'Asia/Tokyo').startOf('day').utc().format('YYYY-MM-DD HH:mm:ss');
+    const endDate = moment.tz(endDateStr, 'YYYY-MM-DD', 'Asia/Tokyo').endOf('day').utc().format('YYYY-MM-DD HH:mm:ss');
 
     // スタッフリストの取得
     const { data: staffList, error: staffError } = await supabase
@@ -415,8 +415,8 @@ export async function POST(request: Request) {
         }
 
         // バリデーション: end_time が start_time より後
-        const startMoment = moment(start_time);
-        const endMoment = moment(end_time);
+        const startMoment = moment.tz(start_time, 'YYYY-MM-DDTHH:mm', 'Asia/Tokyo');
+        const endMoment = moment.tz(end_time, 'YYYY-MM-DDTHH:mm', 'Asia/Tokyo');
         if (!endMoment.isAfter(startMoment)) {
           return NextResponse.json({ error: 'end_time must be after start_time' }, { status: 400 });
         }
@@ -425,8 +425,12 @@ export async function POST(request: Request) {
         const insertData: Partial<Reservation> = {
           user_id: authResult.user.id,
           staff_id: staff_id || undefined,
-          start_time: start_time ? moment(start_time).utc().format('YYYY-MM-DD HH:mm:ss') : undefined,
-          end_time: end_time ? moment(end_time).utc().format('YYYY-MM-DD HH:mm:ss') : undefined,
+          start_time: start_time
+            ? moment.tz(start_time, 'YYYY-MM-DDTHH:mm', 'Asia/Tokyo').utc().format('YYYY-MM-DD HH:mm:ss')
+            : undefined,
+          end_time: end_time
+            ? moment.tz(end_time, 'YYYY-MM-DDTHH:mm', 'Asia/Tokyo').utc().format('YYYY-MM-DD HH:mm:ss')
+            : undefined,
           status: 'staff',
           total_price: 0,
           is_staff_schedule: true,
@@ -471,8 +475,12 @@ export async function POST(request: Request) {
         // create_reservation 関数を呼び出すためのパラメータを準備
         const rpcParams = {
           p_user_id: authResult.user.id,
-          p_start_time: start_time ? moment(start_time).utc().format('YYYY-MM-DD HH:mm:ss') : null,
-          p_end_time: end_time ? moment(end_time).utc().format('YYYY-MM-DD HH:mm:ss') : null,
+          p_start_time: start_time
+            ? moment.tz(start_time, 'YYYY-MM-DDTHH:mm', 'Asia/Tokyo').utc().format('YYYY-MM-DD HH:mm:ss')
+            : null,
+          p_end_time: end_time
+            ? moment.tz(end_time, 'YYYY-MM-DDTHH:mm', 'Asia/Tokyo').utc().format('YYYY-MM-DD HH:mm:ss')
+            : null,
           p_total_price: total_price || 0,
           p_customer_name: customer_name,
           p_customer_name_kana: customer_name_kana,
@@ -624,7 +632,9 @@ export async function PUT(request: Request) {
     for (const field of fieldsToUpdate) {
       if (updateFields[field] !== undefined) {
         if (field === 'start_time' || field === 'end_time') {
-          updatedData[field] = updateFields[field] ? moment(updateFields[field]).utc().format('YYYY-MM-DD HH:mm:ss') : undefined;
+          updatedData[field] = updateFields[field]
+            ? moment.tz(updateFields[field], 'YYYY-MM-DDTHH:mm', 'Asia/Tokyo').utc().format('YYYY-MM-DD HH:mm:ss')
+            : undefined;
         } else {
           updatedData[field] = updateFields[field];
         }

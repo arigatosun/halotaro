@@ -104,14 +104,11 @@ const StaffScheduleForm: React.FC<StaffScheduleFormProps> = ({
     const updatedSchedule = {
       ...formData,
       event: formData.event || '予定あり',
-      start_time: formData.start_time
-        ? moment(formData.start_time).utc().format('YYYY-MM-DD HH:mm:ss')
-        : '',
-      end_time: formData.end_time
-        ? moment(formData.end_time).utc().format('YYYY-MM-DD HH:mm:ss')
-        : '',
       is_staff_schedule: true,
       status: 'staff',
+      // UTCへの変換を避ける
+      start_time: formData.start_time,
+      end_time: formData.end_time,
     };
     
   
