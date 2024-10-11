@@ -1,9 +1,12 @@
+// reservation-monthly-settings-view.tsx
+
 "use client";
 import React, { useState, useEffect } from "react";
 import { Table, Button, Card, Typography, Row, Col } from "antd";
 import { SettingOutlined } from "@ant-design/icons";
 import Link from "next/link";
 import { createClient } from '@supabase/supabase-js';
+import moment from 'moment'; // moment.js を追加
 
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
 
@@ -20,10 +23,6 @@ const MonthlyReceptionSettings: React.FC = () => {
   const [monthlyData, setMonthlyData] = useState<MonthSetting[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  const currentDate = new Date();
-  const currentYear = currentDate.getFullYear();
-  const currentMonth = currentDate.getMonth();
-
   const checkMonthSettings = async (year: number, month: number) => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
@@ -31,20 +30,28 @@ const MonthlyReceptionSettings: React.FC = () => {
       return false;
     }
 
+    const startDate = `${year}-${month.toString().padStart(2, '0')}-01`;
+    const daysInMonth = moment(`${year}-${month}`, "YYYY-MM").daysInMonth();
+    const endDate = `${year}-${month.toString().padStart(2, '0')}-${daysInMonth}`;
+
     const { data, error } = await supabase
       .from('salon_business_hours')
       .select('date')
       .eq('salon_id', user.id)
-      .gte('date', `${year}-${month.toString().padStart(2, '0')}-01`)
-      .lt('date', `${year}-${(month + 1).toString().padStart(2, '0')}-01`);
+      .gte('date', startDate)
+      .lte('date', endDate);
 
     if (error) {
       console.error('Error fetching settings:', error);
       return false;
     }
 
-    const daysInMonth = new Date(year, month, 0).getDate();
-    return data?.length === daysInMonth;
+    // 営業日情報が未設定の場合は未設定とみなす
+    if (!data || data.length === 0) {
+      return false;
+    }
+
+    return data.length === daysInMonth;
   };
 
   const checkStaffShiftSettings = async (year: number, month: number) => {
@@ -53,90 +60,94 @@ const MonthlyReceptionSettings: React.FC = () => {
       console.error('User not authenticated');
       return false;
     }
-  
+
     const startDate = `${year}-${month.toString().padStart(2, '0')}-01`;
-    const endDate = `${year}-${(month + 1).toString().padStart(2, '0')}-01`;
-    const daysInMonth = new Date(year, month, 0).getDate();
-  
+    const daysInMonth = moment(`${year}-${month}`, "YYYY-MM").daysInMonth();
+    const endDate = `${year}-${month.toString().padStart(2, '0')}-${daysInMonth}`;
+
     // サロンの営業日情報を取得
     const { data: salonBusinessHours, error: salonError } = await supabase
       .from('salon_business_hours')
       .select('date, is_holiday')
       .eq('salon_id', user.id)
       .gte('date', startDate)
-      .lt('date', endDate);
-  
+      .lte('date', endDate);
+
     if (salonError) {
       console.error('Error fetching salon business hours:', salonError);
       return false;
     }
-  
+
+    // 営業日情報が未設定の場合は未設定とみなす
+    if (!salonBusinessHours || salonBusinessHours.length === 0) {
+      return false;
+    }
+
+    // 営業日（非店休日）を取得
+    const businessDays = salonBusinessHours
+      .filter(day => !day.is_holiday)
+      .map(day => day.date);
+
     // サロンが全休の場合は設定済とみなす
-    if (salonBusinessHours.length === daysInMonth && salonBusinessHours.every(day => day.is_holiday)) {
+    if (businessDays.length === 0) {
       return true;
     }
-  
-  
-    // 営業日（非店休日）を取得
-  const businessDays = salonBusinessHours
-  .filter(day => !day.is_holiday)
-  .map(day => day.date);
 
-// スタッフのシフト情報を取得
-const { data: allStaffShifts, error: staffError } = await supabase
-  .from('staff_shifts')
-  .select('staff_id, date, shift_status')
-  .gte('date', startDate)
-  .lt('date', endDate);
+    // スタッフのシフト情報を取得
+    const { data: allStaffShifts, error: staffError } = await supabase
+      .from('staff_shifts')
+      .select('staff_id, date, shift_status')
+      .in('date', businessDays);
 
-if (staffError) {
-  console.error('Error fetching staff shifts:', staffError);
-  return false;
-}
+    if (staffError) {
+      console.error('Error fetching staff shifts:', staffError);
+      return false;
+    }
 
-// スタッフごとのシフト設定状況をチェック
-const { data: staffs, error: staffsError } = await supabase
-  .from('staffs')
-  .select('id')
-  .eq('user_id', user.id);
+    // スタッフごとのシフト設定状況をチェック
+    const { data: staffs, error: staffsError } = await supabase
+      .from('staff')
+      .select('id')
+      .eq('user_id', user.id);
 
-if (staffsError) {
-  console.error('Error fetching staffs:', staffsError);
-  return false;
-}
+    if (staffsError) {
+      console.error('Error fetching staffs:', staffsError);
+      return false;
+    }
 
-for (const staff of staffs) {
-  const staffShifts = allStaffShifts.filter((shift: { staff_id: string | number, date: string, shift_status: string }) => 
-    shift.staff_id === staff.id
-  );
-  
-  // すべての営業日にシフトが設定されているかチェック
-  const isAllBusinessDaysSet = businessDays.every((date: string) => 
-    staffShifts.some((shift: { date: string }) => shift.date === date)
-  );
+    for (const staff of staffs) {
+      const staffShifts = allStaffShifts.filter((shift: { staff_id: string | number, date: string, shift_status: string }) => 
+        shift.staff_id === staff.id
+      );
 
-  // すべてのシフトが有効な値（出勤、休日）を持っているかチェック
-  const isAllShiftsValid = staffShifts.every((shift: { shift_status: string }) => 
-    ['出勤', '休日'].includes(shift.shift_status)
-  );
+      // すべての営業日にシフトが設定されているかチェック
+      const isAllBusinessDaysSet = businessDays.every((date: string) => 
+        staffShifts.some((shift: { date: string }) => shift.date === date)
+      );
 
-  if (!isAllBusinessDaysSet || !isAllShiftsValid) {
-    return false;
-  }
-}
+      // すべてのシフトが有効な値（出勤、休日）を持っているかチェック
+      const isAllShiftsValid = staffShifts.every((shift: { shift_status: string }) => 
+        ['出勤', '休日'].includes(shift.shift_status)
+      );
 
-return true; // すべての条件を満たしていれば設定済み
-};
-  
+      if (!isAllBusinessDaysSet || !isAllShiftsValid) {
+        return false;
+      }
+    }
+
+    return true; // すべての条件を満たしていれば設定済み
+  };
+
   const generateMonthlyData = async (): Promise<MonthSetting[]> => {
     const data = await Promise.all(
       Array.from({ length: 4 }, async (_, index) => {
-        const month = (currentMonth + index) % 12;
-        const year = currentYear + Math.floor((currentMonth + index) / 12);
-        const isSet = await checkMonthSettings(year, month + 1);
-        const isStaffSet = await checkStaffShiftSettings(year, month + 1);
+        const monthMoment = moment().add(index, 'months');
+        const year = monthMoment.year();
+        const month = monthMoment.month() + 1; // moment.js の month() は 0 から 11
+        const isSet = await checkMonthSettings(year, month);
+        const isStaffSet = await checkStaffShiftSettings(year, month);
         return {
-          month: `${year}年${month + 1}月`,
+          month: `${year}年${month}月`,
           year: year,
           isSet: isSet,
           isStaffSet: isStaffSet,
@@ -165,12 +176,8 @@ return true; // すべての条件を満たしていれば設定済み
         <Link
           href={
             isStaffSetting
-              ? `/dashboard/reservations/staff-shifts/${setting.year}/${
-                  setting.month.split("年")[1].split("月")[0]
-                }`
-              : `/dashboard/reservations/monthly-settings/${setting.year}/${
-                  setting.month.split("年")[1].split("月")[0]
-                }`
+              ? `/dashboard/reservations/staff-shifts/${setting.year}/${setting.month.split("年")[1].split("月")[0]}`
+              : `/dashboard/reservations/monthly-settings/${setting.year}/${setting.month.split("年")[1].split("月")[0]}`
           }
           passHref
         >
@@ -207,7 +214,7 @@ return true; // すべての条件を満たしていれば設定済み
           スタッフの1ヶ月のシフトを設定します。
           休暇や予定（一部休や外出など）を設定することで、ハロタロの予約受付が停止できます。
         </Paragraph>
-        <Link href="/settings/work-patterns" passHref>
+        <Link href="work-pattern-registration" passHref>
           <Button
             type="primary"
             icon={<SettingOutlined />}
