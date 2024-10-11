@@ -60,8 +60,8 @@ export default function ReservationComplete({
         ),
         customerInfo,
         paymentInfo,
-        paymentMethodId: paymentInfo?.paymentMethodId, // 追加
-        customerEmail: customerInfo.email, // 追加
+        paymentMethodId: paymentInfo?.paymentMethodId,
+        customerEmail: customerInfo.email,
       };
 
       console.log("予約情報です。", reservationData);
@@ -74,6 +74,7 @@ export default function ReservationComplete({
         body: JSON.stringify(reservationData),
       });
 
+      // 一度だけresponse.json()を呼び出す
       const responseData = await response.json();
 
       if (!response.ok) {
@@ -92,11 +93,11 @@ export default function ReservationComplete({
         );
       }
 
-      const result = await response.json();
+      // responseDataをそのまま使用
       const {
         reservation_id: reservationId,
         reservation_customer_id: reservationCustomerId,
-      } = result;
+      } = responseData;
 
       // 30日以上先の予約の場合の処理
       if (paymentInfo?.isOver30Days && reservationCustomerId) {
@@ -105,16 +106,20 @@ export default function ReservationComplete({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             reservationCustomerId,
-            customerEmail: customerInfo.email, // customerEmailを追加
+            customerEmail: customerInfo.email,
           }),
         });
 
+        // 一度だけsetupIntentResponse.json()を呼び出す
+        const setupIntentData = await setupIntentResponse.json();
+
         if (!setupIntentResponse.ok) {
-          const errorData = await setupIntentResponse.json();
-          throw new Error(errorData.error || "Failed to create Setup Intent");
+          throw new Error(
+            setupIntentData.error || "Failed to create Setup Intent"
+          );
         }
 
-        const { clientSecret } = await setupIntentResponse.json();
+        const { clientSecret } = setupIntentData;
         // 必要に応じてclientSecretを保存または使用
         console.log("Setup Intent created with client secret:", clientSecret);
       }
