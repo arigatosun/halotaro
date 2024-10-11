@@ -270,15 +270,15 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               {!hideReservationType && (
-                <div className="space-y-2">
-                  <Label htmlFor="form-type">予約タイプ</Label>
-                  <Select
+                 <div className="space-y-2 col-span-2"> {/* Changed to col-span-2 */}
+                 <Label htmlFor="form-type">予約タイプ</Label>
+                 <Select
                     value={formType}
                     onValueChange={(value: 'reservation' | 'staffSchedule') => setFormType(value)}
                   >
-                    <SelectTrigger>
-                      <SelectValue placeholder="予約タイプを選択" />
-                    </SelectTrigger>
+                    <SelectTrigger className="w-full"> {/* Added w-full class */}
+                    <SelectValue placeholder="予約タイプを選択" />
+                  </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="reservation">通常の予約</SelectItem>
                       <SelectItem value="staffSchedule">スタッフスケジュール</SelectItem>
@@ -289,26 +289,7 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
               {formType === 'reservation' ? (
                 // Reservation form
                 <> {/* スタッフの選択 */}
-                <div className="space-y-2">
-                  <Label htmlFor="staff_id">担当スタッフ</Label>
-                  <Select
-                    value={formData.staff_id || ''}
-                    onValueChange={(value) => handleChange('staff_id', value)}
-                    required
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="スタッフを選択" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {staffList.map((staff) => (
-                        <SelectItem key={staff.id} value={staff.id}>
-                          {staff.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
+                
 
                   {/* 顧客名の入力 (姓) */}
                   <div className="space-y-2">
@@ -376,6 +357,26 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
                       onChange={(e) => handleChange('customer_phone', e.target.value)}
                     />
                   </div>
+
+                  <div className="space-y-2">
+                  <Label htmlFor="staff_id">担当スタッフ</Label>
+                  <Select
+                    value={formData.staff_id || ''}
+                    onValueChange={(value) => handleChange('staff_id', value)}
+                    required
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="スタッフを選択" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {staffList.map((staff) => (
+                        <SelectItem key={staff.id} value={staff.id}>
+                          {staff.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
                   {/* メニューの選択 */}
                   <div className="space-y-2">
