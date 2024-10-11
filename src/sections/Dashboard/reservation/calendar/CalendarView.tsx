@@ -225,6 +225,7 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
           classNames: reservation.is_staff_schedule
             ? ["staff-schedule"]
             : ["customer-reservation"],
+          editable: reservation.editable, // ここを追加
           extendedProps: reservation,
         })),
       ...businessHours
@@ -274,7 +275,7 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
           datesSet={handleDatesSet}
           initialView="resourceTimelineDay"
           initialDate={currentDate.format("YYYY-MM-DD")}
-          editable={true}
+          editable={false} // デフォルトで編集不可に設定
           selectable={true}
           selectConstraint="businessHours"
           select={onDateSelect}

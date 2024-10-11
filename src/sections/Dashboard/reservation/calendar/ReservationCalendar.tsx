@@ -1,5 +1,3 @@
-// src/sections/Dashboard/reservation/calendar/ReservationCalendar.tsx
-
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
@@ -66,9 +64,6 @@ const ReservationCalendar: React.FC = () => {
     const startDate = today.startOf("day").format("YYYY-MM-DD");
     const endDate = today.endOf("day").format("YYYY-MM-DD"); // 1日分に変更
     setDateRange({ start: startDate, end: endDate });
-
-    // データをロード
-    loadData();
   }, []);
 
   const calendarRef = useRef<FullCalendar>(null);
@@ -156,7 +151,8 @@ const ReservationCalendar: React.FC = () => {
     start: Date | null,
     end: Date | null,
     staffId: string,
-    excludeReservationId?: string
+    excludeReservationId?: string,
+    isStaffSchedule?: boolean
   ): boolean => {
     if (!start || !end) return false;
 
@@ -171,6 +167,12 @@ const ReservationCalendar: React.FC = () => {
         "no_show",
       ];
       if (res.status && excludedStatuses.includes(res.status)) return false;
+
+      // スタッフスケジュールを移動する場合、他のスタッフスケジュールとの重複は無視
+      if (isStaffSchedule && res.is_staff_schedule) return false;
+      // 通常の予約を移動する場合、スタッフスケジュールとの重複を無視するかどうか
+      if (!isStaffSchedule && res.is_staff_schedule) return false;
+
       const resStart = moment.utc(res.start_time).local();
       const resEnd = moment.utc(res.end_time).local();
       const newStart = moment(start).local();
@@ -184,6 +186,7 @@ const ReservationCalendar: React.FC = () => {
     if (!user) return;
 
     const eventData = dropInfo.event.extendedProps as Reservation;
+    const isStaffSchedule = eventData.is_staff_schedule;
     const newStart = dropInfo.event.start;
     const newEnd = dropInfo.event.end;
     const staffId =
@@ -191,7 +194,15 @@ const ReservationCalendar: React.FC = () => {
     const reservationId = eventData.id;
 
     // 重複チェック
-    if (isSlotOverlapping(newStart, newEnd, staffId, reservationId)) {
+    if (
+      isSlotOverlapping(
+        newStart,
+        newEnd,
+        staffId,
+        reservationId,
+        isStaffSchedule
+      )
+    ) {
       dropInfo.revert();
       setSnackbar({
         message: "この時間帯は既に予約が入っています",
@@ -208,8 +219,15 @@ const ReservationCalendar: React.FC = () => {
         staff_id: staffId,
         user_id: user.id,
       };
-      // サーバーアクションを呼び出す
-      const response = await updateReservation(updatedReservation);
+      const response = await fetch("/api/calendar-data", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify(updatedReservation),
+      });
+      if (!response.ok) throw new Error("Failed to update reservation");
       await loadData();
 
       const message = eventData.is_staff_schedule
@@ -239,13 +257,29 @@ const ReservationCalendar: React.FC = () => {
     }
 
     try {
-      if (isNew) {
-        // サーバーアクションを呼び出す
-        await createReservation(data);
-      } else {
-        // サーバーアクションを呼び出す
-        await updateReservation(data);
+      const method = isNew ? "POST" : "PUT";
+      const reservationData = {
+        ...data,
+        user_id: user.id,
+      };
+
+      console.log("Sending reservation data:", reservationData); // デバッグ用ログ
+
+      const response = await fetch("/api/calendar-data", {
+        method: method,
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify(reservationData),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error("API error:", errorData);
+        throw new Error(`Failed to ${isNew ? "create" : "update"} reservation`);
       }
+
       await loadData();
       setIsFormOpen(false);
       setSnackbar({
@@ -277,8 +311,30 @@ const ReservationCalendar: React.FC = () => {
 
     try {
       console.log("Calendar: Sending update request");
-      await updateReservation(updatedReservation);
-      await loadData();
+      const response = await fetch("/api/calendar-data", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify(updatedReservation),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error("Calendar: API error", errorData);
+        throw new Error("予約の更新に失敗しました");
+      }
+
+      const updatedData = await response.json();
+      console.log("Calendar: 更新成功", updatedData);
+
+      // ローカルの予約データを更新
+      setReservations((prevReservations) =>
+        prevReservations.map((res) =>
+          res.id === updatedData.id ? { ...res, ...updatedData } : res
+        )
+      );
 
       setIsEditFormOpen(false);
       setSnackbar({
@@ -308,10 +364,22 @@ const ReservationCalendar: React.FC = () => {
     }
 
     try {
-      // サーバーアクションを呼び出す
-      const result = await deleteReservation(reservationId);
+      const response = await fetch(`/api/calendar-data?id=${reservationId}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
 
-      if (result.success) {
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error("Error cancelling reservation:", errorData);
+        throw new Error("予約のキャンセルに失敗しました");
+      }
+
+      const data = await response.json();
+
+      if (data.success) {
         await loadData();
         setIsFormOpen(false);
         setIsDetailsOpen(false);
@@ -342,19 +410,30 @@ const ReservationCalendar: React.FC = () => {
     }
 
     try {
-      // サーバーアクションを呼び出す
-      const result = await deleteReservation(id);
-      if (result.success) {
-        await loadData();
-        setIsFormOpen(false);
-        setIsDetailsOpen(false);
-        setSnackbar({
-          message: "予約がキャンセルされました",
-          severity: "success",
-        });
-      } else {
+      // キャンセルAPIを呼び出す
+      const response = await fetch("/api/cancel-reservation", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          reservationId: id,
+          cancellationType: "cancelled",
+        }),
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error("Error cancelling reservation:", errorData);
         throw new Error("予約のキャンセルに失敗しました");
       }
+      await loadData();
+      setIsFormOpen(false);
+      setIsDetailsOpen(false);
+      setSnackbar({
+        message: "予約がキャンセルされました",
+        severity: "success",
+      });
     } catch (error) {
       console.error("Error in handleDeleteReservation:", error);
       setSnackbar({
@@ -384,8 +463,32 @@ const ReservationCalendar: React.FC = () => {
     }
 
     try {
-      // サーバーアクションを呼び出す
-      await createReservation({ ...data, is_staff_schedule: true });
+      const method = isNew ? "POST" : "PUT";
+      const scheduleData = {
+        ...data,
+        user_id: user.id,
+        is_staff_schedule: true,
+        total_price: 0,
+      };
+      console.log("Sending staff schedule data:", scheduleData); // 追加
+
+      const response = await fetch("/api/calendar-data", {
+        method: method,
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify(scheduleData),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error("API error:", errorData);
+        throw new Error(
+          `Failed to ${isNew ? "create" : "update"} staff schedule`
+        );
+      }
+
       await loadData();
       setIsStaffScheduleFormOpen(false);
       setSelectedStaffSchedule(null);
@@ -415,19 +518,25 @@ const ReservationCalendar: React.FC = () => {
     }
 
     try {
-      // サーバーアクションを呼び出す
-      const result = await deleteReservation(id);
-      if (result.success) {
-        await loadData();
-        setSelectedStaffSchedule(null);
-        setIsStaffScheduleFormOpen(false);
-        setSnackbar({
-          message: "スタッフスケジュールが削除されました",
-          severity: "success",
-        });
-      } else {
+      const response = await fetch(`/api/calendar-data?id=${id}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error("Error deleting staff schedule:", errorData);
         throw new Error("スタッフスケジュールの削除に失敗しました");
       }
+
+      await loadData();
+      setSelectedStaffSchedule(null);
+      setIsStaffScheduleFormOpen(false);
+      setSnackbar({
+        message: "スタッフスケジュールが削除されました",
+        severity: "success",
+      });
     } catch (error) {
       console.error("Error in handleDeleteStaffSchedule:", error);
       setSnackbar({
@@ -488,7 +597,7 @@ const ReservationCalendar: React.FC = () => {
 
     // 具体的な日付に基づいて休業日をマーク
     if (closedDays && closedDays.length > 0) {
-      closedDays.forEach((dateStr: string) => {
+      closedDays.forEach((dateStr) => {
         calendarApi.addEvent({
           title: "休業日",
           start: dateStr,
@@ -519,6 +628,7 @@ const ReservationCalendar: React.FC = () => {
       />
 
       {/* カレンダーセクション */}
+
       <CalendarView
         key={currentDate.format("YYYY-MM-DD")}
         reservations={reservations}
@@ -562,6 +672,19 @@ const ReservationCalendar: React.FC = () => {
           }}
           onSubmit={handleStaffScheduleFormSubmit}
           onDelete={handleDeleteStaffSchedule}
+          staffList={staffList}
+        />
+      )}
+      {isStaffScheduleFormOpen && (
+        <StaffScheduleForm
+          staffSchedule={selectedStaffSchedule}
+          isNew={!selectedStaffSchedule}
+          onClose={() => {
+            setIsStaffScheduleFormOpen(false);
+            setSelectedStaffSchedule(null);
+          }}
+          onSubmit={handleStaffScheduleFormSubmit}
+          onDelete={handleDeleteStaffSchedule} // 変更なし
           staffList={staffList}
         />
       )}

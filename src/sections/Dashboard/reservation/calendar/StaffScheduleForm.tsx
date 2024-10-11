@@ -42,8 +42,12 @@ const StaffScheduleForm: React.FC<StaffScheduleFormProps> = ({
     if (staffSchedule) {
       setFormData({
         ...staffSchedule,
-        start_time: staffSchedule.start_time ? moment.utc(staffSchedule.start_time).local().format('YYYY-MM-DDTHH:mm') : '',
-        end_time: staffSchedule.end_time ? moment.utc(staffSchedule.end_time).local().format('YYYY-MM-DDTHH:mm') : '',
+        start_time: staffSchedule.start_time
+          ? moment.utc(staffSchedule.start_time).local().format('YYYY-MM-DDTHH:mm')
+          : '',
+        end_time: staffSchedule.end_time
+          ? moment.utc(staffSchedule.end_time).local().format('YYYY-MM-DDTHH:mm')
+          : '',
         event: staffSchedule.event || '',
         staff_id: staffSchedule.staff_id || '',
         is_staff_schedule: true,
@@ -79,7 +83,7 @@ const StaffScheduleForm: React.FC<StaffScheduleFormProps> = ({
     }
   
     if (!formData.end_time) {
-      newErrors.end_time = '終了時間を入力してください。'; // 追加
+      newErrors.end_time = '終了時間を入力してください。';
     }
   
     if (formData.start_time && formData.end_time) {
@@ -100,16 +104,23 @@ const StaffScheduleForm: React.FC<StaffScheduleFormProps> = ({
     const updatedSchedule = {
       ...formData,
       event: formData.event || '予定あり',
-      start_time: formData.start_time ? moment(formData.start_time).utc().format() : '',
-      end_time: formData.end_time ? moment(formData.end_time).utc().format() : '',
+      start_time: formData.start_time
+        ? moment(formData.start_time).utc().format('YYYY-MM-DD HH:mm:ss')
+        : '',
+      end_time: formData.end_time
+        ? moment(formData.end_time).utc().format('YYYY-MM-DD HH:mm:ss')
+        : '',
       is_staff_schedule: true,
       status: 'staff',
     };
+    
   
-    console.log('Updated Schedule:', updatedSchedule);
+    console.log('Updated Schedule:', updatedSchedule); // ここで確認
   
     onSubmit(updatedSchedule, isNew);
   };
+  
+  
 
   return (
     <Dialog open={true} onOpenChange={onClose}>
