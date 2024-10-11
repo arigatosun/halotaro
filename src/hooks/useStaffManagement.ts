@@ -25,7 +25,7 @@ export function useStaffManagement(userId?: string) {
     try {
       setLoading(true);
       let query = supabase.from("staff").select("*");
-      
+
       if (userId) {
         // ユーザーIDが提供された場合、そのユーザーに関連するスタッフを取得
         query = query.eq("user_id", userId);
