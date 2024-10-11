@@ -414,26 +414,32 @@ export async function PUT(request: Request) {
   try {
     // 既存の予約データを取得
     const { data: existingReservation, error: fetchError } = await supabase
-      .from('reservations')
-      .select(`
-        *,
-        reservation_customers!fk_customer (
-          id, name, email, phone, name_kana
-        ),
-        menu_items (id, name, duration, price),
-        staff (id, name)
-      `)
-      .eq('id', id)
-      .maybeSingle();
-
-    if (fetchError) {
-      console.error('Error fetching existing reservation:', fetchError);
-      return NextResponse.json({ error: fetchError.message }, { status: 500 });
-    }
-
-    if (!existingReservation) {
-      return NextResponse.json({ error: 'Reservation not found' }, { status: 404 });
-    }
+    .from('reservations')
+    .select(`
+      *,
+      reservation_customers!fk_customer (
+        id, name, email, phone, name_kana
+      ),
+      menu_items (id, name, duration, price),
+      staff (id, name)
+    `)
+    .eq('id', id)
+    .maybeSingle();
+  
+  if (fetchError) {
+    console.error('Error fetching existing reservation:', fetchError);
+    return NextResponse.json({ error: fetchError.message }, { status: 500 });
+  }
+  
+  // Add this check after the fetchError check
+  if (!id) {
+    console.error('Reservation ID is undefined');
+    return NextResponse.json({ error: 'Reservation ID is required' }, { status: 400 });
+  }
+  
+  if (!existingReservation) {
+    return NextResponse.json({ error: 'Reservation not found' }, { status: 404 });
+  }
 
     // 顧客IDの取得（スタッフスケジュールの場合はnullの可能性あり）
     const customerId = existingReservation.reservation_customers?.id || null;
