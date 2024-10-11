@@ -6,8 +6,13 @@ import { cookies } from "next/headers";
 import { Reservation, Staff, MenuItem, BusinessHour } from '@/types/reservation';
 import moment from 'moment';
 import { createClient } from '@supabase/supabase-js';
+import * as Sentry from "@sentry/nextjs";
 
-// Supabase クライアントの初期化（サービスロールキーを使用）
+// ユーティリティのインポート
+import { sendReservationEmails, sendSyncErrorEmail } from '@/utils/email';
+import { sendReservationToAutomation } from '@/utils/automation';
+
+// Supabase サービスクライアントの初期化
 const supabaseService = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY! // サービスロールキーを使用
@@ -20,7 +25,7 @@ async function checkAuth(request: Request) {
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return { error: 'Missing or invalid authorization header', status: 401 };
   }
-  
+
   const token = authHeader.split(' ')[1];
   const { data: { user }, error } = await supabase.auth.getUser(token);
 
@@ -32,16 +37,189 @@ async function checkAuth(request: Request) {
   return { user };
 }
 
-export async function GET(request: Request) {
-  const authResult = await checkAuth(request);
-  if ('error' in authResult) {
-    return NextResponse.json({ error: authResult.error }, { status: authResult.status });
+// 予約データをフォーマットするヘルパー関数
+function formatReservation(reservation: any) {
+  return {
+    ...reservation,
+    customer_name: reservation.scraped_customer || reservation.reservation_customers?.name || 'Unknown',
+    customer_email: reservation.reservation_customers?.email || 'Unknown',
+    customer_phone: reservation.reservation_customers?.phone || 'Unknown',
+    customer_name_kana: reservation.reservation_customers?.name_kana || 'Unknown',
+    menu_name: reservation.menu_items?.name || 'Unknown',
+    staff_name: reservation.staff?.name || 'Unknown',
+    start_time: moment.utc(reservation.start_time).local().format(),
+    end_time: moment.utc(reservation.end_time).local().format(),
+    is_staff_schedule: reservation.is_staff_schedule || false,
+    editable: reservation.is_staff_schedule === true,
+  };
+}
+
+// 通知先のメールアドレスを取得するヘルパー関数
+async function getRecipientEmails(userId: string): Promise<string[]> {
+  const supabase = createRouteHandlerClient({ cookies });
+
+  let recipientEmailSet = new Set<string>();
+
+  // スタッフ通知用のメールアドレスを取得
+  const { data: staffNotificationEmails, error: staffEmailsError } =
+    await supabase
+      .from("staff_notification_emails")
+      .select("email_addresses")
+      .eq("user_id", userId)
+      .single();
+
+  if (staffEmailsError) {
+    console.error(
+      "Error fetching staff notification emails:",
+      staffEmailsError
+    );
+  } else if (
+    staffNotificationEmails &&
+    staffNotificationEmails.email_addresses
+  ) {
+    for (const email of staffNotificationEmails.email_addresses) {
+      recipientEmailSet.add(email);
+    }
   }
 
-  const supabase = createRouteHandlerClient({ cookies });
-  const userId = authResult.user.id;
+  // サロンオーナーのメールアドレスを取得
+  const { data: userData, error: userError } = await supabase
+    .from("user_view")
+    .select("email")
+    .eq("id", userId)
+    .single();
 
+  if (userError) {
+    console.error("Error fetching user email:", userError);
+    throw userError;
+  } else if (userData && userData.email) {
+    recipientEmailSet.add(userData.email);
+  } else {
+    console.error("Salon owner email not found");
+    throw new Error("サロンオーナーのメールアドレスが見つかりません");
+  }
+
+  return Array.from(recipientEmailSet);
+}
+
+// 予約後の処理（メール送信と自動化システム連携）を行うヘルパー関数
+async function handlePostReservationProcesses(userId: string, reservation: any) {
   try {
+    console.log("Attempting to send reservation emails...");
+
+    const baseUrl =
+      process.env.NODE_ENV === "development"
+        ? "http://localhost:3000"
+        : process.env.NEXT_PUBLIC_BASE_URL || "https://www.harotalo.com";
+
+    // 受信者のメールアドレスを取得
+    const recipientEmails = await getRecipientEmails(userId);
+
+    // 顧客情報と予約詳細を準備
+    const customerInfo = {
+      email: reservation.customer_email,
+      phone: reservation.customer_phone,
+    };
+    const reservationDetails = {
+      customerFullName: reservation.customer_name,
+      startTime: reservation.start_time,
+      endTime: reservation.end_time,
+      staffName: reservation.staff_name,
+      serviceName: reservation.menu_name,
+      totalPrice: reservation.total_price,
+      reservationId: reservation.id,
+    };
+
+    // 予約完了メールを送信
+    await sendReservationEmails(
+      customerInfo,
+      reservationDetails,
+      recipientEmails,
+      baseUrl
+    );
+
+    console.log("Emails sent successfully");
+  } catch (emailError) {
+    console.error("Error sending emails:", emailError);
+    // エラーを記録しますが、予約プロセスは中断しません
+  }
+
+  // 自動化システムとの連携処理
+  try {
+    const automationResponse = await sendReservationToAutomation({
+      userId: userId,
+      reservationId: reservation.id,
+      startTime: reservation.start_time,
+      endTime: reservation.end_time,
+      staffName: reservation.staff_name,
+      customerInfo: {
+        lastNameKanji: reservation.customer_name.split(' ')[0],
+        firstNameKanji: reservation.customer_name.split(' ')[1],
+        lastNameKana: reservation.customer_name_kana.split(' ')[0],
+        firstNameKana: reservation.customer_name_kana.split(' ')[1],
+      },
+      rsvTermHour: '0', // 必要に応じて調整
+      rsvTermMinute: '0', // 必要に応じて調整
+    });
+
+    if (!automationResponse.success) {
+      console.error("Automation sync failed:", automationResponse.error);
+
+      // Sentry にエラーを送信
+      Sentry.captureException(new Error(automationResponse.error), {
+        contexts: {
+          reservation: {
+            userId: userId,
+            reservationId: reservation.id,
+          },
+        },
+      });
+
+      // 同期エラーメールを送信
+      const recipientEmails = await getRecipientEmails(userId);
+      const formattedReservationData = {
+        customerName: reservation.customer_name,
+        startTime: reservation.start_time,
+        endTime: reservation.end_time,
+        staffName: reservation.staff_name,
+      };
+      await sendSyncErrorEmail(recipientEmails, automationResponse.error, formattedReservationData);
+    }
+  } catch (error: any) {
+    console.error("Error in sendReservationToAutomation:", error);
+
+    // Sentry にエラーを送信
+    Sentry.captureException(error, {
+      contexts: {
+        reservation: {
+          userId: userId,
+          reservationId: reservation.id,
+        },
+      },
+    });
+
+    // 同期エラーメールを送信
+    const recipientEmails = await getRecipientEmails(userId);
+    const formattedReservationData = {
+      customerName: reservation.customer_name,
+      startTime: reservation.start_time,
+      endTime: reservation.end_time,
+      staffName: reservation.staff_name,
+    };
+    await sendSyncErrorEmail(recipientEmails, error.message, formattedReservationData);
+  }
+}
+
+export async function GET(request: Request) {
+  try {
+    const authResult = await checkAuth(request);
+    if ('error' in authResult) {
+      return NextResponse.json({ error: authResult.error }, { status: authResult.status });
+    }
+
+    const supabase = createRouteHandlerClient({ cookies });
+    const userId = authResult.user.id;
+
     const { searchParams } = new URL(request.url);
     const startDateStr = searchParams.get('startDate');
     const endDateStr = searchParams.get('endDate');
@@ -54,17 +232,16 @@ export async function GET(request: Request) {
     const endDate = moment(endDateStr, 'YYYY-MM-DD').endOf('day').toISOString();
 
     // スタッフリストの取得
-const { data: staffList, error: staffError } = await supabase
-.from('staff')
-.select('id, name')
-.eq('user_id', userId) // ここでuser_idでフィルタリング
-.order('name', { ascending: true });
+    const { data: staffList, error: staffError } = await supabase
+      .from('staff')
+      .select('id, name')
+      .eq('user_id', userId)
+      .order('name', { ascending: true });
 
-if (staffError) {
-console.error('Error fetching staff list:', staffError);
-return NextResponse.json({ error: staffError.message }, { status: 500 });
-}
-
+    if (staffError) {
+      console.error('Error fetching staff list:', staffError);
+      return NextResponse.json({ error: staffError.message }, { status: 500 });
+    }
 
     // メニューリストの取得
     const { data: menuList, error: menuError } = await supabase
@@ -103,18 +280,7 @@ return NextResponse.json({ error: staffError.message }, { status: 500 });
     }
 
     // 予約データのフォーマット
-    const formattedReservations = reservations.map(reservation => ({
-      ...reservation,
-      customer_name: reservation.scraped_customer || reservation.reservation_customers?.name || 'Unknown',
-      customer_email: reservation.reservation_customers?.email || 'Unknown',
-      customer_phone: reservation.reservation_customers?.phone || 'Unknown',
-      customer_name_kana: reservation.reservation_customers?.name_kana || 'Unknown',
-      menu_name: reservation.menu_items?.name || 'Unknown',
-      staff_name: reservation.staff?.name || 'Unknown',
-      start_time: moment.utc(reservation.start_time).local().format(),
-      end_time: moment.utc(reservation.end_time).local().format(),
-      is_staff_schedule: reservation.is_staff_schedule || false,
-    }));
+    const formattedReservations = reservations.map(formatReservation);
 
     // サロンIDの取得
     const { data: salonData, error: salonError } = await supabase
@@ -200,246 +366,228 @@ return NextResponse.json({ error: staffError.message }, { status: 500 });
       businessHours: dateRange,
     });
   } catch (error) {
-    console.error('Unexpected error:', error);
+    console.error('Unexpected error in GET handler:', error);
     return NextResponse.json({ error: 'An unexpected error occurred' }, { status: 500 });
   }
 }
 
 export async function POST(request: Request) {
-  const authResult = await checkAuth(request);
-  if ('error' in authResult) {
-    return NextResponse.json({ error: authResult.error }, { status: authResult.status });
-  }
-
-  const supabase = createRouteHandlerClient({ cookies });
-  const data = await request.json();
-  console.log('Received data:', data);
-
-  const {
-    customer_name,
-    customer_email,
-    customer_phone,
-    customer_name_kana,
-    customer_last_name,
-    customer_first_name,
-    customer_last_name_kana,
-    customer_first_name_kana,
-    staff_id,
-    menu_id,
-    start_time,
-    end_time,
-    total_price,
-    is_staff_schedule, 
-    event,
-    payment_method,
-    payment_status,
-    payment_amount,
-    stripe_payment_intent_id,
-  } = data;
-
-  if (is_staff_schedule) {
-    // スタッフスケジュールの作成
-    try {
-      // バリデーション: end_time が必須
-      if (!end_time) {
-        return NextResponse.json({ error: 'end_time is required for staff schedule' }, { status: 400 });
-      }
-
-      // バリデーション: end_time が start_time より後
-      const startMoment = moment(start_time);
-      const endMoment = moment(end_time);
-      if (!endMoment.isAfter(startMoment)) {
-        return NextResponse.json({ error: 'end_time must be after start_time' }, { status: 400 });
-      }
-
-      // スタッフスケジュールの場合、顧客関連フィールドは除外
-      const insertData: Partial<Reservation> = {
-        user_id: authResult.user.id,
-        staff_id: staff_id || undefined,
-        start_time: start_time ? moment(start_time).utc().format('YYYY-MM-DD HH:mm:ss') : undefined,
-        end_time: end_time ? moment(end_time).utc().format('YYYY-MM-DD HH:mm:ss') : undefined,
-        status: 'staff',
-        total_price: 0,
-        is_staff_schedule: true,
-        event: event || '予定あり',
-        // 顧客関連フィールドはスタッフスケジュールには不要
-      };
-
-      console.log('Inserting staff schedule:', insertData); // 挿入前のデータログ
-
-      const { data: newSchedule, error: scheduleError } = await supabase
-        .from('reservations')
-        .insert(insertData)
-        .select(`
-          *,
-          reservation_customers!fk_customer (
-            id, name, email, phone, name_kana
-          ),
-          menu_items (id, name, duration, price),
-          staff (id, name)
-        `)
-        .single();
-
-      if (scheduleError) {
-        console.error('Error creating staff schedule:', scheduleError);
-        return NextResponse.json({ error: scheduleError.message }, { status: 500 });
-      }
-
-      // 予約データのフォーマット
-      const formattedSchedule = {
-        ...newSchedule,
-        customer_name: newSchedule.scraped_customer || newSchedule.reservation_customers?.name || 'Unknown',
-        customer_email: newSchedule.reservation_customers?.email || 'Unknown',
-        customer_phone: newSchedule.reservation_customers?.phone || 'Unknown',
-        customer_name_kana: newSchedule.reservation_customers?.name_kana || 'Unknown',
-        menu_name: newSchedule.menu_items?.name || 'Unknown',
-        staff_name: newSchedule.staff?.name || 'Unknown',
-        start_time: moment.utc(newSchedule.start_time).local().format(),
-        end_time: moment.utc(newSchedule.end_time).local().format(),
-        is_staff_schedule: newSchedule.is_staff_schedule || false,
-      };
-
-      return NextResponse.json(formattedSchedule);
-    } catch (error: any) {
-      console.error('Unexpected error during staff schedule creation:', error);
-      return NextResponse.json({ error: 'An unexpected error occurred' }, { status: 500 });
+  try {
+    const authResult = await checkAuth(request);
+    if ('error' in authResult) {
+      return NextResponse.json({ error: authResult.error }, { status: authResult.status });
     }
-  } else {
-    // 通常の予約作成時に create_reservation を使用
-    try {
-      // create_reservation 関数を呼び出すためのパラメータを準備
-      const rpcParams = {
-        p_user_id: authResult.user.id,
-        p_start_time: start_time ? moment(start_time).utc().format('YYYY-MM-DD HH:mm:ss') : null,
-        p_end_time: end_time ? moment(end_time).utc().format('YYYY-MM-DD HH:mm:ss') : null,
-        p_total_price: total_price || 0,
-        p_customer_name: customer_name,
-        p_customer_name_kana: customer_name_kana,
-        p_customer_email: customer_email,
-        p_customer_phone: customer_phone,
-        p_menu_id: menu_id ? parseInt(menu_id, 10) : null,
-        p_coupon_id: null, // 必要に応じて設定
-        p_staff_id: staff_id || null,
-        p_payment_method: payment_method || null,
-        p_payment_status: payment_status || null,
-        p_payment_amount: payment_amount || null,
-        p_stripe_payment_intent_id: stripe_payment_intent_id || null,
-      };
 
-      // Supabase クライアント（サービスロールキーを使用）を作成
-      const supabaseService = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY! // サービスロールキーを使用
-      );
+    const supabase = createRouteHandlerClient({ cookies });
+    const data = await request.json();
+    console.log('Received data:', data);
 
-      // create_reservation 関数を呼び出す
-      const { data: reservationData, error: reservationError } = await supabaseService.rpc(
-        'create_reservation',
-        rpcParams
-      );
+    const {
+      customer_name,
+      customer_email,
+      customer_phone,
+      customer_name_kana,
+      customer_last_name,
+      customer_first_name,
+      customer_last_name_kana,
+      customer_first_name_kana,
+      staff_id,
+      menu_id,
+      start_time,
+      end_time,
+      total_price,
+      is_staff_schedule,
+      event,
+      payment_method,
+      payment_status,
+      payment_amount,
+      stripe_payment_intent_id,
+    } = data;
 
-      if (reservationError) {
-        console.error('Error creating reservation:', reservationError);
-        return NextResponse.json({ error: reservationError.message }, { status: 500 });
+    const isStaffSchedule = is_staff_schedule ?? false;
+
+    if (isStaffSchedule) {
+      // スタッフスケジュールの作成
+      try {
+        // バリデーション: end_time が必須
+        if (!end_time) {
+          return NextResponse.json({ error: 'end_time is required for staff schedule' }, { status: 400 });
+        }
+
+        // バリデーション: end_time が start_time より後
+        const startMoment = moment(start_time);
+        const endMoment = moment(end_time);
+        if (!endMoment.isAfter(startMoment)) {
+          return NextResponse.json({ error: 'end_time must be after start_time' }, { status: 400 });
+        }
+
+        // スタッフスケジュールの場合、顧客関連フィールドは除外
+        const insertData: Partial<Reservation> = {
+          user_id: authResult.user.id,
+          staff_id: staff_id || undefined,
+          start_time: start_time ? moment(start_time).utc().format('YYYY-MM-DD HH:mm:ss') : undefined,
+          end_time: end_time ? moment(end_time).utc().format('YYYY-MM-DD HH:mm:ss') : undefined,
+          status: 'staff',
+          total_price: 0,
+          is_staff_schedule: true,
+          event: event || '予定あり',
+          // 顧客関連フィールドはスタッフスケジュールには不要
+        };
+
+        console.log('Inserting staff schedule:', insertData); // 挿入前のデータログ
+
+        const { data: newSchedule, error: scheduleError } = await supabase
+          .from('reservations')
+          .insert(insertData)
+          .select(`
+            *,
+            reservation_customers!fk_customer (
+              id, name, email, phone, name_kana
+            ),
+            menu_items (id, name, duration, price),
+            staff (id, name)
+          `)
+          .single();
+
+        if (scheduleError) {
+          console.error('Error creating staff schedule:', scheduleError);
+          return NextResponse.json({ error: scheduleError.message }, { status: 500 });
+        }
+
+        // 予約データのフォーマット
+        const formattedSchedule = formatReservation(newSchedule);
+
+        // メール送信と自動化システムの処理を実行
+        await handlePostReservationProcesses(authResult.user.id, formattedSchedule);
+
+        return NextResponse.json(formattedSchedule);
+      } catch (error: any) {
+        console.error('Unexpected error during staff schedule creation:', error);
+        return NextResponse.json({ error: 'An unexpected error occurred' }, { status: 500 });
       }
+    } else {
+      // 通常の予約作成時に create_reservation を使用
+      try {
+        // create_reservation 関数を呼び出すためのパラメータを準備
+        const rpcParams = {
+          p_user_id: authResult.user.id,
+          p_start_time: start_time ? moment(start_time).utc().format('YYYY-MM-DD HH:mm:ss') : null,
+          p_end_time: end_time ? moment(end_time).utc().format('YYYY-MM-DD HH:mm:ss') : null,
+          p_total_price: total_price || 0,
+          p_customer_name: customer_name,
+          p_customer_name_kana: customer_name_kana,
+          p_customer_email: customer_email,
+          p_customer_phone: customer_phone,
+          p_menu_id: menu_id ? parseInt(menu_id, 10) : null,
+          p_coupon_id: null, // 必要に応じて設定
+          p_staff_id: staff_id || null,
+          p_payment_method: payment_method || null,
+          p_payment_status: payment_status || null,
+          p_payment_amount: payment_amount || null,
+          p_stripe_payment_intent_id: stripe_payment_intent_id || null,
+        };
 
-      // 予約IDとreservation_customer_idの存在を確認
-      if (!reservationData || reservationData.length === 0 || !reservationData[0].reservation_id || !reservationData[0].reservation_customer_id) {
-        console.error("Reservation created but reservation_id or reservation_customer_id is missing", reservationData);
-        throw new Error("予約IDまたは予約顧客IDの取得に失敗しました");
+        // create_reservation 関数を呼び出す
+        const { data: reservationData, error: reservationError } = await supabaseService.rpc(
+          'create_reservation',
+          rpcParams
+        );
+
+        if (reservationError) {
+          console.error('Error creating reservation:', reservationError);
+          return NextResponse.json({ error: reservationError.message }, { status: 500 });
+        }
+
+        // 予約IDとreservation_customer_idの存在を確認
+        if (!reservationData || reservationData.length === 0 || !reservationData[0].reservation_id || !reservationData[0].reservation_customer_id) {
+          console.error("Reservation created but reservation_id or reservation_customer_id is missing", reservationData);
+          throw new Error("予約IDまたは予約顧客IDの取得に失敗しました");
+        }
+
+        const reservationId = reservationData[0].reservation_id;
+        const reservationCustomerId = reservationData[0].reservation_customer_id;
+
+        console.log("Created reservation ID:", reservationId);
+        console.log("Created reservation customer ID:", reservationCustomerId);
+
+        // 作成された予約情報を取得
+        const { data: newReservation, error: fetchError } = await supabase
+          .from('reservations')
+          .select(`
+            *,
+            reservation_customers!fk_customer (
+              id, name, email, phone, name_kana
+            ),
+            menu_items (id, name, duration, price),
+            staff (id, name)
+          `)
+          .eq('id', reservationId)
+          .single();
+
+        if (fetchError) {
+          console.error('Error fetching new reservation:', fetchError);
+          return NextResponse.json({ error: fetchError.message }, { status: 500 });
+        }
+
+        // フォーマット処理
+        const formattedReservation = formatReservation(newReservation);
+
+        // メール送信と自動化システムの処理を実行
+        await handlePostReservationProcesses(authResult.user.id, formattedReservation);
+
+        // 成功レスポンスを返す
+        return NextResponse.json(formattedReservation);
+      } catch (error: any) {
+        console.error("Error saving reservation:", error);
+        return NextResponse.json({ error: error.message }, { status: 400 });
       }
-
-      const reservationId = reservationData[0].reservation_id;
-      const reservationCustomerId = reservationData[0].reservation_customer_id;
-
-      console.log("Created reservation ID:", reservationId);
-      console.log("Created reservation customer ID:", reservationCustomerId);
-
-      // 作成された予約情報を取得
-      const { data: newReservation, error: fetchError } = await supabase
-        .from('reservations')
-        .select(`
-          *,
-          reservation_customers!fk_customer (
-            id, name, email, phone, name_kana
-          ),
-          menu_items (id, name, duration, price),
-          staff (id, name)
-        `)
-        .eq('id', reservationId)
-        .single();
-
-      if (fetchError) {
-        console.error('Error fetching new reservation:', fetchError);
-        return NextResponse.json({ error: fetchError.message }, { status: 500 });
-      }
-
-      // フォーマット処理
-      const formattedReservation = {
-        ...newReservation,
-        customer_name: newReservation.scraped_customer || newReservation.reservation_customers?.name || 'Unknown',
-        customer_email: newReservation.reservation_customers?.email || 'Unknown',
-        customer_phone: newReservation.reservation_customers?.phone || 'Unknown',
-        customer_name_kana: newReservation.reservation_customers?.name_kana || 'Unknown',
-        menu_name: newReservation.menu_items?.name || 'Unknown',
-        staff_name: newReservation.staff?.name || 'Unknown',
-        start_time: moment.utc(newReservation.start_time).local().format(),
-        end_time: moment.utc(newReservation.end_time).local().format(),
-        is_staff_schedule: newReservation.is_staff_schedule || false,
-      };
-
-      // 必要に応じて、支払い情報やメール送信処理を追加
-
-      // 成功レスポンスを返す
-      return NextResponse.json(formattedReservation);
-    } catch (error: any) {
-      console.error("Error saving reservation:", error);
-      return NextResponse.json({ error: error.message }, { status: 400 });
     }
+  } catch (error: any) {
+    console.error('Unexpected error in POST handler:', error);
+    return NextResponse.json({ error: 'An unexpected error occurred' }, { status: 500 });
   }
 }
 
 export async function PUT(request: Request) {
-  const authResult = await checkAuth(request);
-  if ('error' in authResult) {
-    return NextResponse.json({ error: authResult.error }, { status: authResult.status });
-  }
-
-  const supabase = createRouteHandlerClient({ cookies });
-  const data = await request.json();
-  console.log('Received data for update:', data);
-
-  const { id, ...updateFields } = data;
-
   try {
+    const authResult = await checkAuth(request);
+    if ('error' in authResult) {
+      return NextResponse.json({ error: authResult.error }, { status: authResult.status });
+    }
+
+    const supabase = createRouteHandlerClient({ cookies });
+    const data = await request.json();
+    console.log('Received data for update:', data);
+
+    const { id, ...updateFields } = data;
+
+    if (!id) {
+      console.error('Reservation ID is undefined');
+      return NextResponse.json({ error: 'Reservation ID is required' }, { status: 400 });
+    }
+
     // 既存の予約データを取得
     const { data: existingReservation, error: fetchError } = await supabase
-    .from('reservations')
-    .select(`
-      *,
-      reservation_customers!fk_customer (
-        id, name, email, phone, name_kana
-      ),
-      menu_items (id, name, duration, price),
-      staff (id, name)
-    `)
-    .eq('id', id)
-    .maybeSingle();
-  
-  if (fetchError) {
-    console.error('Error fetching existing reservation:', fetchError);
-    return NextResponse.json({ error: fetchError.message }, { status: 500 });
-  }
-  
-  // Add this check after the fetchError check
-  if (!id) {
-    console.error('Reservation ID is undefined');
-    return NextResponse.json({ error: 'Reservation ID is required' }, { status: 400 });
-  }
-  
-  if (!existingReservation) {
-    return NextResponse.json({ error: 'Reservation not found' }, { status: 404 });
-  }
+      .from('reservations')
+      .select(`
+        *,
+        reservation_customers!fk_customer (
+          id, name, email, phone, name_kana
+        ),
+        menu_items (id, name, duration, price),
+        staff (id, name)
+      `)
+      .eq('id', id)
+      .maybeSingle();
+
+    if (fetchError) {
+      console.error('Error fetching existing reservation:', fetchError);
+      return NextResponse.json({ error: fetchError.message }, { status: 500 });
+    }
+
+    if (!existingReservation) {
+      return NextResponse.json({ error: 'Reservation not found' }, { status: 404 });
+    }
 
     // 顧客IDの取得（スタッフスケジュールの場合はnullの可能性あり）
     const customerId = existingReservation.reservation_customers?.id || null;
@@ -533,22 +681,14 @@ export async function PUT(request: Request) {
     }
 
     // フォーマット処理
-    const formattedReservation = {
-      ...updatedReservation,
-      customer_name: updatedReservation.scraped_customer || updatedReservation.reservation_customers?.name || 'Unknown',
-      customer_email: updatedReservation.reservation_customers?.email || 'Unknown',
-      customer_phone: updatedReservation.reservation_customers?.phone || 'Unknown',
-      customer_name_kana: updatedReservation.reservation_customers?.name_kana || 'Unknown',
-      menu_name: updatedReservation.menu_items?.name || 'Unknown',
-      staff_name: updatedReservation.staff?.name || 'Unknown',
-      start_time: moment.utc(updatedReservation.start_time).local().format(),
-      end_time: moment.utc(updatedReservation.end_time).local().format(),
-      is_staff_schedule: updatedReservation.is_staff_schedule || false,
-    };
+    const formattedReservation = formatReservation(updatedReservation);
+
+    // メール送信と自動化システムの処理を実行
+    await handlePostReservationProcesses(authResult.user.id, formattedReservation);
 
     console.log('Reservation updated:', formattedReservation);
     return NextResponse.json(formattedReservation);
-  } catch (error: unknown) {
+  } catch (error: any) {
     console.error('Unexpected error during reservation update:', error);
     const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
     return NextResponse.json({ error: errorMessage }, { status: 500 });
@@ -556,21 +696,21 @@ export async function PUT(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const authResult = await checkAuth(request);
-  if ('error' in authResult) {
-    return NextResponse.json({ error: authResult.error }, { status: authResult.status });
-  }
-
-  const supabase = createRouteHandlerClient({ cookies });
-  const { searchParams } = new URL(request.url);
-  const reservationId = searchParams.get('id');
-
-  if (!reservationId) {
-    console.error('DELETE request received without ID');
-    return NextResponse.json({ error: 'ID is required' }, { status: 400 });
-  }
-
   try {
+    const authResult = await checkAuth(request);
+    if ('error' in authResult) {
+      return NextResponse.json({ error: authResult.error }, { status: authResult.status });
+    }
+
+    const supabase = createRouteHandlerClient({ cookies });
+    const { searchParams } = new URL(request.url);
+    const reservationId = searchParams.get('id');
+
+    if (!reservationId) {
+      console.error('DELETE request received without ID');
+      return NextResponse.json({ error: 'ID is required' }, { status: 400 });
+    }
+
     // 予約の取得（is_staff_schedule を含めるように修正）
     const { data: reservation, error: fetchError } = await supabase
       .from('reservations')
@@ -627,9 +767,21 @@ export async function DELETE(request: Request) {
       }
 
       console.log(`Reservation ${reservationId} status updated to ${newStatus}`);
+
+      // メール送信と自動化システムの処理を実行
+      // 予約データの詳細を取得する必要がある場合は、追加でデータを取得してください
+      // ここでは既存のデータを使用していると仮定しています
+      const formattedReservation = {
+        id: reservationId,
+        status: newStatus,
+        // 必要に応じて他のフィールドを追加
+      };
+
+      await handlePostReservationProcesses(authResult.user.id, formattedReservation);
+
       return NextResponse.json({ success: true, status: newStatus });
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('Unexpected error during reservation cancellation:', error);
     return NextResponse.json({ error: 'An unexpected error occurred' }, { status: 500 });
   }

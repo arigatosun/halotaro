@@ -1,5 +1,3 @@
-// src/sections/Dashboard/reservation/calendar/ReservationCalendar.tsx
-
 "use client";
 
 import React, { useState, useRef, useEffect } from 'react';
@@ -113,7 +111,8 @@ const ReservationCalendar: React.FC = () => {
     start: Date | null,
     end: Date | null,
     staffId: string,
-    excludeReservationId?: string
+    excludeReservationId?: string,
+    isStaffSchedule?: boolean
   ): boolean => {
     if (!start || !end) return false;
 
@@ -123,6 +122,12 @@ const ReservationCalendar: React.FC = () => {
       // キャンセルされた予約を除外
       const excludedStatuses = ['cancelled', 'salon_cancelled', 'same_day_cancelled', 'no_show'];
       if (res.status && excludedStatuses.includes(res.status)) return false;
+
+      // スタッフスケジュールを移動する場合、他のスタッフスケジュールとの重複は無視
+      if (isStaffSchedule && res.is_staff_schedule) return false;
+      // 通常の予約を移動する場合、スタッフスケジュールとの重複を無視するかどうか
+      if (!isStaffSchedule && res.is_staff_schedule) return false;
+
       const resStart = moment.utc(res.start_time).local();
       const resEnd = moment.utc(res.end_time).local();
       const newStart = moment(start).local();
@@ -136,13 +141,14 @@ const ReservationCalendar: React.FC = () => {
     if (!user) return;
 
     const eventData = dropInfo.event.extendedProps as Reservation;
+    const isStaffSchedule = eventData.is_staff_schedule;
     const newStart = dropInfo.event.start;
     const newEnd = dropInfo.event.end;
     const staffId = dropInfo.newResource?.id || dropInfo.event.getResources()[0]?.id;
     const reservationId = eventData.id;
     
     // 重複チェック
-    if (isSlotOverlapping(newStart, newEnd, staffId, reservationId)) {
+    if (isSlotOverlapping(newStart, newEnd, staffId, reservationId, isStaffSchedule)) {
       dropInfo.revert();
       setSnackbar({ message: 'この時間帯は既に予約が入っています', severity: 'error' });
       return;

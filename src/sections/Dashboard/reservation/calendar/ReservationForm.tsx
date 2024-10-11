@@ -9,6 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { BusinessHour, Reservation, Staff, MenuItem as MenuItemType } from '@/types/reservation';
 import moment from 'moment';
 import { Alert, Snackbar } from '@mui/material';
+// ScrollArea のインポートを削除しました
+// import * as ScrollArea from '@radix-ui/react-scroll-area';
 
 interface FormDataType {
   customer_first_name?: string;
@@ -81,7 +83,7 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
         customer_first_name: firstName,
         customer_last_name_kana: lastNameKana,
         customer_first_name_kana: firstNameKana,
-        menu_id: reservation.menu_id, // そのまま設定
+        menu_id: reservation.menu_id,
         staff_id: reservation.staff_id,
       });
 
@@ -90,7 +92,7 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
         setSelectedDate(startMoment.toDate());
         setSelectedTimeSlot(startMoment.format('HH:mm'));
         if (reservation.menu_id) {
-          const selectedMenu = menuList.find(menu => menu.id === reservation.menu_id); // 比較を修正
+          const selectedMenu = menuList.find(menu => menu.id === reservation.menu_id);
           if (selectedMenu) {
             const endMoment = startMoment.clone().add(selectedMenu.duration, 'minutes');
             setComputedEndTime(endMoment.format('YYYY-MM-DDTHH:mm'));
@@ -230,7 +232,6 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
       customer_name,
       customer_name_kana,
       start_time: formData.start_time ? moment(formData.start_time).utc().format() : undefined,
-      // formTypeに応じてend_timeを設定
       end_time: formType === 'reservation'
         ? (computedEndTime ? moment(computedEndTime).utc().format() : undefined)
         : (formData.end_time ? moment(formData.end_time).utc().format() : undefined),
@@ -240,8 +241,7 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
 
     // スタッフスケジュールの場合、顧客関連フィールドを除外
     if (formType === 'staffSchedule') {
-      // 顧客関連フィールドは既に設定されていないため、特に追加の処理は不要
-      // 今回の修正ではスプレッド演算子を使用しないため、不要なフィールドが含まれない
+      // 特に追加の処理は不要
     }
 
     // デバッグ用ログ
@@ -270,15 +270,15 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               {!hideReservationType && (
-                 <div className="space-y-2 col-span-2"> {/* Changed to col-span-2 */}
-                 <Label htmlFor="form-type">予約タイプ</Label>
-                 <Select
+                <div className="space-y-2 col-span-2">
+                  <Label htmlFor="form-type">予約タイプ</Label>
+                  <Select
                     value={formType}
                     onValueChange={(value: 'reservation' | 'staffSchedule') => setFormType(value)}
                   >
-                    <SelectTrigger className="w-full"> {/* Added w-full class */}
-                    <SelectValue placeholder="予約タイプを選択" />
-                  </SelectTrigger>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="予約タイプを選択" />
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="reservation">通常の予約</SelectItem>
                       <SelectItem value="staffSchedule">スタッフスケジュール</SelectItem>
@@ -287,11 +287,9 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
                 </div>
               )}
               {formType === 'reservation' ? (
-                // Reservation form
-                <> {/* スタッフの選択 */}
-                
-
-                  {/* 顧客名の入力 (姓) */}
+                // 予約フォーム
+                <>
+                  {/* 顧客名（姓） */}
                   <div className="space-y-2">
                     <Label htmlFor="customer_last_name">顧客名（姓）</Label>
                     <Input
@@ -302,7 +300,7 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
                     />
                   </div>
 
-                  {/* 顧客名の入力 (名) */}
+                  {/* 顧客名（名） */}
                   <div className="space-y-2">
                     <Label htmlFor="customer_first_name">顧客名（名）</Label>
                     <Input
@@ -313,7 +311,7 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
                     />
                   </div>
 
-                  {/* 顧客名（カナ）の入力 (姓) */}
+                  {/* 顧客名（カナ・姓） */}
                   <div className="space-y-2">
                     <Label htmlFor="customer_last_name_kana">顧客名（カナ・姓）</Label>
                     <Input
@@ -324,7 +322,7 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
                     />
                   </div>
 
-                  {/* 顧客名（カナ）の入力 (名) */}
+                  {/* 顧客名（カナ・名） */}
                   <div className="space-y-2">
                     <Label htmlFor="customer_first_name_kana">顧客名（カナ・名）</Label>
                     <Input
@@ -335,7 +333,7 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
                     />
                   </div>
 
-                  {/* メールアドレスの入力 */}
+                  {/* メールアドレス */}
                   <div className="space-y-2">
                     <Label htmlFor="customer_email">メールアドレス</Label>
                     <Input
@@ -347,7 +345,7 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
                     />
                   </div>
 
-                  {/* 電話番号の入力 */}
+                  {/* 電話番号 */}
                   <div className="space-y-2">
                     <Label htmlFor="customer_phone">電話番号</Label>
                     <Input
@@ -358,48 +356,54 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
                     />
                   </div>
 
+                  {/* 担当スタッフ */}
                   <div className="space-y-2">
-                  <Label htmlFor="staff_id">担当スタッフ</Label>
-                  <Select
-                    value={formData.staff_id || ''}
-                    onValueChange={(value) => handleChange('staff_id', value)}
-                    required
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="スタッフを選択" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {staffList.map((staff) => (
-                        <SelectItem key={staff.id} value={staff.id}>
-                          {staff.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                  {/* メニューの選択 */}
-                  <div className="space-y-2">
-                    <Label htmlFor="menu_id">メニュー</Label>
+                    <Label htmlFor="staff_id">担当スタッフ</Label>
                     <Select
-                      value={formData.menu_id?.toString() || ''} // 文字列に変換
-                      onValueChange={(value) => handleChange('menu_id', value)}
+                      value={formData.staff_id || ''}
+                      onValueChange={(value) => handleChange('staff_id', value)}
                       required
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="メニューを選択" />
+                        <SelectValue placeholder="スタッフを選択" />
                       </SelectTrigger>
                       <SelectContent>
-                        {menuList.map((menu) => (
-                          <SelectItem key={menu.id} value={menu.id.toString()}>
-                            {menu.name} ({menu.duration}分)
+                        {staffList.map((staff) => (
+                          <SelectItem key={staff.id} value={staff.id}>
+                            {staff.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
 
-                  {/* 選択したメニューの価格表示 */}
+                  {/* メニューの選択 */}
+                  <div className="space-y-2">
+                    <Label htmlFor="menu_id">メニュー</Label>
+                    <Select
+                      value={formData.menu_id?.toString() || ''}
+                      onValueChange={(value) => handleChange('menu_id', value)}
+                      required
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="メニューを選択" />
+                      </SelectTrigger>
+                      <SelectContent
+  side="bottom"
+  onWheelCapture={(e) => {
+    e.stopPropagation();
+  }}
+>
+  {menuList.map((menu) => (
+    <SelectItem key={menu.id} value={menu.id.toString()}>
+      {menu.name} ({menu.duration}分)
+    </SelectItem>
+  ))}
+</SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* メニューの価格表示 */}
                   {selectedMenuPrice > 0 && (
                     <div className="space-y-2">
                       <Label>メニューの価格</Label>
@@ -407,8 +411,7 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
                     </div>
                   )}
 
-
-                  {/* 日付の選択 */}
+                  {/* 予約日 */}
                   <div className="space-y-2">
                     <Label>予約日</Label>
                     <Input
@@ -419,7 +422,7 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
                     />
                   </div>
 
-                  {/* 予約可能な時間帯の表示 */}
+                  {/* 予約可能な時間帯 */}
                   {availableTimes.length > 0 ? (
                     <div className="space-y-2">
                       <Label>予約可能な時間帯</Label>
@@ -439,7 +442,7 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
                   ) : selectedDate && formData.staff_id && formData.menu_id ? (
                     <p>この日に予約可能な時間帯はありません。</p>
                   ) : null}
-                  
+
                   {/* 選択した時間帯の表示 */}
                   {selectedTimeSlot && (
                     <div className="space-y-2">
@@ -460,9 +463,9 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
                   )}
                 </>
               ) : (
-                // Staff Schedule Form
+                // スタッフスケジュールフォーム
                 <>
-                  {/* スタッフの選択 */}
+                  {/* 担当スタッフ */}
                   <div className="space-y-2">
                     <Label htmlFor="staff_id">担当スタッフ</Label>
                     <Select
