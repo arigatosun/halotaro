@@ -185,7 +185,10 @@ const SubHeader: React.FC<{ pathname: string }> = ({ pathname }) => {
       { href: "/dashboard/sales/sales-details", label: "売上明細" },
       { href: "/dashboard/sales/closing", label: "レジ締め" },
       { href: "/dashboard/sales/closing-list", label: "レジ締め一覧" },
-      { href: "/dashboard/sales/withdrawal", label: "Stripeダッシュボード" },
+      {
+        href: "https://dashboard.stripe.com/login",
+        label: "Stripeダッシュボード",
+      },
     ],
     "/dashboard/settings": [
       { href: "/dashboard/settings", label: "基本設定" },

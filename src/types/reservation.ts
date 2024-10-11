@@ -18,6 +18,7 @@ export interface Reservation {
   menu_name?: string; // 追加
   staff_name?: string; // 追加
   is_closed_day?: boolean; // 追加（休業日用）
+  editable?: boolean; // この行を追加
   // その他のフィールドがある場合はここに追加
 }
 
