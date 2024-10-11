@@ -102,19 +102,21 @@ const CancelReservationContent = ({ reservationId }: { reservationId: string }) 
         
         console.log('Days until reservation:', daysDiff);
   
-        // ポリシーを日数で降順にソート
-        const sortedPolicies = policyData.policies.sort((a: CancelPolicy, b: CancelPolicy) => b.days - a.days);
+        // ポリシーを日数で昇順にソート
+        const sortedPolicies = policyData.policies.sort((a: CancelPolicy, b: CancelPolicy) => a.days - b.days);
   
         // 適用可能なポリシーを見つける
-        let applicablePolicy = sortedPolicies.find((policy: CancelPolicy) => daysDiff >= policy.days);
-        
-        // 適用可能なポリシーが見つからない場合、最も小さい `days` のポリシーを適用
-        if (!applicablePolicy) {
-          applicablePolicy = sortedPolicies[sortedPolicies.length - 1];
+        let applicablePolicy: CancelPolicy | null = null;
+
+        for (let policy of sortedPolicies) {
+          if (daysDiff <= policy.days) {
+            applicablePolicy = policy;
+            break; // 適用可能なポリシーを見つけたらループを終了
+          }
         }
-        
+
         console.log('Applicable policy:', applicablePolicy);
-        setAppliedPolicy(applicablePolicy || null);
+        setAppliedPolicy(applicablePolicy);
   
         const feePercentage = applicablePolicy ? applicablePolicy.feePercentage : 0;
         const calculatedFee = (reservationData.total_price * feePercentage) / 100;
@@ -233,16 +235,23 @@ const CancelReservationContent = ({ reservationId }: { reservationId: string }) 
             <Clock className="mr-2" />
             <p>予約までの日数: {daysUntilReservation}日</p>
           </div>
-          {appliedPolicy && (
+          {appliedPolicy ? (
+            <>
+              <div className="flex items-center">
+                <AlertTriangle className="mr-2" />
+                <p>適用されたポリシー: {appliedPolicy.days}日前までのキャンセル料 {appliedPolicy.feePercentage}%</p>
+              </div>
+              <div className="flex items-center font-bold">
+                <AlertTriangle className="mr-2" />
+                <p>キャンセル料: ¥{cancellationFee.toLocaleString()} ({(cancellationFee / reservation.total_price * 100).toFixed(1)}%)</p>
+              </div>
+            </>
+          ) : (
             <div className="flex items-center">
               <AlertTriangle className="mr-2" />
-              <p>適用されたポリシー: {appliedPolicy.days}日前までのキャンセル料 {appliedPolicy.feePercentage}%</p>
+              <p>キャンセル料は発生しません。</p>
             </div>
           )}
-          <div className="flex items-center font-bold">
-            <AlertTriangle className="mr-2" />
-            <p>キャンセル料: ¥{cancellationFee.toLocaleString()} ({(cancellationFee / reservation.total_price * 100).toFixed(1)}%)</p>
-          </div>
         </CardContent>
         <CardFooter>
           <Button onClick={() => setShowConfirmDialog(true)} className="w-full">予約をキャンセルする</Button>
@@ -255,7 +264,11 @@ const CancelReservationContent = ({ reservationId }: { reservationId: string }) 
             <DialogTitle>予約キャンセルの確認</DialogTitle>
             <DialogDescription>
               本当に予約をキャンセルしますか？<br />
-              キャンセル料: ¥{cancellationFee.toLocaleString()}
+              {appliedPolicy ? (
+                <>キャンセル料: ¥{cancellationFee.toLocaleString()}</>
+              ) : (
+                <>キャンセル料は発生しません。</>
+              )}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
