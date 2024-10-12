@@ -408,7 +408,7 @@ const CustomerListPage: React.FC = () => {
                     className="cursor-pointer"
                     onClick={() => requestSort("visits")}
                   >
-                    来店回数{" "}
+                    予約回数{" "}
                     {sortConfig?.key === "visits" &&
                       (sortConfig.direction === "ascending" ? (
                         <ChevronUp className="inline" />

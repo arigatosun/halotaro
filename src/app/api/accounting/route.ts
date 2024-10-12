@@ -10,6 +10,56 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 // Supabaseクライアントをサーバーサイドで作成
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+export async function GET(req: NextRequest) {
+  try {
+    // クエリパラメータからreservationIdを取得
+    const { searchParams } = new URL(req.url);
+    const reservationId = searchParams.get("reservationId");
+
+    if (!reservationId) {
+      return NextResponse.json({ error: "reservationId is required" }, { status: 400 });
+    }
+
+    // AuthorizationヘッダーからBearerトークンを取得
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const token = authHeader.split("Bearer ")[1];
+
+    // トークンからユーザー情報を取得
+    const { data: userData, error: authError } = await supabase.auth.getUser(token);
+
+    if (authError || !userData.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const userId = userData.user.id;
+
+    // 一時保存データを取得
+    const { data: accountingData, error: fetchError } = await supabase
+      .from("accounting_information")
+      .select("*")
+      .eq("reservation_id", reservationId)
+      .eq("is_temporary", true)
+      .eq("user_id", userId)
+      .single();
+
+    if (fetchError) {
+      if (fetchError.code === "PGRST116") { // データが見つからない場合
+        return NextResponse.json({ error: "No temporary accounting data found" }, { status: 404 });
+      }
+      throw fetchError;
+    }
+
+    return NextResponse.json(accountingData, { status: 200 });
+  } catch (error: any) {
+    console.error("一時保存データの取得エラー:", error);
+    return NextResponse.json({ error: error.message || "一時保存データの取得に失敗しました" }, { status: 500 });
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     // AuthorizationヘッダーからBearerトークンを取得

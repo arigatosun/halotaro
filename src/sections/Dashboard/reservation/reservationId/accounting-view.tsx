@@ -1,6 +1,7 @@
 // accounting-view.tsx
 "use client";
-import React, { useState, useEffect } from "react";
+
+import React, { useState, useEffect, useRef } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -164,17 +165,24 @@ export const AccountingPage: React.FC<AccountingPageProps> = ({
 
   const userId = user?.id;
 
-  useEffect(() => {
-    const newTotal = items.reduce(
-      (sum, item) => sum + item.price * item.quantity,
-      0
-    );
-    setTotal(newTotal);
-  }, [items]);
+  // フラグを設定して一度だけフェッチする
+  const fetchReservationRef = useRef<boolean>(false);
+  const fetchStaffRef = useRef<boolean>(false);
+  const fetchMenuItemsRef = useRef<boolean>(false);
+  const fetchTemporarySaveRef = useRef<boolean>(false);
 
   useEffect(() => {
+    if (authLoading) return;
+    if (!user || !session) {
+      // ユーザーがログインしていない場合の処理
+      return;
+    }
+
+    if (fetchReservationRef.current) return; // 既にフェッチ済みの場合は実行しない
+    fetchReservationRef.current = true;
+
     const fetchReservation = async () => {
-      if (!reservationId || !userId || !session?.access_token) return;
+      if (!reservationId || !userId || !session.access_token) return;
 
       try {
         const response = await fetch(`/api/reservations/${reservationId}`, {
@@ -187,31 +195,42 @@ export const AccountingPage: React.FC<AccountingPageProps> = ({
           throw new Error("予約情報の取得に失敗しました");
         }
 
-        const data: Reservation = await response.json();
-        setReservation(data);
+        const data: { reservation: Reservation; accountingData?: any } = await response.json();
+        setReservation(data.reservation);
 
-        if (data.reservation_customers) {
-          setCustomerName(data.reservation_customers.name);
+        if (data.reservation.reservation_customers) {
+          setCustomerName(data.reservation.reservation_customers.name);
         } else {
           setCustomerName("不明");
         }
 
-        if (data.menu_items) {
-          const menuItem: MenuItem = data.menu_items;
+        if (data.reservation.menu_items) {
+          const menuItem: MenuItem = data.reservation.menu_items;
           const newItem: Item = {
             id: menuItem.id.toString(),
             category: "施術",
             name: menuItem.name,
-            staff: data.staff?.name || selectedStaff,
+            staff: data.reservation.staff?.name || selectedStaff,
             price: menuItem.price,
             quantity: 1,
           };
           setItems([newItem]);
         }
 
-        if (data.staff) {
-          setSelectedStaff(data.staff.name);
-          setSelectedCashier(data.staff.name);
+        if (data.reservation.staff) {
+          setSelectedStaff(data.reservation.staff.name);
+          setSelectedCashier(data.reservation.staff.name);
+        }
+
+        // 一時保存データが存在する場合は設定
+        if (data.accountingData) {
+          const tempData = data.accountingData;
+          setCustomerName(tempData.customer_name);
+          setItems(tempData.items);
+          setSelectedStaff(tempData.staff_name);
+          setSelectedCashier(tempData.cashier_name);
+          setPaymentMethods(tempData.payment_methods);
+          setTotal(tempData.total_price);
         }
       } catch (error) {
         console.error("予約情報の取得エラー:", error);
@@ -219,11 +238,20 @@ export const AccountingPage: React.FC<AccountingPageProps> = ({
     };
 
     fetchReservation();
-  }, [reservationId, userId, session?.access_token]);
+  }, [user, session, authLoading, reservationId, userId, selectedStaff]);
 
   useEffect(() => {
+    if (authLoading) return;
+    if (!user || !session) {
+      // ユーザーがログインしていない場合の処理
+      return;
+    }
+
+    if (fetchStaffRef.current) return; // 既にフェッチ済みの場合は実行しない
+    fetchStaffRef.current = true;
+
     const fetchStaff = async () => {
-      if (!userId || !session?.access_token) return;
+      if (!userId || !session.access_token) return;
 
       try {
         const response = await fetch("/api/staff", {
@@ -249,11 +277,20 @@ export const AccountingPage: React.FC<AccountingPageProps> = ({
     };
 
     fetchStaff();
-  }, [userId, session?.access_token, selectedStaff]);
+  }, [user, session, authLoading, userId, selectedStaff]);
 
   useEffect(() => {
+    if (authLoading) return;
+    if (!user || !session) {
+      // ユーザーがログインしていない場合の処理
+      return;
+    }
+
+    if (fetchMenuItemsRef.current) return; // 既にフェッチ済みの場合は実行しない
+    fetchMenuItemsRef.current = true;
+
     const fetchMenuItems = async () => {
-      if (!userId || !session?.access_token) return;
+      if (!userId || !session.access_token) return;
 
       try {
         const response = await fetch("/api/menu-items", {
@@ -293,12 +330,20 @@ export const AccountingPage: React.FC<AccountingPageProps> = ({
     };
 
     fetchMenuItems();
-  }, [userId, session?.access_token, selectedCategory]);
+  }, [user, session, authLoading, userId, selectedCategory]);
 
-  // 一時保存データの取得
   useEffect(() => {
+    if (authLoading) return;
+    if (!user || !session) {
+      // ユーザーがログインしていない場合の処理
+      return;
+    }
+
+    if (fetchTemporarySaveRef.current) return; // 既にフェッチ済みの場合は実行しない
+    fetchTemporarySaveRef.current = true;
+
     const fetchTemporarySave = async () => {
-      if (!reservationId || !userId || !session?.access_token) return;
+      if (!reservationId || !userId || !session.access_token) return;
 
       try {
         const response = await fetch(`/api/accounting?reservationId=${reservationId}`, {
@@ -308,19 +353,22 @@ export const AccountingPage: React.FC<AccountingPageProps> = ({
         });
 
         if (!response.ok) {
+          if (response.status === 404) {
+            console.log("一時保存データが存在しません");
+            return;
+          }
           throw new Error("一時保存データの取得に失敗しました");
         }
 
         const result = await response.json();
 
-        if (result.data) {
-          const tempData = result.data;
-          setCustomerName(tempData.customer_name);
-          setItems(tempData.items);
-          setSelectedStaff(tempData.staff_name);
-          setSelectedCashier(tempData.cashier_name);
-          setPaymentMethods(tempData.payment_methods);
-          setTotal(tempData.total_price);
+        if (result.customer_name) {
+          setCustomerName(result.customer_name);
+          setItems(result.items);
+          setSelectedStaff(result.staff_name);
+          setSelectedCashier(result.cashier_name);
+          setPaymentMethods(result.payment_methods);
+          setTotal(result.total_price);
         }
       } catch (error) {
         console.error("一時保存データの取得エラー:", error);
@@ -328,7 +376,15 @@ export const AccountingPage: React.FC<AccountingPageProps> = ({
     };
 
     fetchTemporarySave();
-  }, [reservationId, userId, session?.access_token]);
+  }, [user, session, authLoading, reservationId, userId]);
+
+  useEffect(() => {
+    const newTotal = items.reduce(
+      (sum, item) => sum + item.price * item.quantity,
+      0
+    );
+    setTotal(newTotal);
+  }, [items]);
 
   const addItem = (category: string, name: string, price: number = 0) => {
     const newItem: Item = {
@@ -708,25 +764,24 @@ export const AccountingPage: React.FC<AccountingPageProps> = ({
               <div className="flex items-center space-x-4">
                 {/* 指名スタッフ */}
                 <div className="flex flex-col">
-                <Label htmlFor="selectedStaff" className="mb-1">
-  指名スタッフ
-</Label>
-<Select
-  value={selectedStaff}
-  onValueChange={setSelectedStaff}
->
-  <SelectTrigger id="selectedStaff" className="w-[200px]">
-    <SelectValue placeholder="選択してください" />
-  </SelectTrigger>
-  <SelectContent>
-    {staffList.map((staff) => (
-      <SelectItem key={staff.id} value={staff.name}>
-        {staff.name}
-      </SelectItem>
-    ))}
-  </SelectContent>
-</Select>
-
+                  <Label htmlFor="selectedStaff" className="mb-1">
+                    指名スタッフ
+                  </Label>
+                  <Select
+                    value={selectedStaff}
+                    onValueChange={setSelectedStaff}
+                  >
+                    <SelectTrigger id="selectedStaff" className="w-[200px]">
+                      <SelectValue placeholder="選択してください" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {staffList.map((staff) => (
+                        <SelectItem key={staff.id} value={staff.name}>
+                          {staff.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 {/* レジ担当者 */}
                 <div className="flex flex-col">
@@ -734,11 +789,10 @@ export const AccountingPage: React.FC<AccountingPageProps> = ({
                     レジ担当者
                   </Label>
                   <Select
-                    
                     value={selectedCashier}
                     onValueChange={setSelectedCashier}
                   >
-                    <SelectTrigger className="w-[200px]" aria-labelledby="selectedCashierLabel">
+                    <SelectTrigger className="w-[200px]">
                       <SelectValue placeholder="選択してください" />
                     </SelectTrigger>
                     <SelectContent>
