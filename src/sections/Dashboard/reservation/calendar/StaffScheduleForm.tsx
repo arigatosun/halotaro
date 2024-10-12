@@ -1,4 +1,4 @@
-// StaffScheduleForm.tsx
+// src/sections/Dashboard/reservation/calendar/StaffScheduleForm.tsx
 
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Reservation, Staff } from '@/types/reservation';
-import moment from 'moment';
+import moment from 'moment-timezone'; // moment-timezone を使用
 import { Alert } from '@mui/material';
 
 interface StaffScheduleFormProps {
@@ -43,10 +43,10 @@ const StaffScheduleForm: React.FC<StaffScheduleFormProps> = ({
       setFormData({
         ...staffSchedule,
         start_time: staffSchedule.start_time
-          ? moment.utc(staffSchedule.start_time).local().format('YYYY-MM-DDTHH:mm')
+          ? moment(staffSchedule.start_time).tz('Asia/Tokyo').format('YYYY-MM-DDTHH:mm')
           : '',
         end_time: staffSchedule.end_time
-          ? moment.utc(staffSchedule.end_time).local().format('YYYY-MM-DDTHH:mm')
+          ? moment(staffSchedule.end_time).tz('Asia/Tokyo').format('YYYY-MM-DDTHH:mm')
           : '',
         event: staffSchedule.event || '',
         staff_id: staffSchedule.staff_id || '',
@@ -87,8 +87,8 @@ const StaffScheduleForm: React.FC<StaffScheduleFormProps> = ({
     }
   
     if (formData.start_time && formData.end_time) {
-      const start = moment(formData.start_time);
-      const end = moment(formData.end_time);
+      const start = moment(formData.start_time).tz('Asia/Tokyo');
+      const end = moment(formData.end_time).tz('Asia/Tokyo');
       if (!end.isAfter(start)) {
         newErrors.end_time = '終了時間は開始時間より後に設定してください。';
       }
@@ -116,7 +116,6 @@ const StaffScheduleForm: React.FC<StaffScheduleFormProps> = ({
   
     onSubmit(updatedSchedule, isNew);
   };
-  
   
 
   return (

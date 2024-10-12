@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Reservation } from '@/types/reservation';
-import moment from 'moment';
+import moment from 'moment-timezone';
 
 interface ReservationDetailsProps {
   reservation: Reservation;
@@ -50,8 +50,8 @@ const ReservationDetails: React.FC<ReservationDetailsProps> = ({ reservation, on
           <p><strong>顧客名:</strong> {reservation.customer_name}</p>
           <p><strong>メニュー:</strong> {reservation.menu_name}</p>
           <p><strong>担当スタッフ:</strong> {reservation.staff_name}</p>
-          <p><strong>開始時間:</strong> {reservation.start_time ? moment.utc(reservation.start_time).local().format('YYYY/MM/DD HH:mm:ss') : '未定'}</p>
-          <p><strong>終了時間:</strong> {reservation.end_time ? moment.utc(reservation.end_time).local().format('YYYY/MM/DD HH:mm:ss') : '未定'}</p>
+          <p><strong>開始時間:</strong> {reservation.start_time ? moment(reservation.start_time).tz('Asia/Tokyo').format('YYYY/MM/DD HH:mm:ss') : '未定'}</p>
+          <p><strong>終了時間:</strong> {reservation.end_time ? moment(reservation.end_time).tz('Asia/Tokyo').format('YYYY/MM/DD HH:mm:ss') : '未定'}</p>
         </div>
         <div className="mt-4 flex justify-end space-x-2">
           <Button onClick={onEdit}>編集</Button>

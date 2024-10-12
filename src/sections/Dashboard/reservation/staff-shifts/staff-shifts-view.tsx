@@ -1,4 +1,5 @@
 // staff-shifts-view.tsx
+
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
@@ -35,8 +36,8 @@ import Link from "next/link";
 import BulkInputModal from "@/components/ui/BulkInputModal";
 import { getStaffShifts, upsertStaffShift, getSalonBusinessHours } from "@/lib/api";
 import { Staff, ShiftData, DBStaffShift } from "./types";
-import { useAuth } from "@/contexts/authcontext"; // 追加
-import { supabase } from "@/lib/supabaseClient"; // 追加
+import { useAuth } from "@/contexts/authcontext";
+import { supabase } from "@/lib/supabaseClient";
 
 moment.locale('ja');
 
@@ -48,13 +49,22 @@ interface ShiftPopoverData {
   currentShift: ShiftData | null;
 }
 
+interface WorkPattern {
+  id: string;
+  abbreviation: string;
+  start_time: string | null;
+  end_time: string | null;
+  is_business_start: boolean;
+  is_business_end: boolean;
+}
+
 const formatTimeForDisplay = (time: string | null): string => {
   if (!time) return "";
   return time.substring(0, 5);
 };
 
 const formatTimeForDatabase = (time: string | null | undefined): string | null => {
-  if (!time) return null;
+  if (!time || time.trim() === '') return null;
   return time + ":00";
 };
 
@@ -67,7 +77,7 @@ const StaffShiftSettings: React.FC = () => {
   const popoverRef = useRef<HTMLDivElement>(null);
   const params = useParams();
   const { year, month } = params;
-  const { user, loading: authLoading } = useAuth(); // 追加
+  const { user, loading: authLoading } = useAuth();
   const [currentDate, setCurrentDate] = useState(moment());
   const [staffShifts, setStaffShifts] = useState<Staff[]>([]);
   const [shiftPopover, setShiftPopover] = useState<ShiftPopoverData>({
@@ -82,22 +92,21 @@ const StaffShiftSettings: React.FC = () => {
   const [salonBusinessHours, setSalonBusinessHours] = useState<{ [date: string]: boolean }>({});
 
   useEffect(() => {
-    if (year && month && user) { // user の存在を確認
+    if (year && month && user) {
       setCurrentDate(moment(`${year}-${month}-01`));
-      fetchStaffsAndShifts(user.id); // user.id を渡す
+      fetchStaffsAndShifts(user.id);
       fetchSalonBusinessHours();
     }
   }, [year, month, user]);
 
-  const fetchStaffsAndShifts = async (userId: string) => { // userId を受け取る
+  const fetchStaffsAndShifts = async (userId: string) => {
     setIsLoading(true);
     try {
-      // Supabase を使用して user_id に基づいてスタッフを取得
       const { data: staffs, error } = await supabase
         .from('staff')
         .select('*')
-        .eq('user_id', userId) // user_id でフィルタリング
-        .eq('is_published', true); // 必要に応じて追加のフィルタリング
+        .eq('user_id', userId)
+        .eq('is_published', true);
 
       if (error) throw error;
 
@@ -136,10 +145,10 @@ const StaffShiftSettings: React.FC = () => {
     const clickedDate = moment(currentDate).date(date);
     const formattedDate = clickedDate.format('YYYY-MM-DD');
     if (salonBusinessHours[formattedDate]) return;
-  
+
     const staff = staffShifts.find(s => s.name === staffName);
     const currentShift = staff?.shifts[date - 1] || null;
-  
+
     setShiftPopover({
       visible: true,
       anchorEl: event.currentTarget,
@@ -152,7 +161,7 @@ const StaffShiftSettings: React.FC = () => {
   const handleShiftSubmit = async (values: ShiftData) => {
     const staff = staffShifts.find(s => s.name === shiftPopover.staffName);
     if (!staff || !shiftPopover.date) return;
-  
+
     const dateIndex = shiftPopover.date.date() - 1;
     const dbShift: Omit<DBStaffShift, 'id'> = {
       staff_id: staff.id.toString(),
@@ -162,11 +171,11 @@ const StaffShiftSettings: React.FC = () => {
       end_time: values.type === '出' ? formatTimeForDatabase(values.endTime) : null,
       memo: values.memo || null,
     };
-  
+
     try {
       const result = await upsertStaffShift(dbShift);
       console.log("Upsert result:", result);
-  
+
       setStaffShifts(prevStaffs =>
         prevStaffs.map(s =>
           s.id === staff.id
@@ -184,15 +193,16 @@ const StaffShiftSettings: React.FC = () => {
       console.error("Failed to update shift:", error);
       console.log("シフトの保存に失敗しました");
     }
-  
+
     setShiftPopover({ ...shiftPopover, visible: false, anchorEl: null });
   };
 
-  const handleBulkInputSubmit = async (newShifts: Record<string, ShiftData[]>) => { // 型を Record<string, ShiftData[]> に変更
+  const handleBulkInputSubmit = async (newShifts: Record<number, { [index: number]: ShiftData }>) => {
     setIsLoading(true);
     try {
       await Promise.all(Object.entries(newShifts).flatMap(([staffId, shifts]) =>
-        shifts.map((shift, index) => {
+        Object.entries(shifts).map(([indexStr, shift]) => {
+          const index = parseInt(indexStr, 10);
           if (shift.type) {
             const date = moment(currentDate).date(index + 1).format('YYYY-MM-DD');
             if (!salonBusinessHours[date]) {
@@ -218,9 +228,9 @@ const StaffShiftSettings: React.FC = () => {
             if (salonBusinessHours[date]) {
               return { type: '店休' };
             }
-            return newShifts[staff.id] && newShifts[staff.id][index] 
-              ? newShifts[staff.id][index] 
-              : shift; // 既存のシフトデータを保持
+            return newShifts[staff.id] && newShifts[staff.id][index]
+              ? newShifts[staff.id][index]
+              : shift;
           })
         }))
       );
@@ -282,10 +292,12 @@ const StaffShiftSettings: React.FC = () => {
   };
 
   const ShiftPopoverContent = ({
+    user,
     staffName,
     date,
     currentShift,
   }: {
+    user: any;
     staffName: string;
     date: moment.Moment;
     currentShift: ShiftData | null;
@@ -294,7 +306,12 @@ const StaffShiftSettings: React.FC = () => {
     const [startTime, setStartTime] = useState(formatTimeForDisplay(currentShift?.startTime || null));
     const [endTime, setEndTime] = useState(formatTimeForDisplay(currentShift?.endTime || null));
     const [memo, setMemo] = useState(currentShift?.memo || "");
-  
+
+    const [workPatterns, setWorkPatterns] = useState<WorkPattern[]>([]);
+    const [selectedWorkPattern, setSelectedWorkPattern] = useState<string | null>(null);
+    const [useBusinessStartTime, setUseBusinessStartTime] = useState<boolean>(false);
+    const [useBusinessEndTime, setUseBusinessEndTime] = useState<boolean>(false);
+
     useEffect(() => {
       if (currentShift) {
         setShiftType(currentShift.type);
@@ -303,17 +320,82 @@ const StaffShiftSettings: React.FC = () => {
         setMemo(currentShift.memo || "");
       }
     }, [currentShift]);
-  
-    const handleSubmit = (e: React.FormEvent) => {
+
+    useEffect(() => {
+      const fetchWorkPatterns = async () => {
+        if (!user) return;
+        const { data, error } = await supabase
+          .from('work_patterns')
+          .select('id, abbreviation, start_time, end_time, is_business_start, is_business_end')
+          .eq('user_id', user.id);
+
+        if (error) {
+          console.error('勤務パターンの取得に失敗しました:', error);
+        } else {
+          setWorkPatterns(data as WorkPattern[]);
+        }
+      };
+
+      fetchWorkPatterns();
+    }, [user]);
+
+    useEffect(() => {
+      setSelectedWorkPattern(null);
+      setUseBusinessStartTime(false);
+      setUseBusinessEndTime(false);
+    }, [shiftType]);
+
+    const handleSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
+
+      let shiftStartTime = startTime;
+      let shiftEndTime = endTime;
+
+      if (useBusinessStartTime || useBusinessEndTime) {
+        const dateStr = date.format('YYYY-MM-DD');
+
+        // `salon_id` を取得
+        const salonId = user.id; // または適切な方法で salon_id を取得
+
+        const { data, error } = await supabase
+          .from('salon_business_hours')
+          .select('open_time, close_time')
+          .eq('date', dateStr)
+          .eq('salon_id', salonId) // `salon_id` でフィルタリング
+          .single();
+
+        if (error || !data) {
+          console.error('salon_business_hours の取得に失敗しました:', error);
+          alert('営業時間の取得に失敗しました。営業時間が設定されているか確認してください。');
+          return;
+        }
+
+        if (useBusinessStartTime) {
+          if (data.open_time) {
+            shiftStartTime = data.open_time.slice(0, 5);
+          } else {
+            alert('この日の営業開始時間が設定されていません。');
+            return;
+          }
+        }
+        if (useBusinessEndTime) {
+          if (data.close_time) {
+            shiftEndTime = data.close_time.slice(0, 5);
+          } else {
+            alert('この日の営業終了時間が設定されていません。');
+            return;
+          }
+        }
+      }
+
       handleShiftSubmit({
         type: shiftType,
-        startTime: startTime,
-        endTime: endTime,
-        memo
+        startTime: shiftStartTime,
+        endTime: shiftEndTime,
+        memo,
       });
     };
-  
+
     return (
       <form onSubmit={handleSubmit} style={{ width: '100%' }}>
         <Typography variant="h6" style={{ marginBottom: '10px' }}>
@@ -328,28 +410,66 @@ const StaffShiftSettings: React.FC = () => {
           <FormControlLabel value="休" control={<Radio />} label="休日" />
         </RadioGroup>
         {shiftType === "出" && (
-          <Box sx={{ display: 'flex', gap: 2, marginBottom: 2 }}>
-            <FormControl sx={{ flex: 1 }}>
-              <InputLabel>開始時間</InputLabel>
+          <>
+            <Box sx={{ display: 'flex', gap: 2, marginBottom: 2 }}>
+              <FormControl sx={{ flex: 1 }}>
+                <InputLabel>開始時間</InputLabel>
+                <Select
+                  value={startTime}
+                  onChange={(e) => setStartTime(e.target.value as string)}
+                  label="開始時間"
+                  disabled={useBusinessStartTime}
+                >
+                  {generateTimeOptions()}
+                </Select>
+              </FormControl>
+              <FormControl sx={{ flex: 1 }}>
+                <InputLabel>終了時間</InputLabel>
+                <Select
+                  value={endTime}
+                  onChange={(e) => setEndTime(e.target.value as string)}
+                  label="終了時間"
+                  disabled={useBusinessEndTime}
+                >
+                  {generateTimeOptions()}
+                </Select>
+              </FormControl>
+            </Box>
+            <FormControl fullWidth margin="normal">
+              <InputLabel>勤務パターン</InputLabel>
               <Select
-                value={startTime}
-                onChange={(e) => setStartTime(e.target.value as string)}
-                label="開始時間"
+                value={selectedWorkPattern || ''}
+                onChange={(e) => {
+                  const patternId = e.target.value as string;
+                  setSelectedWorkPattern(patternId);
+                  const pattern = workPatterns.find((wp) => wp.id === patternId);
+                  if (pattern) {
+                    if (pattern.is_business_start) {
+                      setUseBusinessStartTime(true);
+                      setStartTime('');
+                    } else {
+                      setUseBusinessStartTime(false);
+                      setStartTime(pattern.start_time ? pattern.start_time.slice(0, 5) : '');
+                    }
+
+                    if (pattern.is_business_end) {
+                      setUseBusinessEndTime(true);
+                      setEndTime('');
+                    } else {
+                      setUseBusinessEndTime(false);
+                      setEndTime(pattern.end_time ? pattern.end_time.slice(0, 5) : '');
+                    }
+                  }
+                }}
               >
-                {generateTimeOptions()}
+                {workPatterns.map((pattern) => (
+                  <MenuItem key={pattern.id} value={pattern.id}>
+                    {pattern.abbreviation}
+                  </MenuItem>
+                ))}
               </Select>
             </FormControl>
-            <FormControl sx={{ flex: 1 }}>
-              <InputLabel>終了時間</InputLabel>
-              <Select
-                value={endTime}
-                onChange={(e) => setEndTime(e.target.value as string)}
-                label="終了時間"
-              >
-                {generateTimeOptions()}
-              </Select>
-            </FormControl>
-          </Box>
+          </>
         )}
         <TextField
           fullWidth
@@ -412,7 +532,7 @@ const StaffShiftSettings: React.FC = () => {
     </Box>
   );
 
-  if (authLoading || isLoading) { // 両方の状態を確認
+  if (authLoading || isLoading) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" height="100vh">
         <CircularProgress />
@@ -472,13 +592,12 @@ const StaffShiftSettings: React.FC = () => {
                   padding: '10px',
                   width: '150px',
                   whiteSpace: 'nowrap',
-                  position: 'sticky', // 追加
-                  left: 0, // 追加
-                  background: '#f5f5f5', // 追加
-                  zIndex: 2, // 追加
+                  position: 'sticky',
+                  left: 0,
+                  background: '#f5f5f5',
+                  zIndex: 2,
                 }}>スタッフ名</TableCell>
                 <TableCell style={{ fontWeight: 'bold', padding: '10px', width: '100px' }}>設定状況</TableCell>
-                <TableCell style={{ fontWeight: 'bold', padding: '10px', width: '80px' }}>設定</TableCell>
                 {Array.from({ length: daysInMonth }, (_, i) => (
                   <TableCell key={i} align="center" style={{ fontWeight: 'bold', padding: '10px' }}>
                     {i + 1}
@@ -502,10 +621,10 @@ const StaffShiftSettings: React.FC = () => {
                     whiteSpace: 'nowrap',
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
-                    position: 'sticky', // 追加
-                    left: 0, // 追加
-                    background: '#ffffff', // 追加
-                    zIndex: 1, // 追加
+                    position: 'sticky',
+                    left: 0,
+                    background: '#ffffff',
+                    zIndex: 1,
                   }}>
                     {staff.name}
                   </TableCell>
@@ -520,9 +639,6 @@ const StaffShiftSettings: React.FC = () => {
                       </Button>
                     )}
                   </TableCell>
-                  <TableCell style={{ padding: '10px' }}>
-                    <Button variant="contained" size="small" style={{ backgroundColor: '#1976d2', boxShadow: 'none' }}>設定</Button>
-                  </TableCell>
                   {staff.shifts.map((shift, index) => (
                     <TableCell key={index} align="center" style={{ padding: '4px' }}>
                       {renderShiftButton(shift, staff.name, index + 1)}
@@ -533,20 +649,7 @@ const StaffShiftSettings: React.FC = () => {
             </TableBody>
           </Table>
         </TableContainer>
-        <Box sx={{ display: 'flex', justifyContent: 'center' }}>
-          <Link href="/dashboard/reservations/monthly-settings" passHref>
-            <Button 
-              variant="contained" 
-              style={{ 
-                backgroundColor: '#1976d2',
-                boxShadow: 'none',
-                borderRadius: '4px',
-              }}
-            >
-              毎月の受付設定へ
-            </Button>
-          </Link>
-        </Box>
+        {/* 下部のボタンを削除しました */}
       </Card>
       <Popover
         open={shiftPopover.visible}
@@ -571,6 +674,7 @@ const StaffShiftSettings: React.FC = () => {
       >
         {shiftPopover.date && (
           <ShiftPopoverContent
+            user={user}
             staffName={shiftPopover.staffName}
             date={shiftPopover.date}
             currentShift={shiftPopover.currentShift}
@@ -584,6 +688,7 @@ const StaffShiftSettings: React.FC = () => {
         <BulkInputModal
           staffs={staffShifts}
           currentDate={currentDate}
+          user={user}
           onSubmit={handleBulkInputSubmit}
           onClose={() => setIsBulkInputModalOpen(false)}
         />

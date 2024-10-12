@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Reservation, Staff, MenuItem as MenuItemType, BusinessHour } from '@/types/reservation';
-import moment from 'moment';
+import moment from 'moment-timezone'; // moment-timezone を使用
 import { Alert, Snackbar, Grid, Paper, Typography, Box } from '@mui/material';
 
 interface EditingFormDataType extends Partial<Reservation> {
@@ -63,12 +63,16 @@ const ReservationEditForm: React.FC<ReservationEditFormProps> = ({
         customer_first_name: firstName,
         customer_last_name_kana: lastNameKana,
         customer_first_name_kana: firstNameKana,
-        start_time: moment.utc(reservation.start_time).local().format('YYYY-MM-DDTHH:mm'),
-        end_time: moment.utc(reservation.end_time).local().format('YYYY-MM-DDTHH:mm'),
+        start_time: reservation.start_time
+          ? moment(reservation.start_time).tz('Asia/Tokyo').format('YYYY-MM-DDTHH:mm')
+          : '',
+        end_time: reservation.end_time
+          ? moment(reservation.end_time).tz('Asia/Tokyo').format('YYYY-MM-DDTHH:mm')
+          : '',
         // その他のフィールド...
       });
-      setSelectedDate(moment.utc(reservation.start_time).local().format('YYYY-MM-DD'));
-      setSelectedTime(moment.utc(reservation.start_time).local().format('HH:mm'));
+      setSelectedDate(moment(reservation.start_time).tz('Asia/Tokyo').format('YYYY-MM-DD'));
+      setSelectedTime(moment(reservation.start_time).tz('Asia/Tokyo').format('HH:mm'));
     }
   }, [reservation]);
 
@@ -102,8 +106,8 @@ const ReservationEditForm: React.FC<ReservationEditFormProps> = ({
       return;
     }
 
-    const openingTime = moment(`${dateStr} ${businessHourForDate.open_time}`, 'YYYY-MM-DD HH:mm:ss');
-    const closingTime = moment(`${dateStr} ${businessHourForDate.close_time}`, 'YYYY-MM-DD HH:mm:ss');
+    const openingTime = moment.tz(`${dateStr} ${businessHourForDate.open_time}`, 'YYYY-MM-DD HH:mm:ss', 'Asia/Tokyo');
+    const closingTime = moment.tz(`${dateStr} ${businessHourForDate.close_time}`, 'YYYY-MM-DD HH:mm:ss', 'Asia/Tokyo');
 
     const slots = [];
 
@@ -125,9 +129,9 @@ const ReservationEditForm: React.FC<ReservationEditFormProps> = ({
     return reservations.some(res => {
       if (res.id === editingFormData.id) return false;
       if (res.staff_id !== editingFormData.staff_id) return false;
-      if (res.status === 'cancelled' || res.status === 'completed') return false;
-      const resStart = moment.utc(res.start_time).local();
-      const resEnd = moment.utc(res.end_time).local();
+      if (['cancelled', 'completed'].includes(res.status || '')) return false;
+      const resStart = moment(res.start_time).tz('Asia/Tokyo');
+      const resEnd = moment(res.end_time).tz('Asia/Tokyo');
       return start.isBefore(resEnd) && end.isAfter(resStart);
     });
   };
@@ -183,7 +187,7 @@ const ReservationEditForm: React.FC<ReservationEditFormProps> = ({
       return;
     }
 
-    const startDateTime = moment(`${selectedDate}T${selectedTime}`);
+    const startDateTime = moment.tz(`${selectedDate}T${selectedTime}`, 'YYYY-MM-DDTHH:mm', 'Asia/Tokyo');
     const endDateTime = startDateTime.clone().add(selectedMenu.duration, 'minutes');
 
     const updatedReservation = {
@@ -382,7 +386,7 @@ const ReservationEditForm: React.FC<ReservationEditFormProps> = ({
                 {/* 選択した時間帯の表示 */}
                 {selectedTime && (
                   <Typography variant="body2">
-                    予約時間: {selectedTime} ~ {moment(`${selectedDate}T${selectedTime}`).add(menuList.find(menu => menu.id === editingFormData.menu_id)?.duration || 0, 'minutes').format('HH:mm')}
+                    予約時間: {selectedTime} ~ {moment.tz(`${selectedDate}T${selectedTime}`, 'Asia/Tokyo').add(menuList.find(menu => menu.id === editingFormData.menu_id)?.duration || 0, 'minutes').format('HH:mm')}
                   </Typography>
                 )}
 

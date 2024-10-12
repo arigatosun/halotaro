@@ -357,10 +357,12 @@ export async function GET(request: Request) {
       .format("YYYY-MM-DD HH:mm:ss");
 
     // スタッフリストの取得
+    // スタッフリストの取得（is_published が true のみ）
     const { data: staffList, error: staffError } = await supabase
       .from("staff")
       .select("id, name")
       .eq("user_id", userId)
+      .eq("is_published", true) // この行を追加
       .order("name", { ascending: true });
 
     if (staffError) {
@@ -568,12 +570,8 @@ export async function POST(request: Request) {
         }
 
         // バリデーション: end_time が start_time より後
-        const startMoment = moment.tz(
-          start_time,
-          "YYYY-MM-DDTHH:mm",
-          "Asia/Tokyo"
-        );
-        const endMoment = moment.tz(end_time, "YYYY-MM-DDTHH:mm", "Asia/Tokyo");
+        const startMoment = moment(start_time);
+        const endMoment = moment(end_time);
         if (!endMoment.isAfter(startMoment)) {
           return NextResponse.json(
             { error: "end_time must be after start_time" },
@@ -592,10 +590,7 @@ export async function POST(request: Request) {
                 .format("YYYY-MM-DD HH:mm:ss")
             : undefined,
           end_time: end_time
-            ? moment
-                .tz(end_time, "YYYY-MM-DDTHH:mm", "Asia/Tokyo")
-                .utc()
-                .format("YYYY-MM-DD HH:mm:ss")
+            ? moment(end_time).utc().format("YYYY-MM-DD HH:mm:ss")
             : undefined,
           status: "staff",
           total_price: 0,
@@ -656,16 +651,10 @@ export async function POST(request: Request) {
         const rpcParams = {
           p_user_id: authResult.user.id,
           p_start_time: start_time
-            ? moment
-                .tz(start_time, "YYYY-MM-DDTHH:mm", "Asia/Tokyo")
-                .utc()
-                .format("YYYY-MM-DD HH:mm:ss")
+            ? moment(start_time).utc().format("YYYY-MM-DD HH:mm:ss")
             : null,
           p_end_time: end_time
-            ? moment
-                .tz(end_time, "YYYY-MM-DDTHH:mm", "Asia/Tokyo")
-                .utc()
-                .format("YYYY-MM-DD HH:mm:ss")
+            ? moment(end_time).utc().format("YYYY-MM-DD HH:mm:ss")
             : null,
           p_total_price: total_price || 0,
           p_customer_name: customer_name,
@@ -864,10 +853,7 @@ export async function PUT(request: Request) {
       if (updateFields[field] !== undefined) {
         if (field === "start_time" || field === "end_time") {
           updatedData[field] = updateFields[field]
-            ? moment
-                .tz(updateFields[field], "YYYY-MM-DDTHH:mm", "Asia/Tokyo")
-                .utc()
-                .format("YYYY-MM-DD HH:mm:ss")
+            ? moment(updateFields[field]).utc().format("YYYY-MM-DD HH:mm:ss")
             : undefined;
         } else {
           updatedData[field] = updateFields[field];

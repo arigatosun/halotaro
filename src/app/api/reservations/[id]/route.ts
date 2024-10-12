@@ -1,4 +1,5 @@
 // app/api/reservations/[id]/route.ts
+
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
@@ -70,7 +71,23 @@ export async function GET(
       throw error;
     }
 
-    return NextResponse.json(reservation, { status: 200 });
+    // 一時保存データの取得
+    const { data: accountingData, error: fetchError } = await supabase
+      .from("accounting_information")
+      .select("*")
+      .eq("reservation_id", reservationId)
+      .eq("is_temporary", true)
+      .eq("user_id", userId)
+      .single();
+
+    if (fetchError) {
+      if (fetchError.code === "PGRST116") { // 一時保存データが見つからない場合
+        return NextResponse.json({ reservation }, { status: 200 });
+      }
+      throw fetchError;
+    }
+
+    return NextResponse.json({ reservation, accountingData }, { status: 200 });
   } catch (error: any) {
     console.error("予約情報の取得エラー:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });

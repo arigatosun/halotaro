@@ -549,20 +549,21 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
                   {availableTimes.length > 0 ? (
                     <div className="space-y-2 col-span-2">
                       <Label>予約可能な時間帯</Label>
-                      <div className="grid grid-cols-4 gap-2 max-h-64 overflow-y-auto">
-                        {availableTimes.map((time) => (
-                          <Button
-                            type="button"
-                            key={time}
-                            variant={
-                              selectedTimeSlot === time ? "default" : "outline"
-                            }
-                            onClick={() => setSelectedTimeSlot(time)}
-                          >
-                            {time}
-                          </Button>
-                        ))}
-                      </div>
+                      <div className="grid grid-cols-6 gap-2 max-h-24 overflow-y-auto">
+  {availableTimes.map((time) => (
+    <Button
+      type="button"
+      key={time}
+      variant={
+        selectedTimeSlot === time ? "default" : "outline"
+      }
+      onClick={() => setSelectedTimeSlot(time)}
+    >
+      {time}
+    </Button>
+  ))}
+</div>
+
                     </div>
                   ) : selectedDate && formData.staff_id && formData.menu_id ? (
                     <p>この日に予約可能な時間帯はありません。</p>
