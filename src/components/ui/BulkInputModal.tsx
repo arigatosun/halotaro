@@ -23,7 +23,7 @@ interface BulkInputModalProps {
   staffs: { id: number; name: string }[];
   currentDate: moment.Moment;
   user: any;
-  onSubmit: (newShifts: Record<number, ShiftData[]>) => Promise<void>;
+  onSubmit: (newShifts: Record<number, { [index: number]: ShiftData }>) => Promise<void>;
   onClose: () => void;
 }
 
@@ -62,6 +62,7 @@ const BulkInputModal: React.FC<BulkInputModalProps> = ({
   const [useBusinessStartTime, setUseBusinessStartTime] = useState<boolean>(false);
   const [useBusinessEndTime, setUseBusinessEndTime] = useState<boolean>(false);
 
+  // 勤務パターンの取得
   useEffect(() => {
     const fetchWorkPatterns = async () => {
       if (!user) return;
@@ -80,6 +81,7 @@ const BulkInputModal: React.FC<BulkInputModalProps> = ({
     fetchWorkPatterns();
   }, [user]);
 
+  // シフトタイプ変更時のリセット
   useEffect(() => {
     setSelectedWorkPattern(null);
     setUseBusinessStartTime(false);
@@ -87,16 +89,18 @@ const BulkInputModal: React.FC<BulkInputModalProps> = ({
   }, [shiftType]);
 
   const handleSubmit = async () => {
-    const newShifts: Record<number, ShiftData[]> = {};
+    const newShifts: Record<number, { [index: number]: ShiftData }> = {};
     const daysInMonth = currentDate.daysInMonth();
     const datesToFetch = new Set<string>();
     const indicesToApplyMap: Record<number, number[]> = {};
 
+    // 選択されたスタッフごとに処理
     for (const staffId of selectedStaffs) {
-      newShifts[staffId] = Array(daysInMonth).fill(null).map(() => ({ type: '' }));
+      newShifts[staffId] = {};
 
       const indicesToApply: number[] = [];
 
+      // 選択された日付タイプに応じて適用する日付インデックスを収集
       if (dateType === 'specific') {
         indicesToApply.push(...specificDates.map(date => date - 1));
       } else if (dateType === 'range') {
@@ -118,6 +122,7 @@ const BulkInputModal: React.FC<BulkInputModalProps> = ({
 
       indicesToApplyMap[staffId] = indicesToApply;
 
+      // 勤務パターンで営業開始時間や終了時間を使用する場合、必要な日付を収集
       if (useBusinessStartTime || useBusinessEndTime) {
         indicesToApply.forEach(index => {
           const dateStr = currentDate.date(index + 1).format('YYYY-MM-DD');
@@ -137,7 +142,7 @@ const BulkInputModal: React.FC<BulkInputModalProps> = ({
         .in('date', datesArray);
 
       if (error) {
-        console.error('Failed to fetch salon_business_hours:', error);
+        console.error('salon_business_hours の取得に失敗しました:', error);
       } else {
         data.forEach((item: { date: string; open_time: string | null; close_time: string | null }) => {
           businessHoursMap[item.date] = { open_time: item.open_time, close_time: item.close_time };
@@ -145,6 +150,7 @@ const BulkInputModal: React.FC<BulkInputModalProps> = ({
       }
     }
 
+    // シフトデータの作成
     for (const staffId of selectedStaffs) {
       const indicesToApply = indicesToApplyMap[staffId];
 
@@ -165,7 +171,7 @@ const BulkInputModal: React.FC<BulkInputModalProps> = ({
               shiftEndTime = businessHours.close_time?.slice(0, 5) || '';
             }
           } else {
-            console.warn(`No business hours found for date ${dateStr}`);
+            console.warn(`営業時間が見つかりません: ${dateStr}`);
           }
         }
 
@@ -215,6 +221,8 @@ const BulkInputModal: React.FC<BulkInputModalProps> = ({
       <Typography variant="h6" component="h2" gutterBottom>
         一括入力
       </Typography>
+
+      {/* スタッフ選択 */}
       <FormControl fullWidth margin="normal">
         <InputLabel>スタッフを指定</InputLabel>
         <Select
@@ -227,11 +235,14 @@ const BulkInputModal: React.FC<BulkInputModalProps> = ({
         >
           {staffs.map((staff) => (
             <MenuItem key={staff.id} value={staff.id}>
-              {staff.name}
+              <Checkbox checked={selectedStaffs.includes(staff.id)} />
+              <Typography>{staff.name}</Typography>
             </MenuItem>
           ))}
         </Select>
       </FormControl>
+
+      {/* 日付タイプ選択 */}
       <FormControl component="fieldset" fullWidth margin="normal">
         <RadioGroup value={dateType} onChange={(e) => setDateType(e.target.value)}>
           <FormControlLabel value="specific" control={<Radio />} label="特定の日付" />
@@ -240,6 +251,8 @@ const BulkInputModal: React.FC<BulkInputModalProps> = ({
           <FormControlLabel value="everyday" control={<Radio />} label="毎日" />
         </RadioGroup>
       </FormControl>
+
+      {/* 特定の日付選択 */}
       {dateType === 'specific' && (
         <FormControl fullWidth margin="normal">
           <InputLabel>日付を選択</InputLabel>
@@ -252,13 +265,16 @@ const BulkInputModal: React.FC<BulkInputModalProps> = ({
             {Array.from({ length: currentDate.daysInMonth() }, (_, i) => i + 1).map(
               (day) => (
                 <MenuItem key={day} value={day}>
-                  {day}日
+                  <Checkbox checked={specificDates.includes(day)} />
+                  <Typography>{day}日</Typography>
                 </MenuItem>
               )
             )}
           </Select>
         </FormControl>
       )}
+
+      {/* 期間選択 */}
       {dateType === 'range' && (
         <Grid container spacing={2}>
           <Grid item xs={6}>
@@ -297,6 +313,8 @@ const BulkInputModal: React.FC<BulkInputModalProps> = ({
           </Grid>
         </Grid>
       )}
+
+      {/* 曜日選択 */}
       {dateType === 'weekday' && (
         <FormGroup row>
           {['日', '月', '火', '水', '木', '金', '土'].map((day, index) => (
@@ -319,13 +337,17 @@ const BulkInputModal: React.FC<BulkInputModalProps> = ({
           ))}
         </FormGroup>
       )}
+
+      {/* シフトタイプ選択 */}
       <FormControl component="fieldset" fullWidth margin="normal">
         <RadioGroup value={shiftType} onChange={(e) => setShiftType(e.target.value)}>
           <FormControlLabel value="出勤" control={<Radio />} label="出勤" />
           <FormControlLabel value="休日" control={<Radio />} label="休日" />
-          <FormControlLabel value="店休" control={<Radio />} label="店休" />
+          {/*  <FormControlLabel value="店休" control={<Radio />} label="店休" />*/}
         </RadioGroup>
       </FormControl>
+
+      {/* 出勤の場合の詳細設定 */}
       {shiftType === '出勤' && (
         <>
           <Grid container spacing={2}>
@@ -354,6 +376,8 @@ const BulkInputModal: React.FC<BulkInputModalProps> = ({
               </FormControl>
             </Grid>
           </Grid>
+
+          {/* 勤務パターン選択 */}
           <FormControl fullWidth margin="normal">
             <InputLabel>勤務パターン</InputLabel>
             <Select
@@ -365,12 +389,15 @@ const BulkInputModal: React.FC<BulkInputModalProps> = ({
                 if (pattern) {
                   if (pattern.is_business_start) {
                     setUseBusinessStartTime(true);
+                    setStartTime('');
                   } else {
                     setUseBusinessStartTime(false);
                     setStartTime(pattern.start_time ? pattern.start_time.slice(0, 5) : '');
                   }
+
                   if (pattern.is_business_end) {
                     setUseBusinessEndTime(true);
+                    setEndTime('');
                   } else {
                     setUseBusinessEndTime(false);
                     setEndTime(pattern.end_time ? pattern.end_time.slice(0, 5) : '');
@@ -387,6 +414,8 @@ const BulkInputModal: React.FC<BulkInputModalProps> = ({
           </FormControl>
         </>
       )}
+
+      {/* 閉じる・設定するボタン */}
       <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 3 }}>
         <Button onClick={onClose} sx={{ mr: 2 }}>
           閉じる

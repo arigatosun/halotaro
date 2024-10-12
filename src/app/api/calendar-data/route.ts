@@ -232,11 +232,14 @@ export async function GET(request: Request) {
     const endDate = moment.tz(endDateStr, 'YYYY-MM-DD', 'Asia/Tokyo').endOf('day').utc().format('YYYY-MM-DD HH:mm:ss');
 
     // スタッフリストの取得
-    const { data: staffList, error: staffError } = await supabase
-      .from('staff')
-      .select('id, name')
-      .eq('user_id', userId)
-      .order('name', { ascending: true });
+    // スタッフリストの取得（is_published が true のみ）
+const { data: staffList, error: staffError } = await supabase
+.from('staff')
+.select('id, name')
+.eq('user_id', userId)
+.eq('is_published', true) // この行を追加
+.order('name', { ascending: true });
+
 
     if (staffError) {
       console.error('Error fetching staff list:', staffError);
