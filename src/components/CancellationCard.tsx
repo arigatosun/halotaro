@@ -1,6 +1,7 @@
+// CancellationCard.tsx
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -17,10 +18,11 @@ import {
 import { useAuth } from "@/contexts/authcontext";
 import dayjs from "dayjs";
 
+// インターフェースの定義
 interface CancellationData {
   date: string;
   count: number;
-  totalCount: number; // 総予約数を追加
+  totalCount: number;
   rate: number;
 }
 
@@ -34,6 +36,9 @@ const CancellationCard: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
+  // フラグを設定して一度だけフェッチする
+  const fetchRef = useRef<boolean>(false);
+
   // 期間の説明を定義
   const periodDescriptions: Record<"daily" | "weekly" | "monthly", string> = {
     daily: "過去14日間",
@@ -41,71 +46,39 @@ const CancellationCard: React.FC = () => {
     monthly: "過去6か月間",
   };
 
-  const fetchCancellationData = async (period: "daily" | "weekly" | "monthly") => {
-    try {
-      let endpoint = "";
-      switch (period) {
-        case "daily":
-          endpoint = "/api/cancellations/daily";
-          break;
-        case "weekly":
-          endpoint = "/api/cancellations/weekly";
-          break;
-        case "monthly":
-          endpoint = "/api/cancellations/monthly";
-          break;
-        default:
-          endpoint = "/api/cancellations/daily";
-      }
-
-      const response = await fetch(endpoint, {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${session?.access_token}`,
-        },
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || `${period}キャンセルデータの取得に失敗しました`);
-      }
-
-      const data: CancellationData[] = await response.json();
-
-      switch (period) {
-        case "daily":
-          setDailyData(data);
-          break;
-        case "weekly":
-          setWeeklyData(data);
-          break;
-        case "monthly":
-          setMonthlyData(data);
-          break;
-        default:
-          setDailyData(data);
-      }
-    } catch (err: any) {
-      console.error(`${activeTab}キャンセルデータ取得エラー:`, err);
-      setError(err.message || "キャンセルデータの取得に失敗しました");
-    }
-  };
-
   useEffect(() => {
-    if (authLoading) return; // 認証情報がロード中の場合は待機
+    if (authLoading) return;
     if (!user || !session) {
       setError("ユーザーがログインしていません。");
       setLoading(false);
       return;
     }
 
-    const loadData = async () => {
+    if (fetchRef.current) return; // 既にフェッチ済みの場合は実行しない
+    fetchRef.current = true;
+
+    const fetchCancellationData = async () => {
       try {
         setLoading(true);
         setError(null);
 
-        // 初期表示のタブのデータを取得
-        await fetchCancellationData(activeTab);
+        const response = await fetch("/api/cancellations/all", {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || "キャンセルデータの取得に失敗しました");
+        }
+
+        const data = await response.json();
+
+        setDailyData(data.dailyData);
+        setWeeklyData(data.weeklyData);
+        setMonthlyData(data.monthlyData);
       } catch (err: any) {
         console.error("キャンセルデータの取得エラー:", err);
         setError(err.message || "データの取得に失敗しました");
@@ -114,20 +87,8 @@ const CancellationCard: React.FC = () => {
       }
     };
 
-    loadData();
+    fetchCancellationData();
   }, [user, session, authLoading]);
-
-  useEffect(() => {
-    if (!session) return;
-    if (activeTab === "daily" && dailyData.length === 0) {
-      fetchCancellationData("daily");
-    } else if (activeTab === "weekly" && weeklyData.length === 0) {
-      fetchCancellationData("weekly");
-    } else if (activeTab === "monthly" && monthlyData.length === 0) {
-      fetchCancellationData("monthly");
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab]);
 
   const getDataForTab = () => {
     switch (activeTab) {
@@ -152,7 +113,7 @@ const CancellationCard: React.FC = () => {
     return getDataForTab().reduce((sum, item) => sum + item.totalCount, 0);
   };
 
-  // 平均キャンセル率の計算を修正
+  // 平均キャンセル率の計算
   const getAverageRate = () => {
     const totalCancellations = getTotalCancellations();
     const totalReservations = getTotalReservations();

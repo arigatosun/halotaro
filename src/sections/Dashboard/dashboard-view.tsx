@@ -1,7 +1,7 @@
 // Dashboard.tsx
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { Calendar, DollarSign, Clock, LucideIcon } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import Link from "next/link";
@@ -28,19 +28,12 @@ interface Appointment {
   staff: string;
 }
 
-interface SalesSummary {
-  totalSales: number;
-  averageSalesPerDay: number;
-}
-
-interface DailySale {
-  date: string;
-  total: number;
-}
-
 interface DashboardData {
-  salesSummary: SalesSummary;
-  dailySales: DailySale[];
+  todayReservations: number;
+  yesterdayReservations: number;
+  todaySales: number;
+  yesterdaySales: number;
+  upcomingAppointments: Appointment[];
 }
 
 const AnimatedNumber: React.FC<AnimatedNumberProps> = ({ value }) => {
@@ -97,6 +90,9 @@ const Dashboard = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
+  // フラグを設定して一度だけフェッチする
+  const fetchRef = useRef<boolean>(false);
+
   useEffect(() => {
     if (authLoading) return; // 認証情報がロード中の場合は待機
     if (!user || !session) {
@@ -105,96 +101,33 @@ const Dashboard = () => {
       return;
     }
 
+    if (fetchRef.current) return; // 既にフェッチ済みの場合は実行しない
+    fetchRef.current = true;
+
     const fetchDashboardData = async () => {
       try {
         setLoading(true);
         setError(null);
 
-        // 今日と昨日の日付を取得
-        const today = dayjs();
-        const yesterday = today.subtract(1, "day");
-
-        const year = today.format("YYYY");
-        const month = today.format("MM");
-        const day = today.format("DD");
-
-        // 1. 売上データを取得
-        const salesResponse = await fetch(
-          `/api/sales-summary?year=${year}&month=${month}`,
-          {
-            method: "GET",
-            headers: {
-              Authorization: `Bearer ${session.access_token}`,
-            },
-          }
-        );
-
-        if (!salesResponse.ok) {
-          const errorData = await salesResponse.json();
-          throw new Error(errorData.error || "売上データの取得に失敗しました");
-        }
-
-        const salesData: DashboardData = await salesResponse.json();
-
-        // 今日の売上
-        const todaySalesData = salesData.dailySales.find(
-          (daySale: DailySale) => daySale.date === today.format("YYYY-MM-DD")
-        );
-        setTodaySales(todaySalesData ? todaySalesData.total : 0);
-
-        // 昨日の売上
-        const yesterdaySalesData = salesData.dailySales.find(
-          (daySale: DailySale) => daySale.date === yesterday.format("YYYY-MM-DD")
-        );
-        setYesterdaySales(yesterdaySalesData ? yesterdaySalesData.total : 0);
-
-        // 2. 今日の予約数を取得
-        const reservationsTodayResponse = await fetch(`/api/reservations/today`, {
+        const response = await fetch(`/api/dashboard`, {
           method: "GET",
           headers: {
             Authorization: `Bearer ${session.access_token}`,
           },
         });
 
-        if (!reservationsTodayResponse.ok) {
-          const errorData = await reservationsTodayResponse.json();
-          throw new Error(errorData.error || "今日の予約データの取得に失敗しました");
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || "ダッシュボードデータの取得に失敗しました");
         }
 
-        const reservationsTodayData: { count: number } = await reservationsTodayResponse.json();
-        setTodayReservations(reservationsTodayData.count);
+        const data: DashboardData = await response.json();
 
-        // 3. 昨日の予約数を取得
-        const reservationsYesterdayResponse = await fetch(`/api/reservations/yesterday`, {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-          },
-        });
-
-        if (!reservationsYesterdayResponse.ok) {
-          const errorData = await reservationsYesterdayResponse.json();
-          throw new Error(errorData.error || "昨日の予約データの取得に失敗しました");
-        }
-
-        const reservationsYesterdayData: { count: number } = await reservationsYesterdayResponse.json();
-        setYesterdayReservations(reservationsYesterdayData.count);
-
-        // 4. 次の予約一覧を取得（本日の予約のみ、現在時刻より後、最大3件）
-        const appointmentsResponse = await fetch(`/api/reservations/upcoming`, {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-          },
-        });
-
-        if (!appointmentsResponse.ok) {
-          const errorData = await appointmentsResponse.json();
-          throw new Error(errorData.error || "予約一覧の取得に失敗しました");
-        }
-
-        const appointmentsData: Appointment[] = await appointmentsResponse.json();
-        setUpcomingAppointments(appointmentsData);
+        setTodayReservations(data.todayReservations);
+        setYesterdayReservations(data.yesterdayReservations);
+        setTodaySales(data.todaySales);
+        setYesterdaySales(data.yesterdaySales);
+        setUpcomingAppointments(data.upcomingAppointments);
       } catch (err: any) {
         console.error("ダッシュボードデータの取得エラー:", err);
         setError(err.message || "データの取得に失敗しました");
