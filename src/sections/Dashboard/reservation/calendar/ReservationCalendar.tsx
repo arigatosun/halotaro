@@ -29,6 +29,7 @@ import {
 moment.locale("ja"); // 日本語ロケールを設定
 
 const ReservationCalendar: React.FC = () => {
+  const [isNewStaffSchedule, setIsNewStaffSchedule] = useState(false);
   const [selectedReservation, setSelectedReservation] =
     useState<Reservation | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -99,8 +100,11 @@ const ReservationCalendar: React.FC = () => {
   const handleDateSelect = (selectInfo: DateSelectArg) => {
     const { start, end, resource } = selectInfo;
 
-    // 開始時間と終了時間が同じ場合は処理をスキップ
-    if (start.getTime() == end.getTime()) {
+    // 開始時間と終了時間の差を計算（ミリ秒単位）
+    const duration = end.getTime() - start.getTime();
+
+    // 1分未満の場合は処理をスキップ
+    if (duration < 60000) {
       return;
     }
 
@@ -120,6 +124,7 @@ const ReservationCalendar: React.FC = () => {
     };
 
     setSelectedStaffSchedule(newStaffSchedule as Reservation);
+    setIsNewStaffSchedule(true); // 新規作成なので true に設定
     setIsStaffScheduleFormOpen(true);
   };
 
@@ -446,6 +451,7 @@ const ReservationCalendar: React.FC = () => {
   // スタッフスケジュール追加ボタンハンドラ
   const handleAddStaffSchedule = () => {
     setSelectedStaffSchedule(null);
+    setIsNewStaffSchedule(true); // 新規作成なので true に設定
     setIsStaffScheduleFormOpen(true);
   };
 
@@ -470,7 +476,7 @@ const ReservationCalendar: React.FC = () => {
         is_staff_schedule: true,
         total_price: 0,
       };
-      console.log("Sending staff schedule data:", scheduleData); // 追加
+      console.log("Sending staff schedule data:", scheduleData);
 
       const response = await fetch("/api/calendar-data", {
         method: method,
@@ -492,6 +498,7 @@ const ReservationCalendar: React.FC = () => {
       await loadData();
       setIsStaffScheduleFormOpen(false);
       setSelectedStaffSchedule(null);
+      setIsNewStaffSchedule(false); // 成功時にリセット
       setSnackbar({
         message: `スタッフスケジュールが${isNew ? "作成" : "更新"}されました`,
         severity: "success",
@@ -665,26 +672,14 @@ const ReservationCalendar: React.FC = () => {
       {isStaffScheduleFormOpen && (
         <StaffScheduleForm
           staffSchedule={selectedStaffSchedule}
-          isNew={!selectedStaffSchedule}
+          isNew={isNewStaffSchedule}
           onClose={() => {
             setIsStaffScheduleFormOpen(false);
             setSelectedStaffSchedule(null);
+            setIsNewStaffSchedule(false); // クローズ時にリセット
           }}
           onSubmit={handleStaffScheduleFormSubmit}
           onDelete={handleDeleteStaffSchedule}
-          staffList={staffList}
-        />
-      )}
-      {isStaffScheduleFormOpen && (
-        <StaffScheduleForm
-          staffSchedule={selectedStaffSchedule}
-          isNew={!selectedStaffSchedule}
-          onClose={() => {
-            setIsStaffScheduleFormOpen(false);
-            setSelectedStaffSchedule(null);
-          }}
-          onSubmit={handleStaffScheduleFormSubmit}
-          onDelete={handleDeleteStaffSchedule} // 変更なし
           staffList={staffList}
         />
       )}
