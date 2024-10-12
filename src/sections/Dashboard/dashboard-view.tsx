@@ -172,9 +172,9 @@ const Dashboard = () => {
   }
 
   return (
-    <div className="p-8 pt-0">
-      <h2 className="text-3xl font-bold mb-8">ダッシュボード</h2>
-      <div className="grid gap-4 lg:grid-cols-3 mb-8">
+    <div className="p-4 md:p-8 pt-0">
+      <h2 className="text-2xl md:text-3xl font-bold mb-4 md:mb-8">ダッシュボード</h2>
+      <div className="grid gap-4 lg:grid-cols-3 mb-4 md:mb-8">
         <div className="space-y-4 lg:space-y-0 lg:grid lg:grid-rows-2 lg:gap-4">
           <StatCard
             title="本日の予約"

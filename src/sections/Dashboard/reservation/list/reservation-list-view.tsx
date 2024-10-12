@@ -29,11 +29,9 @@ interface FilterOptions {
   reservationRoute: string;
 }
 
-// Staffインターフェースを定義
 interface Staff {
   id: string;
   name: string;
-  // 他のフィールドがあれば追加
 }
 
 const statusOptions = [
@@ -131,11 +129,11 @@ const ReservationListView: React.FC = () => {
   };
 
   return (
-    <div className="p-8">
-      <h2 className="text-3xl font-bold mb-8">予約一覧</h2>
+    <div className="p-4 md:p-8">
+      <h2 className="text-2xl md:text-3xl font-bold mb-4 md:mb-8">予約一覧</h2>
 
-      <Card className="mb-8">
-        <CardContent className="p-6">
+      <Card className="mb-4 md:mb-8">
+        <CardContent className="p-4 md:p-6">
           <div className="space-y-4">
             <DatePickerWithRange
               date={filterOptions.dateRange}

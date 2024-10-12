@@ -24,7 +24,8 @@ const MonthlyReceptionSettings: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
 
   const checkMonthSettings = async (year: number, month: number) => {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: userData } = await supabase.auth.getUser();
+    const user = userData?.user;
     if (!user) {
       console.error('User not authenticated');
       return false;
@@ -55,7 +56,8 @@ const MonthlyReceptionSettings: React.FC = () => {
   };
 
   const checkStaffShiftSettings = async (year: number, month: number) => {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: userData } = await supabase.auth.getUser();
+    const user = userData?.user;
     if (!user) {
       console.error('User not authenticated');
       return false;
@@ -93,7 +95,7 @@ const MonthlyReceptionSettings: React.FC = () => {
       return true;
     }
 
-    // スタッフのシフト情報を取得
+    // スタッフのシフト情報を取得（is_published が true のスタッフのみ）
     const { data: allStaffShifts, error: staffError } = await supabase
       .from('staff_shifts')
       .select('staff_id, date, shift_status')
@@ -104,11 +106,12 @@ const MonthlyReceptionSettings: React.FC = () => {
       return false;
     }
 
-    // スタッフごとのシフト設定状況をチェック
+    // スタッフごとのシフト設定状況をチェック（is_published が true のスタッフのみ）
     const { data: staffs, error: staffsError } = await supabase
       .from('staff')
       .select('id')
-      .eq('user_id', user.id);
+      .eq('user_id', user.id)
+      .eq('is_published', true); // is_published を追加
 
     if (staffsError) {
       console.error('Error fetching staffs:', staffsError);
@@ -117,7 +120,7 @@ const MonthlyReceptionSettings: React.FC = () => {
 
     for (const staff of staffs) {
       const staffShifts = allStaffShifts.filter((shift: { staff_id: string | number, date: string, shift_status: string }) => 
-        shift.staff_id === staff.id
+        shift.staff_id.toString() === staff.id.toString()
       );
 
       // すべての営業日にシフトが設定されているかチェック
@@ -181,7 +184,10 @@ const MonthlyReceptionSettings: React.FC = () => {
           }
           passHref
         >
-          <Button type={isStaffSetting ? (setting.isStaffSet ? "default" : "primary") : (setting.isSet ? "default" : "primary")} block>
+          <Button 
+            type={isStaffSetting ? (setting.isStaffSet ? "default" : "primary") : (setting.isSet ? "default" : "primary")} 
+            block
+          >
             {isStaffSetting ? (setting.isStaffSet ? "設定済" : "未設定") : (setting.isSet ? "設定済" : "未設定")}
           </Button>
         </Link>
