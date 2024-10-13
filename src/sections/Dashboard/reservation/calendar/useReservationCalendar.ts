@@ -17,6 +17,7 @@ interface UseReservationCalendarReturn {
   setMenuList: React.Dispatch<React.SetStateAction<MenuItem[]>>;
   setClosedDays: React.Dispatch<React.SetStateAction<string[]>>;
   setBusinessHours: React.Dispatch<React.SetStateAction<BusinessHour[]>>;
+  dateRange: { start: string; end: string } | null; // dateRangeを追加
   setDateRange: React.Dispatch<React.SetStateAction<{ start: string; end: string } | null>>;
   snackbar: { message: string; severity: 'success' | 'error' } | null;
   setSnackbar: React.Dispatch<React.SetStateAction<{ message: string; severity: 'success' | 'error' } | null>>;
@@ -34,7 +35,7 @@ const useReservationCalendar = (): UseReservationCalendarReturn => {
 
   const loadData = async () => {
     if (!session || !user || !dateRange) return;
-  
+
     try {
       const response = await fetch(
         `/api/calendar-data?startDate=${dateRange.start}&endDate=${dateRange.end}`,
@@ -81,6 +82,7 @@ const useReservationCalendar = (): UseReservationCalendarReturn => {
     setMenuList,
     setClosedDays,
     setBusinessHours,
+    dateRange, // dateRangeを追加
     setDateRange,
     snackbar,
     setSnackbar,

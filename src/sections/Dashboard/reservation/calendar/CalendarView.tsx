@@ -1,9 +1,10 @@
 // CalendarView.tsx
+
 import React, { forwardRef, useRef, useEffect } from "react";
 import FullCalendar from "@fullcalendar/react";
 import resourceTimelinePlugin from "@fullcalendar/resource-timeline";
 import interactionPlugin, { DateClickArg } from "@fullcalendar/interaction";
-import listPlugin from "@fullcalendar/list"; // 追加
+import listPlugin from "@fullcalendar/list";
 import { styled } from "@mui/system";
 import {
   EventClickArg,
@@ -15,6 +16,8 @@ import { Reservation, Staff, BusinessHour } from "@/types/reservation";
 import moment from "moment";
 import "moment/locale/ja";
 import { Box } from "@mui/material";
+// 日本語ロケールをインポート
+import jaLocale from "@fullcalendar/core/locales/ja";
 
 moment.locale("ja");
 
@@ -29,13 +32,101 @@ interface CalendarViewProps {
   handleDatesSet: (arg: any) => void;
   currentDate: moment.Moment;
   onDateClick: (clickInfo: DateClickArg) => void;
-  isMobile: boolean; // 追加
+  isMobile: boolean;
 }
 
 const StyledFullCalendar = styled(FullCalendar)<CalendarOptions>(
   ({ theme }) => ({
-    // 既存のスタイル設定
-    // ...省略...
+    "& .fc-timeline-event.staff-schedule": {
+      backgroundColor: "#F2884B !important",
+      borderColor: "#F2884B !important",
+      color: "white !important",
+    },
+    "& .fc-timeline-event.customer-reservation": {
+      backgroundColor: "#F2CA52 !important",
+      borderColor: "#F2CA52 !important",
+      color: "black !important",
+    },
+    "& .fc-timeline-slot-cushion": {
+      fontSize: "0.8rem",
+      color: theme.palette.text.primary,
+    },
+    "& .fc-timeline-event": {
+      borderRadius: "4px",
+      padding: "0 !important",
+      fontSize: "0.8rem",
+      boxSizing: "border-box",
+      width: "100% !important",
+      maxWidth: "100% !important",
+      left: "0 !important",
+      right: "0 !important",
+      margin: "0 !important",
+      height: "100% !important",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    "& .fc-timeline-event *": {
+      height: "100% !important",
+      margin: "0 !important",
+      padding: "0 !important",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    "& .fc-timeline-header": {
+      backgroundColor: theme.palette.background.paper,
+      borderBottom: `1px solid ${theme.palette.divider}`,
+    },
+    "& .fc-timeline-slot": {
+      minWidth: "50px !important",
+    },
+    "& .fc-timeline-header-row-chrono th": {
+      textAlign: "center",
+    },
+    "& .fc-resource-timeline-divider": {
+      display: "none",
+    },
+    "& .fc-toolbar": {
+      display: "none",
+    },
+    "& .fc-timeline-header-row:first-child": {
+      display: "none",
+    },
+    "& .fc-resource-area": {
+      maxHeight: "calc(80vh - 50px)",
+      overflowY: "auto !important",
+    },
+    "& .fc-resource-area table": {
+      height: "100%",
+    },
+    "& .fc-resource-area tbody": {
+      display: "flex",
+      flexDirection: "column",
+      height: "100%",
+    },
+    "& .fc-resource-area tr": {
+      flex: 1,
+      display: "flex",
+    },
+    "& .fc-resource-area td": {
+      flex: 1,
+      display: "flex",
+      alignItems: "center",
+      padding: "10px",
+      boxSizing: "border-box",
+      minHeight: "60px",
+      height: "100px",
+    },
+    "& .fc-timeline-body": {
+      maxHeight: "calc(80vh - 50px)",
+      overflowY: "auto !important",
+    },
+    "& .fc-event.closed-day": {
+      backgroundColor: "#ff9f89",
+      border: "none",
+      cursor: "default",
+    },
   })
 );
 
@@ -67,7 +158,7 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
       handleDatesSet,
       currentDate,
       onDateClick,
-      isMobile, // 追加
+      isMobile,
     },
     ref
   ) => {
@@ -127,10 +218,8 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
           id: reservation.id,
           resourceId: reservation.staff_id.toString(),
           title: reservation.is_staff_schedule
-            ? reservation.event
-            : `${reservation.customer_name || ""} - ${
-                reservation.menu_name || ""
-              }`,
+            ? reservation.event || ''
+            : `${reservation.customer_name || ""} - ${reservation.menu_name || ""}`,
           start: reservation.start_time,
           end: reservation.end_time,
           classNames: reservation.is_staff_schedule
@@ -149,6 +238,16 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
           classNames: ["closed-day"],
           allDay: true,
         })),
+      ...closedDays.map((dateStr) => ({
+        id: `closed-${dateStr}`,
+        title: "休業日",
+        start: dateStr,
+        end: moment(dateStr).add(1, "day").format("YYYY-MM-DD"),
+        allDay: true,
+        display: "background",
+        classNames: ["closed-day"],
+        overlap: false,
+      })),
     ];
 
     const resources = staffList.map((staff) => ({
@@ -161,17 +260,15 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
       timelineBodyRef.current = arg.el.querySelector(".fc-timeline-body");
     };
 
-    // プラグインの設定
     const plugins = [
       resourceTimelinePlugin,
       interactionPlugin,
-      listPlugin, // 追加
+      listPlugin,
     ];
 
-    // 初期ビューの設定
-    const initialView = isMobile ? "listWeek" : "resourceTimelineDay";
+    // initialViewをモバイル時にはlistDayに設定
+    const initialView = isMobile ? "listDay" : "resourceTimelineDay";
 
-    // ビジネスアワーの設定
     const businessHoursConfig = businessHours
       .filter((bh) => !bh.is_holiday)
       .map((bh) => ({
@@ -215,14 +312,16 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
           timeZone="local"
           height="100%"
           headerToolbar={false}
-          dayHeaderFormat={{
-            weekday: "long",
-            month: "numeric",
-            day: "numeric",
-          }}
-          slotLabelFormat={[
-            { hour: "2-digit", minute: "2-digit", hour12: false },
-          ]}
+          dayHeaderFormat={
+            isMobile
+              ? { weekday: 'long', month: 'short', day: 'numeric', omitCommas: true }
+              : undefined
+          }
+          slotLabelFormat={
+            isMobile
+              ? [{ hour: '2-digit', minute: '2-digit', hour12: false }]
+              : undefined
+          }
           resourceAreaHeaderContent=""
           resourceAreaWidth="200px"
           resourcesInitiallyExpanded={false}
@@ -236,6 +335,61 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
           }}
           businessHours={businessHoursConfig}
           dateClick={onDateClick}
+          // 日本語ロケールをモバイル時に適用
+          locale={isMobile ? 'ja' : undefined}
+          visibleRange={
+            isMobile
+              ? {
+                  start: currentDate.format('YYYY-MM-DD'),
+                  end: currentDate.clone().add(1, 'day').format('YYYY-MM-DD'),
+                }
+              : undefined
+          }
+          eventContent={(eventInfo) => {
+            const reservation = eventInfo.event.extendedProps as Reservation;
+            const staffName = reservation.staff_id
+              ? staffList.find(
+                  (staff) =>
+                    staff.id.toString() === reservation.staff_id?.toString()
+                )?.name || ''
+              : '';
+            if (reservation.is_staff_schedule) {
+              if (isMobile) {
+                return {
+                  html: `
+                    <div class="fc-event-title">
+                      <strong>${staffName}</strong><br>
+                      ${reservation.event || ""}
+                    </div>
+                  `,
+                };
+              } else {
+                return {
+                  html: `<div class="fc-event-title">${reservation.event || ""}</div>`,
+                };
+              }
+            }
+            if (isMobile) {
+              return {
+                html: `
+                  <div class="fc-event-title">
+                    <strong>${staffName}</strong><br>
+                    ${reservation.customer_name || ""}<br>
+                    ${reservation.menu_name || ""}
+                  </div>
+                `,
+              };
+            } else {
+              return {
+                html: `
+                  <div class="fc-event-title">
+                    ${reservation.customer_name || ""}<br>
+                    ${reservation.menu_name || ""}
+                  </div>
+                `,
+              };
+            }
+          }}
         />
       </Box>
     );
