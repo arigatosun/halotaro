@@ -60,6 +60,7 @@ export default function ReservationListView() {
   const limit = 10
 
   const { reservations, loading, error, totalCount } = useReservations(
+    user?.id, // ここにuser?.idを追加
     filterOptions,
     page,
     limit

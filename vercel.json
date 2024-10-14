@@ -7,6 +7,11 @@
     {
       "path": "/api/cron-capture-payment-intents",
       "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/cron-reservation-messages",
+      "schedule": "* * * * *"
     }
+
   ]
 }

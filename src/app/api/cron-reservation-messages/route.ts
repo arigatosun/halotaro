@@ -26,7 +26,6 @@ interface Reservation {
   user_id: string;
   customer_id: string;
   start_time: string;
-  created_at: string; // 追加: 予約作成日時
   status: string;
   reservation_customers: ReservationCustomer | null;
 }
@@ -74,7 +73,16 @@ export async function GET(request: NextRequest) {
     const today = new Date();
     today.setHours(0, 0, 0, 0); // 時間をクリア
 
-    // ステータスが'confirmed'の将来の予約を取得
+    // 5日後の日付を計算
+    const targetDate = new Date(today);
+    targetDate.setDate(today.getDate() + 5);
+    targetDate.setHours(0, 0, 0, 0); // 時間をクリア
+
+    // 次の日の日付を計算
+    const nextDay = new Date(targetDate);
+    nextDay.setDate(targetDate.getDate() + 1);
+
+    // 予約日のちょうど5日前の予約を取得
     const { data, error: reservationsError } = await supabase
       .from('reservations')
       .select(`
@@ -82,7 +90,6 @@ export async function GET(request: NextRequest) {
         user_id,
         customer_id,
         start_time,
-        created_at,  -- 追加: 予約作成日時
         status,
         reservation_customers:customer_id (
           email,
@@ -91,7 +98,8 @@ export async function GET(request: NextRequest) {
         )
       `)
       .eq('status', 'confirmed')
-      .gte('start_time', today.toISOString());
+      .gte('start_time', targetDate.toISOString())
+      .lt('start_time', nextDay.toISOString());
 
     if (reservationsError || !data) {
       console.error('予約の取得中にエラーが発生しました:', reservationsError);
@@ -105,7 +113,7 @@ export async function GET(request: NextRequest) {
 
     // 各予約を処理
     for (const reservation of reservations) {
-      const { id: reservationId, user_id: userId, start_time, created_at, reservation_customers } = reservation;
+      const { id: reservationId, user_id: userId, reservation_customers } = reservation;
 
       if (!reservation_customers) {
         console.warn(`予約 ${reservationId} に顧客情報がありません`);
@@ -113,13 +121,6 @@ export async function GET(request: NextRequest) {
       }
 
       const { email: customerEmail, name: customerName, name_kana: customerNameKana } = reservation_customers;
-
-      // 予約までの日数を計算
-      const reservationDate = new Date(start_time);
-      reservationDate.setHours(0, 0, 0, 0); // 時間をクリア
-
-      const timeDiff = reservationDate.getTime() - today.getTime();
-      const daysUntilReservation = Math.round(timeDiff / (1000 * 60 * 60 * 24));
 
       // ユーザーの予約メッセージを取得
       const { data: reservationMessagesData, error: messagesError } = await supabase
@@ -133,81 +134,74 @@ export async function GET(request: NextRequest) {
         continue;
       }
 
-      const messages = reservationMessagesData.messages || [];
+      const messages: MessageItem[] = reservationMessagesData.messages || [];
 
-      // 各メッセージを処理
-      for (const message of messages) {
-        const { id: messageId, days, message: messageText } = message;
+      // days === 5 のメッセージを取得
+      const message = messages.find((msg) => msg.days === 5);
 
-        if (days === daysUntilReservation) {
-          // 新しいチェック: 予約作成日がメッセージ送信予定日以降かどうか
-          const messageSendDate = new Date(reservationDate);
-          messageSendDate.setDate(reservationDate.getDate() - days);
-          messageSendDate.setHours(0, 0, 0, 0); // 時間をクリア
+      if (!message) {
+        console.log(`ユーザー ${userId} に days === 5 のメッセージがありません`);
+        continue;
+      }
 
-          const reservationCreatedAt = new Date(created_at);
-          reservationCreatedAt.setHours(0, 0, 0, 0); // 時間をクリア
+      const { id: messageId, message: messageText } = message;
 
-          if (reservationCreatedAt > messageSendDate) {
-            console.log(`予約 ${reservationId} はメッセージ ${messageId} の送信日以降に作成されたため、メッセージを送信しません`);
-            continue;
-          }
+      // メッセージが既に送信されているか確認
+      const { data: sentLog, error: sentLogError } = await supabase
+        .from('reservation_message_logs')
+        .select('id')
+        .eq('reservation_id', reservationId)
+        .eq('message_id', messageId)
+        .single();
 
-          // メッセージが既に送信されているか確認
-          const { data: sentLog, error: sentLogError } = await supabase
-            .from('reservation_message_logs')
-            .select('id')
-            .eq('reservation_id', reservationId)
-            .eq('message_id', messageId)
-            .single();
+      if (sentLogError && sentLogError.code !== 'PGRST116') {
+        console.error(`予約 ${reservationId}、メッセージ ${messageId} のログ確認中にエラーが発生しました:`, sentLogError);
+        continue;
+      }
 
-          if (sentLogError && sentLogError.code !== 'PGRST116') {
-            console.error(`予約 ${reservationId}、メッセージ ${messageId} のログ確認中にエラーが発生しました:`, sentLogError);
-            continue;
-          }
+      if (sentLog) {
+        console.log(`予約 ${reservationId} に対してメッセージ ${messageId} は既に送信済みです`);
+        continue;
+      }
 
-          if (sentLog) {
-            console.log(`予約 ${reservationId} に対してメッセージ ${messageId} は既に送信済みです`);
-            continue;
-          }
+      // スタッフ通知メールを取得
+      const senderEmailAddresses = await getStaffNotificationEmails(userId);
 
-          // スタッフ通知メールを取得
-          const senderEmailAddresses = await getStaffNotificationEmails(userId);
+      if (!senderEmailAddresses || senderEmailAddresses.length === 0) {
+        console.error(`ユーザー ${userId} の送信元メールアドレスが設定されていません`);
+        continue;
+      }
 
-          if (!senderEmailAddresses || senderEmailAddresses.length === 0) {
-            console.error(`ユーザー ${userId} の送信元メールアドレスが設定されていません`);
-            continue;
-          }
+      // 送信元メールアドレスを使用してメールを送信
+      try {
+        // メール本文を取得し、必要に応じてプレースホルダーを置換
+        const emailBody = messageText.replace('{name}', customerName);
 
-          // 送信元メールアドレスを使用してメールを送信
-          try {
-            await resend.emails.send({
-              from: `サービス名 <${senderEmailAddresses[0]}>`,
-              to: customerEmail,
-              subject: '予約に関するお知らせ',
-              text: messageText.replace('{name}', customerName),
-              // 必要に応じてテンプレートを使用できます
-            });
+        await resend.emails.send({
+          from: `サービス名 <${senderEmailAddresses[0]}>`,
+          to: customerEmail,
+          subject: '予約のご案内',
+          text: emailBody,
+          // 必要に応じてテンプレートを使用できます
+        });
 
-            console.log(`予約 ${reservationId} にメッセージ ${messageId} を送信しました`);
+        console.log(`予約 ${reservationId} にメールを送信しました`);
 
-            // 送信済みメッセージをログに記録
-            const { error: logError } = await supabase
-              .from('reservation_message_logs')
-              .insert({
-                reservation_id: reservationId,
-                message_id: messageId,
-                sent_at: new Date().toISOString(),
-              });
+        // 送信済みメッセージをログに記録
+        const { error: logError } = await supabase
+          .from('reservation_message_logs')
+          .insert({
+            reservation_id: reservationId,
+            message_id: messageId,
+            sent_at: new Date().toISOString(),
+          });
 
-            if (logError) {
-              console.error(`予約 ${reservationId}、メッセージ ${messageId} のログ保存中にエラーが発生しました:`, logError);
-            }
-
-          } catch (emailError) {
-            console.error(`予約 ${reservationId} にメッセージ ${messageId} を送信中にエラーが発生しました:`, emailError);
-          }
+        if (logError) {
+          console.error(`予約 ${reservationId}、メッセージ ${messageId} のログ保存中にエラーが発生しました:`, logError);
         }
+
+      } catch (emailError) {
+        console.error(`予約 ${reservationId} にメールを送信中にエラーが発生しました:`, emailError);
       }
     }
 

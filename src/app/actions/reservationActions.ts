@@ -1,4 +1,5 @@
 // reservationActions.ts
+
 import { SupabaseClient } from "@supabase/supabase-js";
 
 export interface Reservation {
@@ -20,21 +21,32 @@ export interface Reservation {
   coupon_id: string | null;
 }
 
+interface GetReservationsOptions {
+  date?: string;
+  staff?: string;
+  menu?: string;
+  statuses?: string[];
+  customerName?: string;
+  reservationRoute?: string;
+}
+
 export async function getReservations(
   supabase: SupabaseClient,
   user_id: string,
-  date?: string,
-  staff?: string,
-  menu?: string,
-  statuses?: string[],
+  filterOptions: GetReservationsOptions,
   page: number = 1,
   limit: number = 30
 ): Promise<{ data: Reservation[]; count: number }> {
+  const { date, staff, menu, statuses, customerName, reservationRoute } =
+    filterOptions;
+
   console.log("getReservations called with:", {
     date,
     staff,
     menu,
     statuses,
+    customerName,
+    reservationRoute,
     page,
     limit,
   });
@@ -79,6 +91,10 @@ export async function getReservations(
     query = query.in("status", statuses);
   }
 
+  if (reservationRoute && reservationRoute !== "all") {
+    query = query.eq("reservation_route", reservationRoute);
+  }
+
   // 'staff' ステータスの予約を除外
   query = query.neq("status", "staff");
 
@@ -111,6 +127,13 @@ export async function getReservations(
   if (menu) {
     formattedData = formattedData.filter(
       (reservation) => reservation.menu_name !== "Unknown"
+    );
+  }
+
+  // お客様名でのフィルタリング
+  if (customerName) {
+    formattedData = formattedData.filter((reservation) =>
+      reservation.customer_name.includes(customerName)
     );
   }
 
