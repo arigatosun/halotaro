@@ -59,6 +59,22 @@ async function getStaffNotificationEmails(userId: string): Promise<string[] | nu
   return data.email_addresses;
 }
 
+// サロン名を取得する関数
+async function getSalonName(userId: string): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('salons')
+    .select('salon_name')
+    .eq('user_id', userId)
+    .single();
+
+  if (error || !data) {
+    console.error(`ユーザー ${userId} のサロン名取得中にエラーが発生しました:`, error);
+    return null;
+  }
+
+  return data.salon_name;
+}
+
 export async function GET(request: NextRequest) {
   // 認証チェック
   if (request.headers.get('Authorization') !== `Bearer ${CRON_SECRET}`) {
@@ -172,15 +188,26 @@ export async function GET(request: NextRequest) {
         continue;
       }
 
+      // サロン名を取得
+      const salonName = await getSalonName(userId);
+
+      if (!salonName) {
+        console.error(`ユーザー ${userId} のサロン名が取得できませんでした`);
+        continue;
+      }
+
       // 送信元メールアドレスを使用してメールを送信
       try {
         // メール本文を取得し、必要に応じてプレースホルダーを置換
         const emailBody = messageText.replace('{name}', customerName);
 
+        // 件名を設定
+        const emailSubject = `〈${salonName}からのメッセージ〉`;
+
         await resend.emails.send({
-          from: `サービス名 <${senderEmailAddresses[0]}>`,
+          from: `Harotalo運営 <${senderEmailAddresses[0]}>`,
           to: customerEmail,
-          subject: '予約のご案内',
+          subject: emailSubject,
           text: emailBody,
           // 必要に応じてテンプレートを使用できます
         });
