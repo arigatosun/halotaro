@@ -1,7 +1,8 @@
+// ReservationCalendar.tsx
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
-import { Box } from "@mui/material";
+import React, { useState, useRef, useEffect, useCallback } from "react";
+import { Box, Select, MenuItem, FormControl, InputLabel, SelectChangeEvent } from "@mui/material";
 import moment from "moment";
 import "moment/locale/ja";
 import CalendarView from "./CalendarView";
@@ -13,20 +14,18 @@ import StaffScheduleForm from "./StaffScheduleForm";
 import StaffScheduleDetails from "./StaffScheduleDetails";
 import ReservationEditForm from "./ReservationEditForm";
 import useReservationCalendar from "./useReservationCalendar";
-import { EventClickArg, EventDropArg, DateSelectArg } from "@fullcalendar/core";
+import {
+  EventClickArg,
+  EventDropArg,
+  DateSelectArg,
+} from "@fullcalendar/core";
 import { DateClickArg } from "@fullcalendar/interaction";
 import { Reservation } from "@/types/reservation";
 import { useAuth } from "@/contexts/authcontext";
 import FullCalendar from "@fullcalendar/react";
-// サーバーアクションのインポート
-import {
-  getCalendarData,
-  createReservation,
-  updateReservation,
-  deleteReservation,
-} from "@/app/actions/reservationCalendarActions";
+import { useMediaQuery } from "react-responsive";
 
-moment.locale("ja"); // 日本語ロケールを設定
+moment.locale("ja");
 
 const ReservationCalendar: React.FC = () => {
   const [isNewStaffSchedule, setIsNewStaffSchedule] = useState(false);
@@ -35,14 +34,15 @@ const ReservationCalendar: React.FC = () => {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isNewReservation, setIsNewReservation] = useState(false);
   const [isStaffScheduleFormOpen, setIsStaffScheduleFormOpen] = useState(false);
-  const [selectedStaffSchedule, setSelectedStaffSchedule] =
-    useState<Reservation | null>(null);
+  const [selectedStaffSchedule, setSelectedStaffSchedule] = useState<Reservation | null>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [isEditFormOpen, setIsEditFormOpen] = useState(false);
   const [currentDate, setCurrentDate] = useState(moment());
   const [isCreatingFromButton, setIsCreatingFromButton] = useState(false);
+  const [selectedStaffId, setSelectedStaffId] = useState<string>("all");
 
-  // useReservationCalendar を呼び出す
+  const isMobile = useMediaQuery({ maxWidth: 767 });
+
   const {
     reservations,
     staffList,
@@ -55,6 +55,7 @@ const ReservationCalendar: React.FC = () => {
     setMenuList,
     setClosedDays,
     setBusinessHours,
+    dateRange, // dateRangeを取得
     setDateRange,
     snackbar,
     setSnackbar,
@@ -63,13 +64,29 @@ const ReservationCalendar: React.FC = () => {
   useEffect(() => {
     const today = moment();
     const startDate = today.startOf("day").format("YYYY-MM-DD");
-    const endDate = today.endOf("day").format("YYYY-MM-DD"); // 1日分に変更
+    const endDate = today.endOf("day").format("YYYY-MM-DD");
     setDateRange({ start: startDate, end: endDate });
-  }, []);
+  }, [setDateRange]);
 
   const calendarRef = useRef<FullCalendar>(null);
 
   const { user, session } = useAuth();
+
+  const handleStaffChange = (event: SelectChangeEvent<string>) => {
+    setSelectedStaffId(event.target.value as string);
+  };
+
+  const filteredReservations = reservations.filter((reservation) => {
+    if (selectedStaffId === "all") {
+      return true;
+    }
+    return reservation.staff_id === selectedStaffId;
+  });
+
+  const filteredStaffList =
+    selectedStaffId === "all"
+      ? staffList
+      : staffList.filter((staff) => staff.id === selectedStaffId);
 
   // 日付クリックハンドラ（予約追加）
   const handleDateClick = (dateClickInfo: DateClickArg) => {
@@ -85,7 +102,7 @@ const ReservationCalendar: React.FC = () => {
 
     const newReservation: Partial<Reservation> = {
       start_time: date.toISOString(),
-      end_time: moment(date).add(1, "hours").toISOString(), // デフォルトの予約時間を1時間に設定
+      end_time: moment(date).add(1, "hours").toISOString(),
       staff_id: resource.id,
       is_staff_schedule: false,
     };
@@ -95,7 +112,6 @@ const ReservationCalendar: React.FC = () => {
     setIsFormOpen(true);
     setIsCreatingFromButton(false);
   };
-
   // 日付選択ハンドラ（スタッフスケジュール追加）
   const handleDateSelect = (selectInfo: DateSelectArg) => {
     const { start, end, resource } = selectInfo;
@@ -268,7 +284,7 @@ const ReservationCalendar: React.FC = () => {
         user_id: user.id,
       };
 
-      console.log("Sending reservation data:", reservationData); // デバッグ用ログ
+      console.log("Sending reservation data:", reservationData);
 
       const response = await fetch("/api/calendar-data", {
         method: method,
@@ -477,6 +493,7 @@ const ReservationCalendar: React.FC = () => {
         total_price: 0,
       };
       console.log("Sending staff schedule data:", scheduleData);
+      console.log("Sending staff schedule data:", scheduleData);
 
       const response = await fetch("/api/calendar-data", {
         method: method,
@@ -588,35 +605,29 @@ const ReservationCalendar: React.FC = () => {
     }
   };
 
-  // カレンダーの日付レンダリング時に休業日をマークする
-  const handleDatesSet = (arg: any) => {
-    const calendarApi = arg.view.calendar;
+  // handleDatesSet関数を修正
+  const handleDatesSet = useCallback(
+    (arg: any) => {
+      // 表示範囲の開始日と終了日を取得
+      const startDate = moment(arg.start).format("YYYY-MM-DD");
+      const endDate = moment(arg.end).subtract(1, "days").format("YYYY-MM-DD"); // FullCalendar の end は翌日を指すため
 
-    // 表示範囲の開始日と終了日を取得
-    const startDate = moment(arg.start).format("YYYY-MM-DD");
-    const endDate = moment(arg.end).subtract(1, "days").format("YYYY-MM-DD"); // FullCalendar の end は翌日を指すため
+      // dateRange を更新 (値が変わった場合のみ)
+      if (!dateRange || dateRange.start !== startDate || dateRange.end !== endDate) {
+        setDateRange({ start: startDate, end: endDate });
+      }
 
-    // dateRange を更新
-    setDateRange({ start: startDate, end: endDate });
+      // currentDate を更新 (値が変わった場合のみ)
+      const newCurrentDate = moment(arg.start);
+      if (!newCurrentDate.isSame(currentDate, 'day')) {
+        setCurrentDate(newCurrentDate);
+      }
 
-    // currentDate を更新
-    setCurrentDate(moment(arg.start));
-
-    // 具体的な日付に基づいて休業日をマーク
-    if (closedDays && closedDays.length > 0) {
-      closedDays.forEach((dateStr) => {
-        calendarApi.addEvent({
-          title: "休業日",
-          start: dateStr,
-          end: moment(dateStr).add(1, "day").format("YYYY-MM-DD"),
-          allDay: true,
-          display: "background",
-          classNames: ["closed-day"],
-          overlap: false,
-        });
-      });
-    }
-  };
+      // calendarApi.addEventを使用してイベントを追加しない
+      // 休業日イベントはevents配列で管理する
+    },
+    [dateRange, setDateRange, currentDate, setCurrentDate]
+  );
 
   if (!staffList.length || !businessHours.length) {
     return <div>データを読み込んでいます...</div>;
@@ -624,7 +635,27 @@ const ReservationCalendar: React.FC = () => {
 
   return (
     <Box sx={{ p: 3, backgroundColor: "background.default" }}>
-      {/* ナビゲーションセクション */}
+      {isMobile && (
+        <Box sx={{ mb: 2 }}>
+          <FormControl fullWidth>
+            <InputLabel id="staff-select-label">スタッフ選択</InputLabel>
+            <Select
+              labelId="staff-select-label"
+              value={selectedStaffId}
+              onChange={handleStaffChange}
+              label="スタッフ選択"
+            >
+              <MenuItem value="all">全スタッフ</MenuItem>
+              {staffList.map((staff) => (
+                <MenuItem key={staff.id} value={staff.id}>
+                  {staff.name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </Box>
+      )}
+
       <NavigationControls
         currentDate={currentDate}
         onPrevDay={handlePrevDay}
@@ -634,21 +665,20 @@ const ReservationCalendar: React.FC = () => {
         onAddStaffSchedule={handleAddStaffSchedule}
       />
 
-      {/* カレンダーセクション */}
-
       <CalendarView
-        key={currentDate.format("YYYY-MM-DD")}
-        reservations={reservations}
-        staffList={staffList}
+        key={`${currentDate.format("YYYY-MM-DD")}-${selectedStaffId}`}
+        reservations={filteredReservations}
+        staffList={filteredStaffList}
         closedDays={closedDays}
         businessHours={businessHours}
-        onDateClick={handleDateClick} // この行を追加
+        onDateClick={handleDateClick}
         onDateSelect={handleDateSelect}
         onEventClick={handleEventClick}
         onEventDrop={handleEventDrop}
         handleDatesSet={handleDatesSet}
         ref={calendarRef}
         currentDate={currentDate}
+        isMobile={isMobile}
       />
 
       {/* 予約フォームモーダル */}
@@ -661,8 +691,8 @@ const ReservationCalendar: React.FC = () => {
           onDelete={handleDeleteReservation}
           staffList={staffList}
           menuList={menuList}
-          reservations={reservations} // 既存の予約データを渡す
-          hideReservationType={isCreatingFromButton} // 新規予約時に予約タイプを非表示
+          reservations={reservations}
+          hideReservationType={isCreatingFromButton}
           isCreatingFromButton={isCreatingFromButton}
           businessHours={businessHours}
         />

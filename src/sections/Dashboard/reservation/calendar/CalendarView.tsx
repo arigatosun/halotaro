@@ -1,7 +1,10 @@
+// CalendarView.tsx
+
 import React, { forwardRef, useRef, useEffect } from "react";
 import FullCalendar from "@fullcalendar/react";
 import resourceTimelinePlugin from "@fullcalendar/resource-timeline";
 import interactionPlugin, { DateClickArg } from "@fullcalendar/interaction";
+import listPlugin from "@fullcalendar/list";
 import { styled } from "@mui/system";
 import {
   EventClickArg,
@@ -13,6 +16,8 @@ import { Reservation, Staff, BusinessHour } from "@/types/reservation";
 import moment from "moment";
 import "moment/locale/ja";
 import { Box } from "@mui/material";
+// 日本語ロケールをインポート
+import jaLocale from "@fullcalendar/core/locales/ja";
 
 moment.locale("ja");
 
@@ -27,6 +32,7 @@ interface CalendarViewProps {
   handleDatesSet: (arg: any) => void;
   currentDate: moment.Moment;
   onDateClick: (clickInfo: DateClickArg) => void;
+  isMobile: boolean;
 }
 
 const StyledFullCalendar = styled(FullCalendar)<CalendarOptions>(
@@ -152,6 +158,7 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
       handleDatesSet,
       currentDate,
       onDateClick,
+      isMobile,
     },
     ref
   ) => {
@@ -201,11 +208,6 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
       )
       .format("HH:mm:ss");
 
-    console.log("Raw reservations:", reservations);
-    console.log("Business hours:", businessHours);
-    console.log("Earliest open time:", earliestOpenTime);
-    console.log("Latest close time:", latestCloseTime);
-
     const events = [
       ...reservations
         .filter(
@@ -216,16 +218,14 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
           id: reservation.id,
           resourceId: reservation.staff_id.toString(),
           title: reservation.is_staff_schedule
-            ? reservation.event
-            : `${reservation.customer_name || ""} - ${
-                reservation.menu_name || ""
-              }`,
+            ? reservation.event || ''
+            : `${reservation.customer_name || ""} - ${reservation.menu_name || ""}`,
           start: reservation.start_time,
           end: reservation.end_time,
           classNames: reservation.is_staff_schedule
             ? ["staff-schedule"]
             : ["customer-reservation"],
-          editable: reservation.editable, // ここを追加
+          editable: reservation.editable,
           extendedProps: reservation,
         })),
       ...businessHours
@@ -238,23 +238,44 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
           classNames: ["closed-day"],
           allDay: true,
         })),
+      ...closedDays.map((dateStr) => ({
+        id: `closed-${dateStr}`,
+        title: "休業日",
+        start: dateStr,
+        end: moment(dateStr).add(1, "day").format("YYYY-MM-DD"),
+        allDay: true,
+        display: "background",
+        classNames: ["closed-day"],
+        overlap: false,
+      })),
     ];
-
-    console.log("Events passed to FullCalendar:", events);
 
     const resources = staffList.map((staff) => ({
       id: staff.id.toString(),
       title: staff.name,
     }));
 
-    console.log("Resources passed to FullCalendar:", resources);
-    console.log("Events:", events);
-    console.log("Resources:", resources);
-
     const handleViewDidMount = (arg: { el: HTMLElement; view: any }) => {
       resourceAreaRef.current = arg.el.querySelector(".fc-resource-area");
       timelineBodyRef.current = arg.el.querySelector(".fc-timeline-body");
     };
+
+    const plugins = [
+      resourceTimelinePlugin,
+      interactionPlugin,
+      listPlugin,
+    ];
+
+    // initialViewをモバイル時にはlistDayに設定
+    const initialView = isMobile ? "listDay" : "resourceTimelineDay";
+
+    const businessHoursConfig = businessHours
+      .filter((bh) => !bh.is_holiday)
+      .map((bh) => ({
+        daysOfWeek: [moment(bh.date).day()],
+        startTime: bh.open_time || "00:00",
+        endTime: bh.close_time || "24:00",
+      }));
 
     return (
       <Box
@@ -271,11 +292,11 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
         <StyledFullCalendar
           expandRows={true}
           ref={ref}
-          plugins={[resourceTimelinePlugin, interactionPlugin]}
+          plugins={plugins}
           datesSet={handleDatesSet}
-          initialView="resourceTimelineDay"
+          initialView={initialView}
           initialDate={currentDate.format("YYYY-MM-DD")}
-          editable={false} // デフォルトで編集不可に設定
+          editable={false}
           selectable={true}
           selectConstraint="businessHours"
           select={onDateSelect}
@@ -291,14 +312,16 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
           timeZone="local"
           height="100%"
           headerToolbar={false}
-          dayHeaderFormat={{
-            weekday: "long",
-            month: "numeric",
-            day: "numeric",
-          }}
-          slotLabelFormat={[
-            { hour: "2-digit", minute: "2-digit", hour12: false },
-          ]}
+          dayHeaderFormat={
+            isMobile
+              ? { weekday: 'long', month: 'short', day: 'numeric', omitCommas: true }
+              : undefined
+          }
+          slotLabelFormat={
+            isMobile
+              ? [{ hour: '2-digit', minute: '2-digit', hour12: false }]
+              : undefined
+          }
           resourceAreaHeaderContent=""
           resourceAreaWidth="200px"
           resourcesInitiallyExpanded={false}
@@ -310,14 +333,63 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
           eventDidMount={(info) => {
             console.log("Event mounted:", info.event.toPlainObject());
           }}
-          businessHours={businessHours
-            .filter((bh) => !bh.is_holiday)
-            .map((bh) => ({
-              daysOfWeek: [moment(bh.date).day()],
-              startTime: bh.open_time || "00:00", // NULLの場合のデフォルト値
-              endTime: bh.close_time || "24:00",
-            }))}
+          businessHours={businessHoursConfig}
           dateClick={onDateClick}
+          // 日本語ロケールをモバイル時に適用
+          locale={isMobile ? 'ja' : undefined}
+          visibleRange={
+            isMobile
+              ? {
+                  start: currentDate.format('YYYY-MM-DD'),
+                  end: currentDate.clone().add(1, 'day').format('YYYY-MM-DD'),
+                }
+              : undefined
+          }
+          eventContent={(eventInfo) => {
+            const reservation = eventInfo.event.extendedProps as Reservation;
+            const staffName = reservation.staff_id
+              ? staffList.find(
+                  (staff) =>
+                    staff.id.toString() === reservation.staff_id?.toString()
+                )?.name || ''
+              : '';
+            if (reservation.is_staff_schedule) {
+              if (isMobile) {
+                return {
+                  html: `
+                    <div class="fc-event-title">
+                      <strong>${staffName}</strong><br>
+                      ${reservation.event || ""}
+                    </div>
+                  `,
+                };
+              } else {
+                return {
+                  html: `<div class="fc-event-title">${reservation.event || ""}</div>`,
+                };
+              }
+            }
+            if (isMobile) {
+              return {
+                html: `
+                  <div class="fc-event-title">
+                    <strong>${staffName}</strong><br>
+                    ${reservation.customer_name || ""}<br>
+                    ${reservation.menu_name || ""}
+                  </div>
+                `,
+              };
+            } else {
+              return {
+                html: `
+                  <div class="fc-event-title">
+                    ${reservation.customer_name || ""}<br>
+                    ${reservation.menu_name || ""}
+                  </div>
+                `,
+              };
+            }
+          }}
         />
       </Box>
     );

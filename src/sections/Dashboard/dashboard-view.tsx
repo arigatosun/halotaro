@@ -1,4 +1,3 @@
-// Dashboard.tsx
 "use client";
 
 import React, { useEffect, useState, useRef } from "react";
@@ -9,7 +8,6 @@ import CancellationCard from "@/components/CancellationCard";
 import { useAuth } from "@/contexts/authcontext";
 import dayjs from "dayjs";
 
-// 型定義
 interface AnimatedNumberProps {
   value: number;
 }
@@ -18,7 +16,7 @@ interface StatCardProps {
   title: string;
   value: React.ReactNode;
   icon: LucideIcon;
-  subtext: React.ReactNode; // string から React.ReactNode に変更
+  subtext: React.ReactNode;
 }
 
 interface Appointment {
@@ -90,18 +88,17 @@ const Dashboard = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  // フラグを設定して一度だけフェッチする
   const fetchRef = useRef<boolean>(false);
 
   useEffect(() => {
-    if (authLoading) return; // 認証情報がロード中の場合は待機
+    if (authLoading) return;
     if (!user || !session) {
       setError("ユーザーがログインしていません。");
       setLoading(false);
       return;
     }
 
-    if (fetchRef.current) return; // 既にフェッチ済みの場合は実行しない
+    if (fetchRef.current) return;
     fetchRef.current = true;
 
     const fetchDashboardData = async () => {
@@ -139,7 +136,6 @@ const Dashboard = () => {
     fetchDashboardData();
   }, [user, session, authLoading]);
 
-  // 前日比の計算
   const reservationDifference = todayReservations - yesterdayReservations;
   const reservationDifferenceText =
     reservationDifference >= 0
@@ -155,8 +151,8 @@ const Dashboard = () => {
 
   if (authLoading || loading) {
     return (
-      <div className="p-8 pt-0">
-        <h2 className="text-3xl font-bold mb-8">ダッシュボード</h2>
+      <div className="p-4 md:p-8 pt-0">
+        <h2 className="text-2xl md:text-3xl font-bold mb-4 md:mb-8">ダッシュボード</h2>
         <p>読み込み中...</p>
       </div>
     );
@@ -164,52 +160,50 @@ const Dashboard = () => {
 
   if (error) {
     return (
-      <div className="p-8 pt-0">
-        <h2 className="text-3xl font-bold mb-8">ダッシュボード</h2>
+      <div className="p-4 md:p-8 pt-0">
+        <h2 className="text-2xl md:text-3xl font-bold mb-4 md:mb-8">ダッシュボード</h2>
         <p className="text-red-500">エラー: {error}</p>
       </div>
     );
   }
 
   return (
-    <div className="p-8 pt-0">
-      <h2 className="text-3xl font-bold mb-8">ダッシュボード</h2>
-      <div className="grid gap-4 lg:grid-cols-3 mb-8">
-        <div className="space-y-4 lg:space-y-0 lg:grid lg:grid-rows-2 lg:gap-4">
-          <StatCard
-            title="本日の予約"
-            value={<AnimatedNumber value={todayReservations} />}
-            icon={Calendar}
-            subtext={
-              <span
-                className={`text-xs ${
-                  reservationDifference >= 0 ? "text-green-500" : "text-red-500"
-                } opacity-70`}
-              >
-                {reservationDifferenceText}
-              </span>
-            }
-          />
-          <StatCard
-            title="本日の売上"
-            value={
-              <>
-                ¥<AnimatedNumber value={todaySales} />
-              </>
-            }
-            icon={DollarSign}
-            subtext={
-              <span
-                className={`text-xs ${
-                  salesDifference >= 0 ? "text-green-500" : "text-red-500"
-                } opacity-70`}
-              >
-                {salesDifferenceText}
-              </span>
-            }
-          />
-        </div>
-        <Card className="bg-white border-none shadow-lg lg:col-span-2">
+    <div className="p-4 md:p-8 pt-0">
+      <h2 className="text-2xl md:text-3xl font-bold mb-4 md:mb-8">ダッシュボード</h2>
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 mb-4 md:mb-8">
+        <StatCard
+          title="本日の予約"
+          value={<AnimatedNumber value={todayReservations} />}
+          icon={Calendar}
+          subtext={
+            <span
+              className={`text-xs ${
+                reservationDifference >= 0 ? "text-green-500" : "text-red-500"
+              } opacity-70`}
+            >
+              {reservationDifferenceText}
+            </span>
+          }
+        />
+        <StatCard
+          title="本日の売上"
+          value={
+            <>
+              ¥<AnimatedNumber value={todaySales} />
+            </>
+          }
+          icon={DollarSign}
+          subtext={
+            <span
+              className={`text-xs ${
+                salesDifference >= 0 ? "text-green-500" : "text-red-500"
+              } opacity-70`}
+            >
+              {salesDifferenceText}
+            </span>
+          }
+        />
+        <Card className="bg-white border-none shadow-lg md:col-span-2 lg:col-span-1">
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>次の予約</CardTitle>
             <Link
@@ -224,7 +218,7 @@ const Dashboard = () => {
               {upcomingAppointments.length > 0 ? (
                 upcomingAppointments.map((appointment, index) => (
                   <div key={index} className="flex items-center p-3 rounded-md">
-                    <Clock className="h-4 w-4 text-orange-500 mr-2" />
+                    <Clock className="h-4 w-4 text-orange-500 mr-2 flex-shrink-0" />
                     <div>
                       <p className="text-sm font-semibold">
                         {appointment.time} - {appointment.client}

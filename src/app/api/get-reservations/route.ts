@@ -28,14 +28,20 @@ export async function GET(request: NextRequest) {
   const page = parseInt(searchParams.get("page") || "1", 10);
   const limit = parseInt(searchParams.get("limit") || "30", 10);
 
+  // フィルターオプションをオブジェクトとして作成
+  const filterOptions = {
+    date,
+    staff,
+    menu,
+    statuses,
+    // 必要に応じて他のフィルター項目を追加
+  };
+
   try {
     const { data, count } = await getReservations(
       supabase,
       userId,
-      date,
-      staff,
-      menu,
-      statuses,
+      filterOptions,
       page,
       limit
     );

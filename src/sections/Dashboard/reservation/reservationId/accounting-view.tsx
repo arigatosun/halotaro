@@ -1,4 +1,3 @@
-// accounting-view.tsx
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
@@ -51,6 +50,19 @@ interface MenuItem {
   image_url: string | null;
 }
 
+// SalesMenuItem interface
+interface SalesMenuItem {
+  id: number;
+  user_id: string;
+  name: string;
+  category: string;
+  description: string | null;
+  price: number;
+  created_at: string;
+  updated_at: string;
+  image_url: string | null;
+}
+
 // Staff interface
 interface Staff {
   id: string;
@@ -98,38 +110,12 @@ interface Reservation {
   event: string | null;
   menu_items: MenuItem | null;
   staff: Staff | null;
-  reservation_customers: ReservationCustomer | null; // 修正: 配列から単一オブジェクトに変更
+  reservation_customers: ReservationCustomer | null;
 }
 
 interface AccountingPageProps {
   reservationId: string;
 }
-
-// 店販のカテゴリーとアイテムを定義
-const retailCategories = [
-  "シャンプー",
-  "トリートメント",
-  "スタイリング",
-  "ヘアケア",
-  "ボディケア",
-];
-
-// retailItemsをRecord<string, string[]>として定義
-const retailItems: Record<string, string[]> = {
-  シャンプー: [
-    "モイストシャンプー",
-    "ボリュームシャンプー",
-    "スカルプシャンプー",
-  ],
-  トリートメント: [
-    "モイストトリートメント",
-    "ダメージケアトリートメント",
-    "カラーケアトリートメント",
-  ],
-  スタイリング: ["ヘアオイル", "ヘアワックス", "ヘアスプレー"],
-  ヘアケア: ["頭皮ケアローション", "育毛剤", "ヘアパック"],
-  ボディケア: ["ボディクリーム", "ボディオイル", "ハンドクリーム"],
-};
 
 export const AccountingPage: React.FC<AccountingPageProps> = ({
   reservationId,
@@ -158,6 +144,12 @@ export const AccountingPage: React.FC<AccountingPageProps> = ({
     [category: string]: MenuItem[];
   }>({});
 
+  // 店販データのステートを追加
+  const [retailCategories, setRetailCategories] = useState<string[]>([]);
+  const [retailItemsByCategory, setRetailItemsByCategory] = useState<{
+    [category: string]: SalesMenuItem[];
+  }>({});
+
   const [reservation, setReservation] = useState<Reservation | null>(null);
   const [customerName, setCustomerName] = useState<string>("");
   const [staffList, setStaffList] = useState<Staff[]>([]);
@@ -169,6 +161,7 @@ export const AccountingPage: React.FC<AccountingPageProps> = ({
   const fetchReservationRef = useRef<boolean>(false);
   const fetchStaffRef = useRef<boolean>(false);
   const fetchMenuItemsRef = useRef<boolean>(false);
+  const fetchSalesMenuItemsRef = useRef<boolean>(false); // 店販データ取得用
   const fetchTemporarySaveRef = useRef<boolean>(false);
 
   useEffect(() => {
@@ -195,7 +188,8 @@ export const AccountingPage: React.FC<AccountingPageProps> = ({
           throw new Error("予約情報の取得に失敗しました");
         }
 
-        const data: { reservation: Reservation; accountingData?: any } = await response.json();
+        const data: { reservation: Reservation; accountingData?: any } =
+          await response.json();
         setReservation(data.reservation);
 
         if (data.reservation.reservation_customers) {
@@ -332,6 +326,60 @@ export const AccountingPage: React.FC<AccountingPageProps> = ({
     fetchMenuItems();
   }, [user, session, authLoading, userId, selectedCategory]);
 
+  // 店販データを取得するuseEffectを追加
+  useEffect(() => {
+    if (authLoading) return;
+    if (!user || !session) {
+      // ユーザーがログインしていない場合の処理
+      return;
+    }
+
+    if (fetchSalesMenuItemsRef.current) return; // 既にフェッチ済みの場合は実行しない
+    fetchSalesMenuItemsRef.current = true;
+
+    const fetchSalesMenuItems = async () => {
+      if (!userId || !session.access_token) return;
+
+      try {
+        const response = await fetch("/api/get-sales-menu-items", {
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error("店販項目の取得に失敗しました");
+        }
+
+        const data: SalesMenuItem[] = await response.json();
+
+        const userSalesMenuItems = data.filter((item) => item.user_id === userId);
+
+        const categories = Array.from(
+          new Set(userSalesMenuItems.map((item) => item.category))
+        ) as string[];
+        setRetailCategories(categories);
+
+        if (categories.length > 0 && !selectedCategory) {
+          setSelectedCategory(categories[0]);
+        }
+
+        const itemsByCategory: { [category: string]: SalesMenuItem[] } = {};
+        userSalesMenuItems.forEach((item) => {
+          if (!itemsByCategory[item.category]) {
+            itemsByCategory[item.category] = [];
+          }
+          itemsByCategory[item.category].push(item);
+        });
+        setRetailItemsByCategory(itemsByCategory);
+      } catch (error) {
+        console.error("店販項目の取得エラー:", error);
+      }
+    };
+
+    fetchSalesMenuItems();
+  }, [user, session, authLoading, userId, selectedCategory]);
+
   useEffect(() => {
     if (authLoading) return;
     if (!user || !session) {
@@ -346,11 +394,14 @@ export const AccountingPage: React.FC<AccountingPageProps> = ({
       if (!reservationId || !userId || !session.access_token) return;
 
       try {
-        const response = await fetch(`/api/accounting?reservationId=${reservationId}`, {
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-          },
-        });
+        const response = await fetch(
+          `/api/accounting?reservationId=${reservationId}`,
+          {
+            headers: {
+              Authorization: `Bearer ${session.access_token}`,
+            },
+          }
+        );
 
         if (!response.ok) {
           if (response.status === 404) {
@@ -814,7 +865,7 @@ export const AccountingPage: React.FC<AccountingPageProps> = ({
                 <TableRow>
                   <TableHead className="text-black font-bold">カテゴリ</TableHead>
                   <TableHead className="text-black font-bold">
-                    メニュー・店販・割引・サービス・オプション
+                    メニュー・店販
                   </TableHead>
                   <TableHead className="text-black font-bold">スタッフ</TableHead>
                   <TableHead className="text-black font-bold">単価</TableHead>
@@ -881,7 +932,7 @@ export const AccountingPage: React.FC<AccountingPageProps> = ({
                       店販
                     </TabsTrigger>
                     {/*<TabsTrigger value="discount" className="flex-1">
-                      //{/* 割引・サービス・オプション
+                      割引・サービス・オプション
                     </TabsTrigger>*/}
                   </TabsList>
                   <TabsContent value="treatment">
@@ -944,17 +995,19 @@ export const AccountingPage: React.FC<AccountingPageProps> = ({
                         ))}
                       </div>
                       <div className="space-y-2">
-                        {retailItems[selectedCategory]?.map((item: string) => (
-                          <Button
-                            key={item}
-                            variant="outline"
-                            className="w-full justify-start"
-                            onClick={() => addItem("店販", item, 0)}
-                          >
-                            <PlusIcon className="mr-2 h-4 w-4" />
-                            {item}
-                          </Button>
-                        ))}
+                        {retailItemsByCategory[selectedCategory]?.map(
+                          (item: SalesMenuItem) => (
+                            <Button
+                              key={item.id}
+                              variant="outline"
+                              className="w-full justify-start"
+                              onClick={() => addItem("店販", item.name, item.price)}
+                            >
+                              <PlusIcon className="mr-2 h-4 w-4" />
+                              {item.name}
+                            </Button>
+                          )
+                        )}
                       </div>
                     </div>
                   </TabsContent>

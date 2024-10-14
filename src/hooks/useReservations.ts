@@ -1,9 +1,10 @@
+// hooks/useReservations.ts
+
 import { useState, useEffect, useCallback } from "react";
-import { Reservation } from "@/app/actions/reservationActions";
+import { Reservation, getReservations } from "@/app/actions/reservationActions";
 import { DateRange } from "react-day-picker";
 import { format } from "date-fns";
-import { useAuth } from "@/contexts/authcontext";
-import { useRouter } from "next/router";
+import { supabase } from "@/lib/supabaseClient";
 
 interface FilterOptions {
   dateRange: DateRange | undefined;
@@ -15,6 +16,7 @@ interface FilterOptions {
 }
 
 export const useReservations = (
+  user_id: string | undefined,
   filterOptions: FilterOptions,
   page: number,
   limit: number
@@ -23,10 +25,9 @@ export const useReservations = (
   const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
-  const { user } = useAuth();
 
   const fetchReservations = useCallback(async () => {
-    if (!user) {
+    if (!user_id) {
       setError(new Error("ユーザーが認証されていません"));
       setLoading(false);
       return;
@@ -41,40 +42,22 @@ export const useReservations = (
         date = format(filterOptions.dateRange.from, "yyyy-MM-dd");
       }
 
-      const params = new URLSearchParams();
-      if (date) params.append("date", date);
-      if (filterOptions.staff && filterOptions.staff !== "all")
-        params.append("staff", filterOptions.staff);
-      if (filterOptions.menu) params.append("menu", filterOptions.menu);
-      if (filterOptions.statuses.length > 0)
-        params.append("statuses", filterOptions.statuses.join(","));
-      params.append("page", page.toString());
-      params.append("limit", limit.toString());
-
-      const response = await fetch(
-        `/api/get-reservations?${params.toString()}`,
+      const { data, count } = await getReservations(
+        supabase,
+        user_id,
         {
-          method: "GET",
-          headers: {
-            "user-id": user.id,
-          },
-        }
+          date,
+          staff: filterOptions.staff,
+          menu: filterOptions.menu,
+          statuses: filterOptions.statuses,
+          customerName: filterOptions.customerName,
+          reservationRoute: filterOptions.reservationRoute,
+        },
+        page,
+        limit
       );
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "データの取得に失敗しました");
-      }
-
-      const { data = [], count = 0 } = await response.json();
-
-      const filteredData = filterOptions.customerName
-        ? data.filter((reservation: Reservation) =>
-            reservation.customer_name.includes(filterOptions.customerName)
-          )
-        : data;
-
-      setReservations(filteredData);
+      setReservations(data);
       setTotalCount(count);
     } catch (err) {
       console.error("Error in fetchReservations:", err);
@@ -84,7 +67,7 @@ export const useReservations = (
     } finally {
       setLoading(false);
     }
-  }, [filterOptions, page, limit, user]);
+  }, [user_id, filterOptions, page, limit]);
 
   useEffect(() => {
     fetchReservations();

@@ -146,7 +146,8 @@ function ReservationContent({ userId }: ReservationRootProps) {
   return (
     <Layout>
       <Box sx={{ padding: "0 16px" }}>
-        <ReservationHeader currentStep={activeStep} />
+        {/* userId を渡します */}
+        <ReservationHeader currentStep={activeStep} userId={userId} />
         {getStepContent(activeStep)}
       </Box>
     </Layout>

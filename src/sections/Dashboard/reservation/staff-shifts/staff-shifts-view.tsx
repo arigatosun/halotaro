@@ -91,15 +91,18 @@ const StaffShiftSettings: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [salonBusinessHours, setSalonBusinessHours] = useState<{ [date: string]: boolean }>({});
 
+  // year と month が変更されたときに currentDate を更新
   useEffect(() => {
     if (year && month && user) {
-      setCurrentDate(moment(`${year}-${month}-01`));
-      fetchStaffsAndShifts(user.id);
-      fetchSalonBusinessHours();
+      const newDate = moment(`${year}-${month}-01`);
+      setCurrentDate(newDate);
+      fetchStaffsAndShifts(user.id, newDate);
+      fetchSalonBusinessHours(newDate);
     }
   }, [year, month, user]);
 
-  const fetchStaffsAndShifts = async (userId: string) => {
+  // fetchStaffsAndShifts を修正して year と month を直接受け取るように変更
+  const fetchStaffsAndShifts = async (userId: string, date: moment.Moment) => {
     setIsLoading(true);
     try {
       const { data: staffs, error } = await supabase
@@ -110,13 +113,13 @@ const StaffShiftSettings: React.FC = () => {
 
       if (error) throw error;
 
-      const daysInMonth = currentDate.daysInMonth();
+      const daysInMonth = date.daysInMonth();
       const shifts = await Promise.all(staffs.map(async (staff) => {
-        const dbShifts = await getStaffShifts(staff.id.toString(), parseInt(year as string), parseInt(month as string));
+        const dbShifts = await getStaffShifts(staff.id.toString(), date.year(), date.month() + 1);
         return {
           ...staff,
           shifts: Array.from({ length: daysInMonth }, (_, i) => {
-            const dbShift = dbShifts.find(s => s.date === `${year}-${month.toString().padStart(2, '0')}-${(i + 1).toString().padStart(2, '0')}`);
+            const dbShift = dbShifts.find(s => s.date === date.clone().date(i + 1).format('YYYY-MM-DD'));
             return dbShift ? convertDBShiftToShiftData(dbShift) : { type: '' };
           })
         };
@@ -128,11 +131,12 @@ const StaffShiftSettings: React.FC = () => {
     setIsLoading(false);
   };
 
-  const fetchSalonBusinessHours = async () => {
+  // fetchSalonBusinessHours を修正して year と month を直接受け取るように変更
+  const fetchSalonBusinessHours = async (date: moment.Moment) => {
     try {
-      const businessHours = await getSalonBusinessHours(parseInt(year as string), parseInt(month as string));
-      const businessHoursMap = businessHours.reduce((acc, { date, is_holiday }) => {
-        acc[date] = is_holiday;
+      const businessHours = await getSalonBusinessHours(date.year(), date.month() + 1);
+      const businessHoursMap = businessHours.reduce((acc, { date: dateStr, is_holiday }) => {
+        acc[dateStr] = is_holiday;
         return acc;
       }, {} as { [date: string]: boolean });
       setSalonBusinessHours(businessHoursMap);
@@ -355,7 +359,7 @@ const StaffShiftSettings: React.FC = () => {
         const dateStr = date.format('YYYY-MM-DD');
 
         // `salon_id` を取得
-        const salonId = user.id; // または適切な方法で salon_id を取得
+        const salonId = user.id; // 必要に応じて正しい salon_id を取得してください
 
         const { data, error } = await supabase
           .from('salon_business_hours')
@@ -598,6 +602,7 @@ const StaffShiftSettings: React.FC = () => {
                   zIndex: 2,
                 }}>スタッフ名</TableCell>
                 <TableCell style={{ fontWeight: 'bold', padding: '10px', width: '100px' }}>設定状況</TableCell>
+                {/* 「設定」列を削除 */}
                 {Array.from({ length: daysInMonth }, (_, i) => (
                   <TableCell key={i} align="center" style={{ fontWeight: 'bold', padding: '10px' }}>
                     {i + 1}
@@ -639,6 +644,7 @@ const StaffShiftSettings: React.FC = () => {
                       </Button>
                     )}
                   </TableCell>
+                  {/* 「設定」列を削除 */}
                   {staff.shifts.map((shift, index) => (
                     <TableCell key={index} align="center" style={{ padding: '4px' }}>
                       {renderShiftButton(shift, staff.name, index + 1)}
@@ -649,7 +655,7 @@ const StaffShiftSettings: React.FC = () => {
             </TableBody>
           </Table>
         </TableContainer>
-        {/* 下部のボタンを削除しました */}
+        {/* 下部のボタンを削除 */}
       </Card>
       <Popover
         open={shiftPopover.visible}

@@ -1,4 +1,3 @@
-// CancellationCard.tsx
 "use client";
 
 import React, { useEffect, useState, useRef } from "react";
@@ -16,9 +15,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { useAuth } from "@/contexts/authcontext";
-import dayjs from "dayjs";
 
-// インターフェースの定義
 interface CancellationData {
   date: string;
   count: number;
@@ -35,16 +32,26 @@ const CancellationCard: React.FC = () => {
   const [monthlyData, setMonthlyData] = useState<CancellationData[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [isMobile, setIsMobile] = useState<boolean>(false);
 
-  // フラグを設定して一度だけフェッチする
   const fetchRef = useRef<boolean>(false);
 
-  // 期間の説明を定義
   const periodDescriptions: Record<"daily" | "weekly" | "monthly", string> = {
-    daily: "過去14日間",
-    weekly: "過去4週間",
+    daily: isMobile ? "過去5日間" : "過去14日間",
+    weekly: "過去3週間", // 4週間から3週間に変更
     monthly: "過去6か月間",
   };
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+
+    handleResize();
+    window.addEventListener('resize', handleResize);
+
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   useEffect(() => {
     if (authLoading) return;
@@ -54,7 +61,7 @@ const CancellationCard: React.FC = () => {
       return;
     }
 
-    if (fetchRef.current) return; // 既にフェッチ済みの場合は実行しない
+    if (fetchRef.current) return;
     fetchRef.current = true;
 
     const fetchCancellationData = async () => {
@@ -91,29 +98,45 @@ const CancellationCard: React.FC = () => {
   }, [user, session, authLoading]);
 
   const getDataForTab = () => {
+    let data = [];
     switch (activeTab) {
       case "daily":
-        return dailyData;
+        data = dailyData;
+        break;
       case "weekly":
-        return weeklyData;
+        data = weeklyData;
+        break;
       case "monthly":
-        return monthlyData;
+        data = monthlyData;
+        break;
       default:
-        return dailyData;
+        data = dailyData;
     }
+
+    // データを新しい順に並べ替え（週別データのdateはパースできないため、インデックスでソート）
+    data = [...data].reverse();
+
+    // モバイル表示時は最新の5日分のデータのみを返す
+    if (isMobile && activeTab === "daily") {
+      return data.slice(-5);
+    }
+
+    // 週別の場合は最新の3週間分のデータのみを返す
+    if (activeTab === "weekly") {
+      return data.slice(-3);
+    }
+
+    return data;
   };
 
-  // キャンセル数の合計
   const getTotalCancellations = () => {
     return getDataForTab().reduce((sum, item) => sum + item.count, 0);
   };
 
-  // 総予約数の合計
   const getTotalReservations = () => {
     return getDataForTab().reduce((sum, item) => sum + item.totalCount, 0);
   };
 
-  // 平均キャンセル率の計算
   const getAverageRate = () => {
     const totalCancellations = getTotalCancellations();
     const totalReservations = getTotalReservations();
@@ -121,9 +144,18 @@ const CancellationCard: React.FC = () => {
     return parseFloat(((totalCancellations / totalReservations) * 100).toFixed(1));
   };
 
+  const formatWeekLabel = (date: string) => {
+    if (isMobile) {
+      // dateが「13-19」の形式の場合、開始日の「13」を取得
+      const startDateString = date.split('-')[0];
+      return startDateString + '～';
+    }
+    return date;
+  };
+
   if (authLoading || loading) {
     return (
-      <Card className="bg-white border-none shadow-lg mt-10">
+      <Card className="bg-white border-none shadow-lg mt-4 md:mt-10">
         <CardContent>
           <p>読み込み中...</p>
         </CardContent>
@@ -133,7 +165,7 @@ const CancellationCard: React.FC = () => {
 
   if (error) {
     return (
-      <Card className="bg-white border-none shadow-lg mt-10">
+      <Card className="bg-white border-none shadow-lg mt-4 md:mt-10">
         <CardContent>
           <p className="text-red-500">エラー: {error}</p>
         </CardContent>
@@ -142,13 +174,12 @@ const CancellationCard: React.FC = () => {
   }
 
   return (
-    <Card className="bg-white border-none shadow-lg mt-10">
+    <Card className="bg-white border-none shadow-lg mt-4 md:mt-10">
       <CardContent>
-        {/* 期間の説明を表示 */}
         <div className="mb-4">
           <h2 className="text-lg font-semibold">キャンセル状況 ({periodDescriptions[activeTab]})</h2>
         </div>
-        <div className="grid grid-cols-2 gap-8 mb-6">
+        <div className="grid grid-cols-2 gap-4 md:gap-8 mb-6">
           <div className="text-center">
             <h3 className="text-sm font-medium text-gray-600">キャンセル数</h3>
             <p className="text-2xl font-bold">{getTotalCancellations()}</p>
@@ -192,7 +223,15 @@ const CancellationCard: React.FC = () => {
               <ResponsiveContainer width="100%" height={300}>
                 <ComposedChart data={getDataForTab()}>
                   <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="date" />
+                  <XAxis
+                    dataKey="date"
+                    tickFormatter={(value) => {
+                      if (activeTab === 'weekly' && isMobile) {
+                        return formatWeekLabel(value);
+                      }
+                      return value;
+                    }}
+                  />
                   <YAxis
                     yAxisId="left"
                     orientation="left"
