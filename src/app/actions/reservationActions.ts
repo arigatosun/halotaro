@@ -1,5 +1,3 @@
-// reservationActions.ts
-
 import { SupabaseClient } from "@supabase/supabase-js";
 
 export interface Reservation {
@@ -22,7 +20,8 @@ export interface Reservation {
 }
 
 interface GetReservationsOptions {
-  date?: string;
+  dateFrom?: string;
+  dateTo?: string;
   staff?: string;
   menu?: string;
   statuses?: string[];
@@ -37,11 +36,19 @@ export async function getReservations(
   page: number = 1,
   limit: number = 30
 ): Promise<{ data: Reservation[]; count: number }> {
-  const { date, staff, menu, statuses, customerName, reservationRoute } =
-    filterOptions;
+  const {
+    dateFrom,
+    dateTo,
+    staff,
+    menu,
+    statuses,
+    customerName,
+    reservationRoute,
+  } = filterOptions;
 
   console.log("getReservations called with:", {
-    date,
+    dateFrom,
+    dateTo,
     staff,
     menu,
     statuses,
@@ -68,12 +75,17 @@ export async function getReservations(
   // user_idでフィルタリング
   query = query.eq("user_id", user_id);
 
-  // その他のフィルタを適用
-  if (date) {
-    const dateStart = `${date}T00:00:00+09:00`;
-    const dateEnd = `${date}T23:59:59+09:00`;
-
+  // 日付範囲でフィルタリング
+  if (dateFrom && dateTo) {
+    const dateStart = `${dateFrom}T00:00:00+09:00`;
+    const dateEnd = `${dateTo}T23:59:59+09:00`;
     query = query.gte("start_time", dateStart).lte("start_time", dateEnd);
+  } else if (dateFrom) {
+    const dateStart = `${dateFrom}T00:00:00+09:00`;
+    query = query.gte("start_time", dateStart);
+  } else if (dateTo) {
+    const dateEnd = `${dateTo}T23:59:59+09:00`;
+    query = query.lte("start_time", dateEnd);
   }
 
   if (staff && staff !== "all") {

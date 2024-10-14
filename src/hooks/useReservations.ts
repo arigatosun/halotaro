@@ -1,5 +1,3 @@
-// hooks/useReservations.ts
-
 import { useState, useEffect, useCallback } from "react";
 import { Reservation, getReservations } from "@/app/actions/reservationActions";
 import { DateRange } from "react-day-picker";
@@ -37,16 +35,21 @@ export const useReservations = (
       setLoading(true);
       setError(null);
 
-      let date: string | undefined;
+      let dateFrom: string | undefined;
+      let dateTo: string | undefined;
       if (filterOptions.dateRange?.from) {
-        date = format(filterOptions.dateRange.from, "yyyy-MM-dd");
+        dateFrom = format(filterOptions.dateRange.from, "yyyy-MM-dd");
+      }
+      if (filterOptions.dateRange?.to) {
+        dateTo = format(filterOptions.dateRange.to, "yyyy-MM-dd");
       }
 
       const { data, count } = await getReservations(
         supabase,
         user_id,
         {
-          date,
+          dateFrom,
+          dateTo,
           staff: filterOptions.staff,
           menu: filterOptions.menu,
           statuses: filterOptions.statuses,
