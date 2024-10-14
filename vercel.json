@@ -10,7 +10,7 @@
     },
     {
       "path": "/api/cron-reservation-messages",
-      "schedule": "* * * * *"
+      "schedule": "0 12 * * *"
     }
 
   ]
