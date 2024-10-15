@@ -8,7 +8,6 @@ import {
   CreditCard,
 } from "lucide-react";
 
-
 const LandingPage: React.FC = () => {
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-yellow-50 to-red-50">
@@ -144,15 +143,15 @@ const LandingPage: React.FC = () => {
               <ul className="flex space-x-6">
                 <li>
                   <a
-                    href="#"
+                    href="/legalnotice-page"
                     className="hover:text-yellow-400 transition duration-300"
                   >
-                    利用規約
+                    特定商取引法に基づく表記
                   </a>
                 </li>
                 <li>
                   <a
-                    href="#"
+                    href="/privacy-policy"
                     className="hover:text-yellow-400 transition duration-300"
                   >
                     プライバシーポリシー
