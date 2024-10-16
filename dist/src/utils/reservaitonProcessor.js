@@ -3,7 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.processReservation = processReservation;
 const supabase_js_1 = require("@supabase/supabase-js");
 const date_fns_1 = require("date-fns");
-const date_fns_tz_1 = require("date-fns-tz");
+const { zonedTimeToUtc } = require("date-fns-tz");
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const supabase = (0, supabase_js_1.createClient)(supabaseUrl, supabaseKey);
@@ -12,12 +12,20 @@ function parseDateTime(dateString) {
   const [month, day] = datePart.split("/").map(Number);
   const [hours, minutes] = timePart.split(":").map(Number);
   const currentYear = new Date().getFullYear();
-  const date = new Date(currentYear, month - 1, day, hours, minutes);
-  return (0, date_fns_tz_1.toZonedTime)(date, "Asia/Tokyo");
+
+  const dateStringFormatted = `${currentYear}-${String(month).padStart(
+    2,
+    "0"
+  )}-${String(day).padStart(2, "0")} ${String(hours).padStart(2, "0")}:${String(
+    minutes
+  ).padStart(2, "0")}:00`;
+
+  const date = zonedTimeToUtc(dateStringFormatted, "Asia/Tokyo");
+  return date;
 }
 async function processReservation(raw, userId) {
   const startTime = parseDateTime(raw.date);
-  const endTime = (0, date_fns_1.addMinutes)(startTime, 90); // 仮に90分としています
+  const endTime = addMinutes(startTime, 90); // 必要に応じて調整
   const menuId = await getMenuId(raw.menu);
   // メニューが見つからない場合は0を設定
   const finalMenuId = menuId === null ? 0 : menuId;
