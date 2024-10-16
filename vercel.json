@@ -2,11 +2,11 @@
   "crons": [
     {
       "path": "/api/cron-payments-intents",
-      "schedule": "* * * * *"
+      "schedule": "0 */3 * * *"
     },
     {
       "path": "/api/cron-capture-payment-intents",
-      "schedule": "* * * * *"
+      "schedule": "0 */3 * * *"
     },
     {
       "path": "/api/cron-reservation-messages",
