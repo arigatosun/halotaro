@@ -7,25 +7,34 @@ const { zonedTimeToUtc } = require("date-fns-tz");
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const supabase = (0, supabase_js_1.createClient)(supabaseUrl, supabaseKey);
-// function parseDateTime(dateString) {
-//   const [datePart, timePart] = dateString.split(/(\d{2}:\d{2})$/);
-//   const [month, day] = datePart.split("/").map(Number);
-//   const [hours, minutes] = timePart.split(":").map(Number);
-//   const currentYear = new Date().getFullYear();
+function parseDateTime(dateString) {
+  // dateString は "MM/DDHH:mm" 形式（例: "10/2014:00"）
+  const dateTimeRegex = /^(\d{1,2})\/(\d{1,2})(\d{1,2}):(\d{2})$/;
+  const match = dateString.match(dateTimeRegex);
 
-//   const dateStringFormatted = `${currentYear}-${String(month).padStart(
-//     2,
-//     "0"
-//   )}-${String(day).padStart(2, "0")} ${String(hours).padStart(2, "0")}:${String(
-//     minutes
-//   ).padStart(2, "0")}:00`;
+  if (!match) {
+    throw new Error(`Invalid date format: ${dateString}`);
+  }
 
-//   const date = zonedTimeToUtc(dateStringFormatted, "Asia/Tokyo");
-//   return date;
-// }
+  const [, monthStr, dayStr, hourStr, minuteStr] = match;
+  const month = parseInt(monthStr, 10);
+  const day = parseInt(dayStr, 10);
+  const hours = parseInt(hourStr, 10);
+  const minutes = parseInt(minuteStr, 10);
+
+  const currentYear = new Date().getFullYear();
+
+  // Dateオブジェクトを作成（UTCで作成し、タイムゾーンの問題を回避）
+  const date = new Date(
+    Date.UTC(currentYear, month - 1, day, hours - 9, minutes)
+  );
+
+  return date;
+}
+
 async function processReservation(raw, userId) {
-  // 他サービスから受け取った日時文字列をそのまま使用
-  const startTime = new Date(raw.date);
+  // カスタムの parseDateTime 関数を使用して日時をパース
+  const startTime = parseDateTime(raw.date);
 
   // 所要時間が分かっている場合は、startTime から endTime を計算
   const durationMinutes = raw.duration || 90; // デフォルトで90分
