@@ -140,9 +140,11 @@ export async function GET(req: NextRequest) {
       .select(
         `
         start_time,
+        scraped_customer,
+        scraped_menu,
         reservation_customers!fk_customer(name),
-        menu_items(name),
-        staff(name)
+    menu_items!left(name),
+        staff!left(name)
       `
       )
       .eq("user_id", userId)
@@ -156,12 +158,29 @@ export async function GET(req: NextRequest) {
     if (upcomingError) throw upcomingError;
 
     const appointments: Appointment[] = upcomingReservations.map(
-      (reservation: any) => ({
-        time: dayjs(reservation.start_time).format("HH:mm"),
-        client: reservation.reservation_customers.name,
-        service: reservation.menu_items?.name || "サービス未設定",
-        staff: reservation.staff?.name || "スタッフ未設定",
-      })
+      (reservation: any) => {
+        // クライアント名の取得
+        let clientName = reservation.reservation_customers?.name;
+        if (!clientName) {
+          clientName = reservation.scraped_customer || "顧客名未設定";
+        }
+
+        // メニュー名の取得
+        let serviceName = reservation.menu_items?.name;
+        if (!serviceName) {
+          serviceName = reservation.scraped_menu || "サービス未設定";
+        }
+
+        // スタッフ名の取得
+        const staffName = reservation.staff?.name || "スタッフ未設定";
+
+        return {
+          time: dayjs(reservation.start_time).format("HH:mm"),
+          client: clientName,
+          service: serviceName,
+          staff: staffName,
+        };
+      }
     );
 
     // 取得したデータをまとめて返す
