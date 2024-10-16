@@ -590,7 +590,10 @@ export async function POST(request: Request) {
                 .format("YYYY-MM-DD HH:mm:ss")
             : undefined,
           end_time: end_time
-            ? moment(end_time).utc().format("YYYY-MM-DD HH:mm:ss")
+            ? moment
+                .tz(end_time, "YYYY-MM-DDTHH:mm", "Asia/Tokyo")
+                .utc()
+                .format("YYYY-MM-DD HH:mm:ss")
             : undefined,
           status: "staff",
           total_price: 0,
@@ -628,10 +631,15 @@ export async function POST(request: Request) {
         const formattedSchedule = formatReservation(newSchedule);
 
         // メール送信と自動化システムの処理を実行
-        await handlePostStaffScheduleProcesses(
-          authResult.user.id,
-          formattedSchedule
-        );
+        // スタッフスケジュール挿入後
+        handlePostStaffScheduleProcesses(authResult.user.id, formattedSchedule)
+          .then(() => {
+            console.log("Post-processing completed successfully.");
+          })
+          .catch((error) => {
+            console.error("Error in post-processing:", error);
+            // 必要に応じてエラーハンドリング
+          });
 
         return NextResponse.json(formattedSchedule);
       } catch (error: any) {
@@ -853,7 +861,10 @@ export async function PUT(request: Request) {
       if (updateFields[field] !== undefined) {
         if (field === "start_time" || field === "end_time") {
           updatedData[field] = updateFields[field]
-            ? moment(updateFields[field]).utc().format("YYYY-MM-DD HH:mm:ss")
+            ? moment
+                .tz(updateFields[field], "YYYY-MM-DDTHH:mm", "Asia/Tokyo")
+                .utc()
+                .format("YYYY-MM-DD HH:mm:ss")
             : undefined;
         } else {
           updatedData[field] = updateFields[field];
