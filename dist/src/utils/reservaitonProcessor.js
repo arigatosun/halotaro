@@ -29,7 +29,7 @@ async function processReservation(raw, userId) {
 
   // 所要時間が分かっている場合は、startTime から endTime を計算
   const durationMinutes = raw.duration || 90; // デフォルトで90分
-  const endTime = addMinutes(startTime, durationMinutes);
+  const endTime = (0, date_fns_1.addMinutes)(startTime, durationMinutes);
 
   // 以下の処理は変更せず
   const menuId = await getMenuId(raw.menu, userId);
