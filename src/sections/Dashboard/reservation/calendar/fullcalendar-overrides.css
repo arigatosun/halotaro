@@ -1,0 +1,7 @@
+/* fullcalendar-overrides.css */
+
+.fc-event.staff-schedule {
+  background-color: #b0b0b0 !important; /* 灰色に変更 */
+  border-color: #b0b0b0 !important;
+  color: white !important;
+}

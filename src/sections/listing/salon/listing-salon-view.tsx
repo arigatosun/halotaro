@@ -435,44 +435,6 @@ const AuthenticatedListingSalonView: React.FC<{ userId: string }> = ({
                     </FormItem>
                   )}
                 />
-                {/* ウェブサイト */}
-                <FormField
-                  control={form.control}
-                  name="website"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>
-                        ウェブサイト <span className="text-red-500">*</span>
-                      </FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="https://example.com"
-                          {...field}
-                          aria-required="true"
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                {/* サロン説明 */}
-                <FormField
-                  control={form.control}
-                  name="description"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>サロン説明</FormLabel>
-                      <FormControl>
-                        <Textarea
-                          placeholder="サロンの特徴や魅力を記入してください"
-                          className="resize-none"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
               </div>
               <SectionTitle>営業時間</SectionTitle>
               <Separator className="my-4" />
@@ -650,88 +612,43 @@ const AuthenticatedListingSalonView: React.FC<{ userId: string }> = ({
               <div>
                 <h3 className="text-lg font-medium">サロン画像</h3>
                 <Separator className="my-4" />
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  {/* メイン画像 */}
-                  <div>
-                    <Label>メイン画像</Label>
-                    <div className="mt-2 flex items-center gap-4">
-                      <div className="relative">
-                        <Label
-                          htmlFor="mainImage"
-                          className="flex h-32 w-32 cursor-pointer items-center justify-center rounded-lg border-2 border-dashed"
-                        >
-                          {mainImage || form.getValues("mainImageUrl") ? (
-                            <img
-                              src={
-                                mainImage
-                                  ? URL.createObjectURL(mainImage)
-                                  : form.getValues("mainImageUrl")
-                              }
-                              alt="Main"
-                              className="h-full w-full object-cover rounded-lg"
-                            />
-                          ) : (
-                            <Upload className="h-8 w-8 text-gray-400" />
-                          )}
-                          <input
-                            id="mainImage"
-                            type="file"
-                            className="hidden"
-                            accept="image/*"
-                            onChange={handleMainImageUpload}
-                          />
-                        </Label>
-                        {(mainImage || form.getValues("mainImageUrl")) && (
-                          <button
-                            type="button"
-                            onClick={removeMainImage}
-                            className="absolute -top-2 -right-2 bg-red-500 rounded-full p-1"
-                          >
-                            <X className="h-4 w-4 text-white" />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                  {/* サブ画像 */}
-                  <div>
-                    <Label>サブ画像（最大5枚）</Label>
-                    <div className="mt-2 flex flex-wrap items-center gap-4">
-                      {combinedSubImages.slice(0, 5).map((imageObj, index) => (
-                        <div key={index} className="relative">
+                <div>
+                  <Label>メイン画像</Label>
+                  <div className="mt-2 flex items-center gap-4">
+                    <div className="relative">
+                      <Label
+                        htmlFor="mainImage"
+                        className="flex h-32 w-32 cursor-pointer items-center justify-center rounded-lg border-2 border-dashed"
+                      >
+                        {mainImage || form.getValues("mainImageUrl") ? (
                           <img
                             src={
-                              imageObj.type === "new"
-                                ? URL.createObjectURL(imageObj.data)
-                                : imageObj.data
+                              mainImage
+                                ? URL.createObjectURL(mainImage)
+                                : form.getValues("mainImageUrl")
                             }
-                            alt={`Sub ${index + 1}`}
-                            className="h-24 w-24 object-cover rounded-lg"
+                            alt="Main"
+                            className="h-full w-full object-cover rounded-lg"
                           />
-                          <button
-                            type="button"
-                            onClick={() => removeSubImage(index, imageObj.type)}
-                            className="absolute -top-2 -right-2 bg-red-500 rounded-full p-1"
-                          >
-                            <X className="h-4 w-4 text-white" />
-                          </button>
-                        </div>
-                      ))}
-                      {combinedSubImages.length < 5 && (
-                        <Label
-                          htmlFor="subImages"
-                          className="flex h-24 w-24 cursor-pointer items-center justify-center rounded-lg border-2 border-dashed"
+                        ) : (
+                          <Upload className="h-8 w-8 text-gray-400" />
+                        )}
+                        <input
+                          id="mainImage"
+                          type="file"
+                          className="hidden"
+                          accept="image/*"
+                          onChange={handleMainImageUpload}
+                        />
+                      </Label>
+                      {(mainImage || form.getValues("mainImageUrl")) && (
+                        <button
+                          type="button"
+                          onClick={removeMainImage}
+                          className="absolute -top-2 -right-2 bg-red-500 rounded-full p-1"
                         >
-                          <Upload className="h-6 w-6 text-gray-400" />
-                          <input
-                            id="subImages"
-                            type="file"
-                            className="hidden"
-                            accept="image/*"
-                            multiple
-                            onChange={handleSubImageUpload}
-                          />
-                        </Label>
+                          <X className="h-4 w-4 text-white" />
+                        </button>
                       )}
                     </div>
                   </div>

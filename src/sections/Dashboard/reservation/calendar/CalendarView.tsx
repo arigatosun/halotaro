@@ -37,9 +37,9 @@ interface CalendarViewProps {
 
 const StyledFullCalendar = styled(FullCalendar)<CalendarOptions>(
   ({ theme }) => ({
-    "& .fc-timeline-event.staff-schedule": {
-      backgroundColor: "#F2884B !important",
-      borderColor: "#F2884B !important",
+    "& .fc-timeline-event-harness.staff-schedule": {
+      backgroundColor: "#B0B0B0 !important", // 灰色のカラーコード
+      borderColor: "#B0B0B0 !important",
       color: "white !important",
     },
     "& .fc-timeline-event.customer-reservation": {
@@ -218,8 +218,10 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
           id: reservation.id,
           resourceId: reservation.staff_id.toString(),
           title: reservation.is_staff_schedule
-            ? reservation.event || ''
-            : `${reservation.customer_name || ""} - ${reservation.menu_name || ""}`,
+            ? reservation.event || ""
+            : `${reservation.customer_name || ""} - ${
+                reservation.menu_name || ""
+              }`,
           start: reservation.start_time,
           end: reservation.end_time,
           classNames: reservation.is_staff_schedule
@@ -260,11 +262,7 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
       timelineBodyRef.current = arg.el.querySelector(".fc-timeline-body");
     };
 
-    const plugins = [
-      resourceTimelinePlugin,
-      interactionPlugin,
-      listPlugin,
-    ];
+    const plugins = [resourceTimelinePlugin, interactionPlugin, listPlugin];
 
     // initialViewをモバイル時にはlistDayに設定
     const initialView = isMobile ? "listDay" : "resourceTimelineDay";
@@ -314,12 +312,17 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
           headerToolbar={false}
           dayHeaderFormat={
             isMobile
-              ? { weekday: 'long', month: 'short', day: 'numeric', omitCommas: true }
+              ? {
+                  weekday: "long",
+                  month: "short",
+                  day: "numeric",
+                  omitCommas: true,
+                }
               : undefined
           }
           slotLabelFormat={
             isMobile
-              ? [{ hour: '2-digit', minute: '2-digit', hour12: false }]
+              ? [{ hour: "2-digit", minute: "2-digit", hour12: false }]
               : undefined
           }
           resourceAreaHeaderContent=""
@@ -336,12 +339,12 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
           businessHours={businessHoursConfig}
           dateClick={onDateClick}
           // 日本語ロケールをモバイル時に適用
-          locale={isMobile ? 'ja' : undefined}
+          locale={isMobile ? "ja" : undefined}
           visibleRange={
             isMobile
               ? {
-                  start: currentDate.format('YYYY-MM-DD'),
-                  end: currentDate.clone().add(1, 'day').format('YYYY-MM-DD'),
+                  start: currentDate.format("YYYY-MM-DD"),
+                  end: currentDate.clone().add(1, "day").format("YYYY-MM-DD"),
                 }
               : undefined
           }
@@ -351,8 +354,8 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
               ? staffList.find(
                   (staff) =>
                     staff.id.toString() === reservation.staff_id?.toString()
-                )?.name || ''
-              : '';
+                )?.name || ""
+              : "";
             if (reservation.is_staff_schedule) {
               if (isMobile) {
                 return {
@@ -365,7 +368,9 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
                 };
               } else {
                 return {
-                  html: `<div class="fc-event-title">${reservation.event || ""}</div>`,
+                  html: `<div class="fc-event-title">${
+                    reservation.event || ""
+                  }</div>`,
                 };
               }
             }

@@ -1,6 +1,15 @@
-import React, { useState } from 'react';
-import { Modal, Form, Radio, Select, Button, Checkbox, InputNumber, Input } from 'antd';
-import moment from 'moment';
+import React, { useState } from "react";
+import {
+  Modal,
+  Form,
+  Radio,
+  Select,
+  Button,
+  Checkbox,
+  InputNumber,
+  Input,
+} from "antd";
+import moment from "moment";
 
 const { Option } = Select;
 
@@ -11,21 +20,24 @@ interface BusinessHoursBulkInputModalProps {
   currentDate: moment.Moment;
 }
 
-const BusinessHoursBulkInputModal: React.FC<BusinessHoursBulkInputModalProps> = ({
-  visible,
-  onCancel,
-  onSubmit,
-  currentDate,
-}) => {
+const BusinessHoursBulkInputModal: React.FC<
+  BusinessHoursBulkInputModalProps
+> = ({ visible, onCancel, onSubmit, currentDate }) => {
   const [form] = Form.useForm();
-  const [dateType, setDateType] = useState<string>('specific');
+  const [dateType, setDateType] = useState<string>("specific");
 
   const generateTimeOptions = () => {
     const options = [];
     for (let hour = 0; hour < 24; hour++) {
       for (let minute = 0; minute < 60; minute += 30) {
-        const time = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-        options.push(<Option key={time} value={time}>{time}</Option>);
+        const time = `${hour.toString().padStart(2, "0")}:${minute
+          .toString()
+          .padStart(2, "0")}`;
+        options.push(
+          <Option key={time} value={time}>
+            {time}
+          </Option>
+        );
       }
     }
     return options;
@@ -63,9 +75,9 @@ const BusinessHoursBulkInputModal: React.FC<BusinessHoursBulkInputModalProps> = 
           </Radio.Group>
         </Form.Item>
 
-        {dateType === 'specific' && (
+        {dateType === "specific" && (
           <Form.Item name="specificDates" label="日付を選択">
-            <Select mode="multiple" style={{ width: '100%' }}>
+            <Select mode="multiple" style={{ width: "100%" }}>
               {[...Array(currentDate.daysInMonth())].map((_, index) => (
                 <Option key={index + 1} value={index + 1}>
                   {index + 1}日
@@ -75,10 +87,10 @@ const BusinessHoursBulkInputModal: React.FC<BusinessHoursBulkInputModalProps> = 
           </Form.Item>
         )}
 
-        {dateType === 'range' && (
+        {dateType === "range" && (
           <Form.Item label="期間を選択">
             <Input.Group compact>
-              <Form.Item name={['range', 'start']} noStyle>
+              <Form.Item name={["range", "start"]} noStyle>
                 <Select style={{ width: 120 }}>
                   {[...Array(currentDate.daysInMonth())].map((_, index) => (
                     <Option key={index + 1} value={index + 1}>
@@ -87,8 +99,8 @@ const BusinessHoursBulkInputModal: React.FC<BusinessHoursBulkInputModalProps> = 
                   ))}
                 </Select>
               </Form.Item>
-              <span style={{ padding: '0 8px' }}>から</span>
-              <Form.Item name={['range', 'end']} noStyle>
+              <span style={{ padding: "0 8px" }}>から</span>
+              <Form.Item name={["range", "end"]} noStyle>
                 <Select style={{ width: 120 }}>
                   {[...Array(currentDate.daysInMonth())].map((_, index) => (
                     <Option key={index + 1} value={index + 1}>
@@ -101,42 +113,48 @@ const BusinessHoursBulkInputModal: React.FC<BusinessHoursBulkInputModalProps> = 
           </Form.Item>
         )}
 
-        {dateType === 'weekday' && (
+        {dateType === "weekday" && (
           <Form.Item name="weekdays" label="曜日を選択">
-          <Checkbox.Group>
-            <Checkbox value="日曜">日曜</Checkbox>
-            <Checkbox value="月曜">月曜</Checkbox>
-            <Checkbox value="火曜">火曜</Checkbox>
-            <Checkbox value="水曜">水曜</Checkbox>
-            <Checkbox value="木曜">木曜</Checkbox>
-            <Checkbox value="金曜">金曜</Checkbox>
-            <Checkbox value="土曜">土曜</Checkbox>
-          </Checkbox.Group>
-        </Form.Item>
+            <Checkbox.Group>
+              <Checkbox value="日曜">日曜</Checkbox>
+              <Checkbox value="月曜">月曜</Checkbox>
+              <Checkbox value="火曜">火曜</Checkbox>
+              <Checkbox value="水曜">水曜</Checkbox>
+              <Checkbox value="木曜">木曜</Checkbox>
+              <Checkbox value="金曜">金曜</Checkbox>
+              <Checkbox value="土曜">土曜</Checkbox>
+            </Checkbox.Group>
+          </Form.Item>
         )}
 
         <Form.Item name="isHoliday" valuePropName="checked">
           <Checkbox>休業日</Checkbox>
         </Form.Item>
 
-        <Form.Item 
-          noStyle 
-          shouldUpdate={(prevValues, currentValues) => prevValues.isHoliday !== currentValues.isHoliday}
+        <Form.Item
+          noStyle
+          shouldUpdate={(prevValues, currentValues) =>
+            prevValues.isHoliday !== currentValues.isHoliday
+          }
         >
-          {({ getFieldValue }) => 
-            !getFieldValue('isHoliday') && (
+          {({ getFieldValue }) =>
+            !getFieldValue("isHoliday") && (
               <>
-                <Form.Item name="capacity" label="受付可能数を指定">
+                {/* <Form.Item name="capacity" label="受付可能数を指定">
                   <InputNumber min={1} />
-                </Form.Item>
+                </Form.Item> */}
                 <Form.Item label="営業時間を指定">
                   <Input.Group compact>
-                    <Form.Item name={['businessHours', 'start']} noStyle>
-                      <Select style={{ width: 120 }}>{generateTimeOptions()}</Select>
+                    <Form.Item name={["businessHours", "start"]} noStyle>
+                      <Select style={{ width: 120 }}>
+                        {generateTimeOptions()}
+                      </Select>
                     </Form.Item>
-                    <span style={{ padding: '0 8px' }}>から</span>
-                    <Form.Item name={['businessHours', 'end']} noStyle>
-                      <Select style={{ width: 120 }}>{generateTimeOptions()}</Select>
+                    <span style={{ padding: "0 8px" }}>から</span>
+                    <Form.Item name={["businessHours", "end"]} noStyle>
+                      <Select style={{ width: 120 }}>
+                        {generateTimeOptions()}
+                      </Select>
                     </Form.Item>
                   </Input.Group>
                 </Form.Item>

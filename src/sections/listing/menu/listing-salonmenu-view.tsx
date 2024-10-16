@@ -50,18 +50,25 @@ const ListingSalonMenuView: React.FC = () => {
     return <div>認証に失敗しました。ページをリロードしてください。</div>;
   }
 
-  return <AuthenticatedListingSalonMenuView session={session} />;
+  return <AuthenticatedListingSalonMenuView session={session} user={user} />;
 };
 
-const AuthenticatedListingSalonMenuView: React.FC<{ session: any }> = ({
-  session,
-}) => {
+const AuthenticatedListingSalonMenuView: React.FC<{
+  session: any;
+  user: any;
+}> = ({ session, user }) => {
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [editingMenu, setEditingMenu] = useState<MenuItem | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
+
+  // ローディング状態を管理するステートを追加
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDeletingId, setIsDeletingId] = useState<number | string | null>(
+    null
+  );
 
   useEffect(() => {
     fetchMenuItems();
@@ -101,10 +108,10 @@ const AuthenticatedListingSalonMenuView: React.FC<{ session: any }> = ({
     setIsModalOpen(true);
   };
 
-  const handleModalSubmit = async (
-    event: React.FormEvent<HTMLFormElement>
-  ) => {
+  const handleModalSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+
+    setIsSubmitting(true); // ローディング開始
 
     try {
       const formData = new FormData(event.currentTarget);
@@ -116,6 +123,9 @@ const AuthenticatedListingSalonMenuView: React.FC<{ session: any }> = ({
       if (imageFile) {
         formData.append("image", imageFile);
       }
+
+      // user_id を追加
+      formData.append("user_id", user.id);
 
       const response = await fetch(
         editingMenu
@@ -131,7 +141,10 @@ const AuthenticatedListingSalonMenuView: React.FC<{ session: any }> = ({
       );
 
       if (!response.ok) {
-        throw new Error("店販メニューの保存に失敗しました");
+        const errorData = await response.json();
+        throw new Error(
+          errorData.message || "店販メニューの保存に失敗しました"
+        );
       }
 
       const updatedMenuItem = await response.json();
@@ -147,15 +160,20 @@ const AuthenticatedListingSalonMenuView: React.FC<{ session: any }> = ({
       setIsModalOpen(false);
       toast({
         title: editingMenu ? "メニュー更新" : "メニュー追加",
-        description: `メニューが正常に${editingMenu ? "更新" : "追加"}されました。`,
+        description: `メニューが正常に${
+          editingMenu ? "更新" : "追加"
+        }されました。`,
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("操作に失敗しました:", error);
       toast({
         title: "エラー",
-        description: "メニューの操作中にエラーが発生しました。",
+        description:
+          error.message || "メニューの操作中にエラーが発生しました。",
         variant: "destructive",
       });
+    } finally {
+      setIsSubmitting(false); // ローディング終了
     }
   };
 
@@ -167,6 +185,8 @@ const AuthenticatedListingSalonMenuView: React.FC<{ session: any }> = ({
 
   const handleDelete = async (menuItemId: number | string) => {
     if (window.confirm("このメニューを削除してもよろしいですか？")) {
+      setIsDeletingId(menuItemId); // ローディング開始
+
       try {
         const response = await fetch("/api/delete-sales-menu-item", {
           method: "DELETE",
@@ -194,16 +214,16 @@ const AuthenticatedListingSalonMenuView: React.FC<{ session: any }> = ({
           description:
             data.message || `メニューID: ${menuItemId} が削除されました`,
         });
-      } catch (error) {
+      } catch (error: any) {
         console.error("店販メニュー削除エラー:", error);
         toast({
           title: "削除エラー",
           description:
-            error instanceof Error
-              ? error.message
-              : "メニューの削除中にエラーが発生しました。",
+            error.message || "メニューの削除中にエラーが発生しました。",
           variant: "destructive",
         });
+      } finally {
+        setIsDeletingId(null); // ローディング終了
       }
     }
   };
@@ -266,6 +286,7 @@ const AuthenticatedListingSalonMenuView: React.FC<{ session: any }> = ({
                   variant="outline"
                   size="sm"
                   onClick={() => handleEdit(item)}
+                  disabled={isSubmitting || isDeletingId === item.id}
                 >
                   <Pencil className="h-4 w-4" />
                 </Button>
@@ -275,8 +296,13 @@ const AuthenticatedListingSalonMenuView: React.FC<{ session: any }> = ({
                   variant="outline"
                   size="sm"
                   onClick={() => handleDelete(item.id)}
+                  disabled={isDeletingId === item.id}
                 >
-                  <Trash2 className="h-4 w-4" />
+                  {isDeletingId === item.id ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-4 w-4" />
+                  )}
                 </Button>
               </TableCell>
             </TableRow>
@@ -301,6 +327,7 @@ const AuthenticatedListingSalonMenuView: React.FC<{ session: any }> = ({
                   name="name"
                   defaultValue={editingMenu?.name}
                   className="col-span-3"
+                  required
                 />
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
@@ -345,6 +372,7 @@ const AuthenticatedListingSalonMenuView: React.FC<{ session: any }> = ({
                   type="number"
                   defaultValue={editingMenu?.price}
                   className="col-span-3"
+                  required
                 />
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
@@ -370,7 +398,16 @@ const AuthenticatedListingSalonMenuView: React.FC<{ session: any }> = ({
               </div>
             </div>
             <div className="flex justify-end">
-              <Button type="submit">保存</Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    保存中...
+                  </>
+                ) : (
+                  "保存"
+                )}
+              </Button>
             </div>
           </form>
         </DialogContent>

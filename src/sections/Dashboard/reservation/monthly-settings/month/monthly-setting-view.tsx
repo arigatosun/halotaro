@@ -109,7 +109,8 @@ const MonthlyReceptionSettingsDetail: React.FC<
         isHoliday: values.isHoliday,
         openTime: values.isHoliday ? "" : values.businessHours?.start || "",
         closeTime: values.isHoliday ? "" : values.businessHours?.end || "",
-        capacity: values.isHoliday ? undefined : values.capacity,
+        // capacity: values.isHoliday ? undefined : values.capacity,
+        capacity: values.isHoliday ? undefined : values.capacity || null,
       };
     };
 
@@ -381,10 +382,15 @@ const MonthlyReceptionSettingsDetail: React.FC<
     }
 
     if (incompleteDays.length > 0) {
+      // message.error(
+      //   `以下の日付の設定が不完全です: ${incompleteDays.join(
+      //     ", "
+      //   )}。すべての日付に対して休業日か営業時間と受付可能数を設定してください。`
+      // );
       message.error(
         `以下の日付の設定が不完全です: ${incompleteDays.join(
           ", "
-        )}。すべての日付に対して休業日か営業時間と受付可能数を設定してください。`
+        )}。すべての日付に対して休業日か営業時間を設定してください。`
       );
       return;
     }
@@ -450,7 +456,8 @@ const MonthlyReceptionSettingsDetail: React.FC<
             一括入力
           </Button>
           <Text style={{ marginLeft: "10px" }}>
-            日・期間・曜日を指定して営業時間・受付可能数の一括入力ができます。
+            {/* 日・期間・曜日を指定して営業時間・受付可能数の一括入力ができます。 */}
+            日・期間・曜日を指定して営業時間の一括入力ができます。
           </Text>
         </div>
         {/* 変更点2: 年月表示を追加 */}

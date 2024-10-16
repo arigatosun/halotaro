@@ -35,7 +35,9 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     const token = authHeader.split("Bearer ")[1];
-    const { data: userData, error: authError } = await supabase.auth.getUser(token);
+    const { data: userData, error: authError } = await supabase.auth.getUser(
+      token
+    );
     if (authError || !userData.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -47,25 +49,27 @@ export async function GET(req: NextRequest) {
     const year = today.format("YYYY");
     const month = today.format("MM");
     const selectedDate = dayjs(`${year}-${month}-01`);
-    const startOfMonth = selectedDate.startOf('month').toISOString();
-    const endOfMonth = selectedDate.endOf('month').toISOString();
-    const startOfToday = today.startOf('day').toISOString();
-    const endOfToday = today.endOf('day').toISOString();
-    const startOfYesterday = yesterday.startOf('day').toISOString();
-    const endOfYesterday = yesterday.endOf('day').toISOString();
+    const startOfMonth = selectedDate.startOf("month").toISOString();
+    const endOfMonth = selectedDate.endOf("month").toISOString();
+    const startOfToday = today.startOf("day").toISOString();
+    const endOfToday = today.endOf("day").toISOString();
+    const startOfYesterday = yesterday.startOf("day").toISOString();
+    const endOfYesterday = yesterday.endOf("day").toISOString();
 
-    // 今日と昨日の予約数を取得
+    // 今日と昨日の予約数を取得（is_staff_schedule = false を追加）
     const [todayReservations, yesterdayReservations] = await Promise.all([
       supabase
         .from("reservations")
         .select("*", { count: "exact", head: true })
         .eq("user_id", userId)
+        .eq("is_staff_schedule", false)
         .gte("start_time", startOfToday)
         .lte("start_time", endOfToday),
       supabase
         .from("reservations")
         .select("*", { count: "exact", head: true })
         .eq("user_id", userId)
+        .eq("is_staff_schedule", false)
         .gte("start_time", startOfYesterday)
         .lte("start_time", endOfYesterday),
     ]);
@@ -76,14 +80,15 @@ export async function GET(req: NextRequest) {
     const todayReservationsCount = todayReservations.count || 0;
     const yesterdayReservationsCount = yesterdayReservations.count || 0;
 
-    // 売上データの取得
+    // 売上データの取得（is_staff_schedule = false を追加）
     const { data: reservations, error: reservationsError } = await supabase
-      .from('reservations')
-      .select('id, end_time, status')
-      .eq('user_id', userId)
-      .neq('status', 'confirmed')
-      .gte('end_time', startOfMonth)
-      .lte('end_time', endOfMonth);
+      .from("reservations")
+      .select("id, end_time, status")
+      .eq("user_id", userId)
+      .neq("status", "confirmed")
+      .eq("is_staff_schedule", false)
+      .gte("end_time", startOfMonth)
+      .lte("end_time", endOfMonth);
 
     if (reservationsError) throw reservationsError;
 
@@ -93,10 +98,10 @@ export async function GET(req: NextRequest) {
     let accountingRecords: AccountingInformationRecord[] = [];
     if (reservationIds.length > 0) {
       const { data: accountingData, error: accountingError } = await supabase
-        .from('accounting_information')
-        .select('total_price, reservation_id')
-        .eq('is_temporary', false)
-        .in('reservation_id', reservationIds);
+        .from("accounting_information")
+        .select("total_price, reservation_id")
+        .eq("is_temporary", false)
+        .in("reservation_id", reservationIds);
 
       if (accountingError) throw accountingError;
       accountingRecords = accountingData as AccountingInformationRecord[];
@@ -126,20 +131,23 @@ export async function GET(req: NextRequest) {
     const todaySales = dailySalesMap[todayDateStr] || 0;
     const yesterdaySales = dailySalesMap[yesterdayDateStr] || 0;
 
-    // 次の予約一覧を取得
+    // 次の予約一覧を取得（is_staff_schedule = false を追加）
     const now = dayjs();
     const endOfTodayStr = now.endOf("day").toISOString();
 
     const { data: upcomingReservations, error: upcomingError } = await supabase
       .from("reservations")
-      .select(`
+      .select(
+        `
         start_time,
         reservation_customers!fk_customer(name),
         menu_items(name),
         staff(name)
-      `)
+      `
+      )
       .eq("user_id", userId)
       .eq("status", "confirmed")
+      .eq("is_staff_schedule", false)
       .gte("start_time", now.toISOString())
       .lte("start_time", endOfTodayStr)
       .order("start_time", { ascending: true })
@@ -147,22 +155,26 @@ export async function GET(req: NextRequest) {
 
     if (upcomingError) throw upcomingError;
 
-    const appointments: Appointment[] = upcomingReservations.map((reservation: any) => ({
-      time: dayjs(reservation.start_time).format("HH:mm"),
-      client: reservation.reservation_customers.name,
-      service: reservation.menu_items?.name || "サービス未設定",
-      staff: reservation.staff?.name || "スタッフ未設定",
-    }));
+    const appointments: Appointment[] = upcomingReservations.map(
+      (reservation: any) => ({
+        time: dayjs(reservation.start_time).format("HH:mm"),
+        client: reservation.reservation_customers.name,
+        service: reservation.menu_items?.name || "サービス未設定",
+        staff: reservation.staff?.name || "スタッフ未設定",
+      })
+    );
 
     // 取得したデータをまとめて返す
-    return NextResponse.json({
-      todayReservations: todayReservationsCount,
-      yesterdayReservations: yesterdayReservationsCount,
-      todaySales,
-      yesterdaySales,
-      upcomingAppointments: appointments,
-    }, { status: 200 });
-
+    return NextResponse.json(
+      {
+        todayReservations: todayReservationsCount,
+        yesterdayReservations: yesterdayReservationsCount,
+        todaySales,
+        yesterdaySales,
+        upcomingAppointments: appointments,
+      },
+      { status: 200 }
+    );
   } catch (error: any) {
     console.error("ダッシュボードデータ取得エラー:", error);
     return NextResponse.json(
