@@ -7,46 +7,52 @@ const { zonedTimeToUtc } = require("date-fns-tz");
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const supabase = (0, supabase_js_1.createClient)(supabaseUrl, supabaseKey);
-function parseDateTime(dateString) {
-  const [datePart, timePart] = dateString.split(/(\d{2}:\d{2})$/);
-  const [month, day] = datePart.split("/").map(Number);
-  const [hours, minutes] = timePart.split(":").map(Number);
-  const currentYear = new Date().getFullYear();
+// function parseDateTime(dateString) {
+//   const [datePart, timePart] = dateString.split(/(\d{2}:\d{2})$/);
+//   const [month, day] = datePart.split("/").map(Number);
+//   const [hours, minutes] = timePart.split(":").map(Number);
+//   const currentYear = new Date().getFullYear();
 
-  const dateStringFormatted = `${currentYear}-${String(month).padStart(
-    2,
-    "0"
-  )}-${String(day).padStart(2, "0")} ${String(hours).padStart(2, "0")}:${String(
-    minutes
-  ).padStart(2, "0")}:00`;
+//   const dateStringFormatted = `${currentYear}-${String(month).padStart(
+//     2,
+//     "0"
+//   )}-${String(day).padStart(2, "0")} ${String(hours).padStart(2, "0")}:${String(
+//     minutes
+//   ).padStart(2, "0")}:00`;
 
-  const date = zonedTimeToUtc(dateStringFormatted, "Asia/Tokyo");
-  return date;
-}
+//   const date = zonedTimeToUtc(dateStringFormatted, "Asia/Tokyo");
+//   return date;
+// }
 async function processReservation(raw, userId) {
-  const startTime = parseDateTime(raw.date);
-  const endTime = addMinutes(startTime, 90); // 必要に応じて調整
-  const menuId = await getMenuId(raw.menu);
-  // メニューが見つからない場合は0を設定
+  // 他サービスから受け取った日時文字列をそのまま使用
+  const startTime = new Date(raw.date);
+
+  // 所要時間が分かっている場合は、startTime から endTime を計算
+  const durationMinutes = raw.duration || 90; // デフォルトで90分
+  const endTime = addMinutes(startTime, durationMinutes);
+
+  // 以下の処理は変更せず
+  const menuId = await getMenuId(raw.menu, userId);
   const finalMenuId = menuId === null ? 0 : menuId;
   const staffId = await getStaffId(raw.staff, userId);
-  // 金額の処理を修正
   const total_price = extractPrice(raw.amount);
   const cleanStatus = raw.status.replace(/\(未読\)$/, "").trim();
+
   return {
     user_id: userId,
     menu_id: finalMenuId,
     staff_id: staffId,
     status: mapStatus(cleanStatus),
     total_price: total_price,
-    start_time: (0, date_fns_1.format)(startTime, "yyyy-MM-dd'T'HH:mm:ssXXX"),
-    end_time: (0, date_fns_1.format)(endTime, "yyyy-MM-dd'T'HH:mm:ssXXX"),
-    created_at: (0, date_fns_1.format)(new Date(), "yyyy-MM-dd'T'HH:mm:ssXXX"),
-    updated_at: (0, date_fns_1.format)(new Date(), "yyyy-MM-dd'T'HH:mm:ssXXX"),
+    start_time: format(startTime, "yyyy-MM-dd'T'HH:mm:ssXXX"),
+    end_time: format(endTime, "yyyy-MM-dd'T'HH:mm:ssXXX"),
+    created_at: format(new Date(), "yyyy-MM-dd'T'HH:mm:ssXXX"),
+    updated_at: format(new Date(), "yyyy-MM-dd'T'HH:mm:ssXXX"),
     scraped_customer: raw.customerName,
     scraped_menu: raw.menu,
   };
 }
+
 function extractPrice(amountString) {
   if (amountString === "-") {
     return 0;
