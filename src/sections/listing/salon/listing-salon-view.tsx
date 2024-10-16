@@ -36,7 +36,6 @@ interface SalonData {
   salonName: string;
   phone: string;
   address: string;
-  website: string; // 必須に変更
   description?: string;
   weekdayOpen: string;
   weekdayClose: string;
@@ -51,7 +50,6 @@ const formSchema = z.object({
   salonName: z.string().min(1, { message: "サロン名は必須です" }),
   phone: z.string().min(1, { message: "電話番号は必須です" }),
   address: z.string().min(1, { message: "住所は必須です" }),
-  website: z.string().url({ message: "有効なURLを入力してください" }), // 必須に変更
   description: z.string().optional(),
   weekdayOpen: z.string(),
   weekdayClose: z.string(),
@@ -105,7 +103,6 @@ const AuthenticatedListingSalonView: React.FC<{ userId: string }> = ({
       salonName: "",
       phone: "",
       address: "",
-      website: "", // 必須フィールドの初期値
       description: "",
       weekdayOpen: "",
       weekdayClose: "",
@@ -141,7 +138,6 @@ const AuthenticatedListingSalonView: React.FC<{ userId: string }> = ({
             salonName: data.salon_name,
             phone: data.phone,
             address: data.address,
-            website: data.website || "", // 必須フィールドの初期値
             description: data.description || "",
             weekdayOpen: data.weekday_open || "",
             weekdayClose: data.weekday_close || "",
@@ -276,7 +272,6 @@ const AuthenticatedListingSalonView: React.FC<{ userId: string }> = ({
         salonName: values.salonName,
         phone: values.phone,
         address: values.address,
-        website: values.website, // 必須フィールド
         description: values.description,
         weekdayOpen: values.weekdayOpen,
         weekdayClose: values.weekdayClose,
