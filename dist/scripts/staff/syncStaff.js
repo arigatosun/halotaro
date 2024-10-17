@@ -45,7 +45,7 @@ async function syncStaff(staffData, userId) {
       name: staff.name,
       role: staff.role,
       experience: staff.experience,
-      is_published: staff.isPublished,
+      is_published: staff.is_published,
       image: staff.image,
       description: staff.description,
       updated_at: new Date().toISOString(),
