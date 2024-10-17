@@ -20,7 +20,11 @@ export default function StaffSelection({
   userId,
 }: StaffSelectionProps) {
   const { setSelectedStaff } = useReservation();
-  const { staffList, loading, error } = useStaffManagement(userId);
+
+  const { staffList, loading, error } = useStaffManagement(
+    userId,
+    selectedMenuId
+  );
 
   // スタッフ選択時の処理
   const handleStaffSelect = (staff: Staff | null) => {
@@ -38,8 +42,11 @@ export default function StaffSelection({
     );
 
   const renderStaff = (staff: Staff) => {
-    const hasValidImage = typeof staff.image === "string" && staff.image.trim() !== "";
-    const imageSrc: string = hasValidImage ? staff.image as string : "/placeholder.svg?height=80&width=80";
+    const hasValidImage =
+      typeof staff.image === "string" && staff.image.trim() !== "";
+    const imageSrc: string = hasValidImage
+      ? (staff.image as string)
+      : "/placeholder.svg?height=80&width=80";
 
     return (
       <Card key={staff.id} className="mb-4">
@@ -49,9 +56,7 @@ export default function StaffSelection({
               <h3 className="text-lg font-semibold mb-1">{staff.name}</h3>
               <p className="text-sm text-gray-600 mb-1">{staff.role}</p>
               {staff.experience && (
-                <p className="text-sm text-gray-600 mb-1">
-                  {staff.experience}
-                </p>
+                <p className="text-sm text-gray-600 mb-1">{staff.experience}</p>
               )}
               <p className="text-sm text-gray-700">{staff.description}</p>
             </div>

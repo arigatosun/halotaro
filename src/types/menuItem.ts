@@ -10,4 +10,5 @@ export interface MenuItem {
   isCoupon?: boolean;
   coupon_id?: string;
   image_url?: string;
+  unavailable_staff_ids?: string[]; // 追加
 }

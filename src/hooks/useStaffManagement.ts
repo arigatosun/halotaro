@@ -26,45 +26,54 @@ interface ErrorWithMessage {
   message: string;
 }
 
-export function useStaffManagement(userId: string) { // userId を必須に変更
+export function useStaffManagement(userId: string, menuItemId?: string) {
+  // userId を必須に変更
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<ErrorWithMessage | null>(null);
 
+  console.log("menuItemId", menuItemId);
+
   const fetchStaff = useCallback(async () => {
     try {
       setLoading(true);
-      let query = supabase.from("staff").select("*");
 
-      if (userId) {
-        // ユーザーIDが提供された場合、そのユーザーに関連するスタッフを取得
-        query = query.eq("user_id", userId);
-      } else {
-        // ユーザーIDが提供されない場合、公開されているスタッフのみを取得
-        query = query.eq("is_published", true);
+      let query = supabase.from("staff").select("*").eq("user_id", userId);
+
+      if (menuItemId) {
+        // 対応不可スタッフを取得
+        const { data: unavailableStaff, error: unavailableStaffError } =
+          await supabase
+            .from("menu_item_unavailable_staff")
+            .select("staff_id")
+            .eq("menu_item_id", menuItemId);
+
+        if (unavailableStaffError) throw unavailableStaffError;
+
+        const unavailableStaffIds = unavailableStaff.map(
+          (item) => item.staff_id
+        );
+
+        if (unavailableStaffIds.length > 0) {
+          query = query.not("id", "in", `(${unavailableStaffIds.join(",")})`);
+        }
       }
 
       const { data, error } = await query;
 
       if (error) throw error;
 
-      // 受信データの `image` フィールドを文字列または null に変換
-      const sanitizedData = (data || []).map((staff) => ({
-        ...staff,
-        image: typeof staff.image === "string" ? staff.image : null,
-      }));
-
-      console.log("Sanitized staff data:", sanitizedData); // デバッグ用ログ
-
-      setStaffList(sanitizedData);
+      setStaffList(data || []);
       setError(null);
     } catch (err: any) {
-      setError({ message: err.message || "スタッフデータの取得に失敗しました" });
+      setError({
+        message: err.message || "スタッフデータの取得に失敗しました",
+      });
       console.error("Fetch Staff Error:", err);
     } finally {
       setLoading(false);
     }
-  }, [userId]);
+  }, [userId, menuItemId]);
 
   useEffect(() => {
     fetchStaff();
@@ -133,7 +142,8 @@ export function useStaffManagement(userId: string) { // userId を必須に変�
       setStaffList([...staffList, addedStaff]);
       setError(null);
       return addedStaff;
-    } catch (err: any) { // any 型に変更
+    } catch (err: any) {
+      // any 型に変更
       setError({ message: err.message || "スタッフの追加に失敗しました" });
       console.error("Add Staff Error:", err);
       throw err;
@@ -143,7 +153,8 @@ export function useStaffManagement(userId: string) { // userId を必須に変�
   const updateStaff = async (
     updatedStaff: Staff,
     imageFile: File | null
-  ): Promise<Staff> => { // 戻り値の型を明示
+  ): Promise<Staff> => {
+    // 戻り値の型を明示
     try {
       let imageUrl = updatedStaff.image;
       if (imageFile) {

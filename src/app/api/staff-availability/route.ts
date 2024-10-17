@@ -9,27 +9,15 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-interface ShiftData {
-  staff_id: string;
-  date: string;
-  start_time: string;
-  end_time: string;
-}
-
-interface ReservationData {
-  staff_id: string;
-  start_time: string;
-  end_time: string;
-}
-
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const staffId = searchParams.get("staffId");
   const startDate = searchParams.get("startDate");
   const endDate = searchParams.get("endDate");
   const menuId = searchParams.get("menuId");
+  const salonId = searchParams.get("salonId"); // salonIdを取得
 
-  if (!startDate || !endDate) {
+  if (!startDate || !endDate || !salonId) {
     return NextResponse.json(
       { error: "Missing required parameters" },
       { status: 400 }
@@ -37,120 +25,83 @@ export async function GET(request: Request) {
   }
 
   try {
-    // シフトの取得
-    let shiftQuery = supabase
-      .from("staff_shifts")
-      .select("staff_id, date, start_time, end_time")
-      .gte("date", startDate)
-      .lte("date", endDate)
-      .order("date", { ascending: true });
+    // メニューに対応できないスタッフのIDを取得
+    let unavailableStaffIds: string[] = [];
+    if (menuId) {
+      const { data: unavailableStaffData, error: unavailableStaffError } =
+        await supabase
+          .from("menu_item_unavailable_staff")
+          .select("staff_id")
+          .eq("menu_item_id", menuId);
 
+      if (unavailableStaffError) {
+        throw unavailableStaffError;
+      }
+
+      unavailableStaffIds = unavailableStaffData.map((item) => item.staff_id);
+    }
+
+    // サロンの全スタッフIDを取得
+    const { data: staffData, error: staffError } = await supabase
+      .from("staff")
+      .select("id")
+      .eq("user_id", salonId); // サロンのスタッフに限定
+
+    if (staffError) {
+      throw staffError;
+    }
+
+    let availableStaffIds = staffData.map((staff) => staff.id);
+
+    // 対応不可スタッフを除外
+    if (unavailableStaffIds.length > 0) {
+      availableStaffIds = availableStaffIds.filter(
+        (id) => !unavailableStaffIds.includes(id)
+      );
+    }
+
+    // 選択されたスタッフが対応可能かチェック（スタッフを指名している場合）
     if (staffId) {
-      shiftQuery = shiftQuery.eq("staff_id", staffId);
+      if (!availableStaffIds.includes(staffId)) {
+        // 対応不可の場合、空の結果を返す
+        return NextResponse.json({});
+      }
+      // 指定されたスタッフのみを対象にする
+      availableStaffIds = [staffId];
     }
 
-    const { data: shiftData, error: shiftError } = await shiftQuery;
-
-    if (shiftError) {
-      throw shiftError;
+    if (availableStaffIds.length === 0) {
+      // 利用可能なスタッフがいない場合、空の結果を返す
+      return NextResponse.json({});
     }
 
-    // 予約の取得
-    let reservationQuery = supabase
-      .from("reservations")
-      .select("staff_id, start_time, end_time")
-      .gte("start_time", startDate)
-      .lte("end_time", endDate);
+    // ストアドプロシージャの呼び出し
+    const { data, error } = await supabase.rpc("get_staff_availability", {
+      start_date: startDate,
+      end_date: endDate,
+      staff_ids: availableStaffIds,
+    });
 
-    if (staffId) {
-      reservationQuery = reservationQuery.eq("staff_id", staffId);
+    if (error) {
+      throw error;
     }
 
-    const { data: reservationData, error: reservationError } =
-      await reservationQuery;
-
-    if (reservationError) {
-      throw reservationError;
-    }
-
-    // 利用可能枠の計算
+    // データの整形
     const availabilityByDate: Record<string, Record<string, string[]>> = {};
 
-    // 区切り文字を変更（例えば "|" を使用）
-    const separator = "|";
-
-    // シフトと予約をスタッフと日付でグループ化
-    const shiftsByStaffDate = shiftData.reduce((acc, shift: ShiftData) => {
-      const key = `${shift.staff_id}${separator}${shift.date}`;
-      if (!acc[key]) {
-        acc[key] = [];
+    data.forEach(
+      (row: { staff_id: string; date: string; time_slot: string }) => {
+        const dateStr = row.date;
+        const timeStr = moment(row.time_slot, "HH:mm:ss").format("HH:mm");
+        if (!availabilityByDate[dateStr]) {
+          availabilityByDate[dateStr] = {};
+        }
+        if (!availabilityByDate[dateStr][timeStr]) {
+          availabilityByDate[dateStr][timeStr] = [];
+        }
+        availabilityByDate[dateStr][timeStr].push(row.staff_id);
       }
-      acc[key].push(shift);
-      return acc;
-    }, {} as Record<string, ShiftData[]>);
-
-    const reservationsByStaffDate = reservationData.reduce(
-      (acc, res: ReservationData) => {
-        const date = moment(res.start_time).format("YYYY-MM-DD");
-        const key = `${res.staff_id}${separator}${date}`;
-        if (!acc[key]) {
-          acc[key] = [];
-        }
-        acc[key].push(res);
-        return acc;
-      },
-      {} as Record<string, ReservationData[]>
     );
-
-    // 時間スロットの定義
-    const slotInterval = 30; // 分単位
-    const slots = Array.from({ length: 28 }, (_, i) =>
-      moment("09:00", "HH:mm")
-        .add(i * slotInterval, "minutes")
-        .format("HH:mm")
-    );
-
-    // 利用可能枠の計算
-    for (const shiftKey in shiftsByStaffDate) {
-      const [staffId, date] = shiftKey.split(separator);
-      const shifts = shiftsByStaffDate[shiftKey];
-      const reservations = reservationsByStaffDate[shiftKey] || [];
-      console.log("shiftKey:", shiftKey);
-      console.log("staffId:", staffId);
-      console.log("date:", date);
-
-      // シフトから利用可能な時間スロットを計算
-      slots.forEach((time) => {
-        const slotStart = moment(`${date} ${time}`);
-        const slotEnd = moment(slotStart).add(slotInterval, "minutes");
-
-        // シフト内にあるか確認
-        const isInShift = shifts.some((shift) => {
-          const shiftStart = moment(`${shift.date} ${shift.start_time}`);
-          const shiftEnd = moment(`${shift.date} ${shift.end_time}`);
-          return slotStart.isBetween(shiftStart, shiftEnd, null, "[)");
-        });
-
-        if (isInShift) {
-          // 予約があるか確認
-          const isReserved = reservations.some((res) => {
-            const resStart = moment(res.start_time);
-            const resEnd = moment(res.end_time);
-            return slotStart.isBetween(resStart, resEnd, null, "[)");
-          });
-
-          if (!isReserved) {
-            if (!availabilityByDate[date]) {
-              availabilityByDate[date] = {};
-            }
-            if (!availabilityByDate[date][time]) {
-              availabilityByDate[date][time] = [];
-            }
-            availabilityByDate[date][time].push(staffId);
-          }
-        }
-      });
-    }
 
     return NextResponse.json(availabilityByDate);
   } catch (error) {

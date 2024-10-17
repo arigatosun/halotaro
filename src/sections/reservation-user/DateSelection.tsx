@@ -316,12 +316,38 @@ const DateSelection: React.FC<DateSelectionProps> = ({
   }, [availableSlots, reservedSlots]);
 
   // スタッフリストの取得
+  // スタッフリストの取得時に、対応不可スタッフを除外
   const fetchStaffList = async () => {
     try {
-      const { data, error } = await supabase
+      // メニューに対応できないスタッフのIDを取得
+      let unavailableStaffIds: string[] = [];
+      const { data: unavailableStaffData, error: unavailableStaffError } =
+        await supabase
+          .from("menu_item_unavailable_staff")
+          .select("staff_id")
+          .eq("menu_item_id", selectedMenuId);
+
+      if (unavailableStaffError) {
+        throw unavailableStaffError;
+      }
+
+      unavailableStaffIds = unavailableStaffData.map((item) => item.staff_id);
+
+      // スタッフのリストを取得（対応不可スタッフを除外）
+      let staffQuery = supabase
         .from("staff")
         .select("id, name")
-        .eq("user_id", salonId); // サロンIDでフィルタリング
+        .eq("user_id", salonId);
+
+      if (unavailableStaffIds.length > 0) {
+        staffQuery = staffQuery.not(
+          "id",
+          "in",
+          `(${unavailableStaffIds.join(",")})`
+        );
+      }
+
+      const { data, error } = await staffQuery;
 
       if (error) {
         throw error;
@@ -344,6 +370,7 @@ const DateSelection: React.FC<DateSelectionProps> = ({
         startDate: startDate.format("YYYY-MM-DD"),
         endDate: endDate,
         menuId: selectedMenuId,
+        salonId, // 追加
       });
 
       if (selectedStaffProp) {
@@ -377,6 +404,7 @@ const DateSelection: React.FC<DateSelectionProps> = ({
       const queryParams = new URLSearchParams({
         startDate: startDate.format("YYYY-MM-DD"),
         endDate: endDate,
+        salonId, // 追加
       });
 
       if (selectedStaffProp) {

@@ -12,11 +12,8 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData();
     const userId = formData.get("user_id") as string;
 
-    if (!userId || typeof userId !== 'string' || userId.length === 0) {
-      return NextResponse.json(
-        { message: "Invalid user ID" },
-        { status: 400 }
-      );
+    if (!userId || typeof userId !== "string" || userId.length === 0) {
+      return NextResponse.json({ message: "Invalid user ID" }, { status: 400 });
     }
 
     const name = formData.get("name") as string;
@@ -26,6 +23,9 @@ export async function POST(request: NextRequest) {
     const duration = parseInt(formData.get("duration") as string);
     const isReservable = formData.get("is_reservable") === "true";
     const image = formData.get("image") as File | null;
+    const unavailableStaffIds = formData.getAll(
+      "unavailable_staff_ids[]"
+    ) as string[];
 
     let imageUrl = null;
     if (image && image.size > 0) {
@@ -44,20 +44,37 @@ export async function POST(request: NextRequest) {
       imageUrl = publicUrlData.publicUrl;
     }
 
-    const { data, error } = await supabase.from("menu_items").insert({
-      user_id: userId,
-      name,
-      category,
-      description,
-      price,
-      duration,
-      is_reservable: isReservable,
-      image_url: imageUrl,
-    }).select().single();
+    const { data: menuItem, error } = await supabase
+      .from("menu_items")
+      .insert({
+        user_id: userId,
+        name,
+        category,
+        description,
+        price,
+        duration,
+        is_reservable: isReservable,
+        image_url: imageUrl,
+      })
+      .select()
+      .single();
+
+    if (unavailableStaffIds && unavailableStaffIds.length > 0) {
+      const insertData = unavailableStaffIds.map((staffId) => ({
+        menu_item_id: menuItem.id,
+        staff_id: staffId,
+      }));
+
+      const { error: insertError } = await supabase
+        .from("menu_item_unavailable_staff")
+        .insert(insertData);
+
+      if (insertError) throw insertError;
+    }
 
     if (error) throw error;
 
-    return NextResponse.json(data);
+    return NextResponse.json(menuItem);
   } catch (error) {
     console.error("Error creating menu item:", error);
     return NextResponse.json(

@@ -1,8 +1,10 @@
 "use client";
+
 import React, { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/authcontext";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Table,
   TableBody,
@@ -32,7 +34,13 @@ import { Toaster } from "@/components/ui/toaster";
 import { toast } from "@/components/ui/use-toast";
 import { PlusCircle, Pencil, Trash2, Loader2, ImageOff } from "lucide-react";
 import { MenuItem } from "@/types/menuItem";
+import { useStaffManagement } from "@/hooks/useStaffManagement";
+import { createClient } from "@supabase/supabase-js";
 
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
 const MenuSettingsPage: React.FC = () => {
   const { user, loading: authLoading, refreshAuthState } = useAuth();
@@ -66,6 +74,14 @@ const AuthenticatedMenuSettingsPage: React.FC<{ userId: string }> = ({
   const [editingMenu, setEditingMenu] = useState<MenuItem | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
 
+  const {
+    staffList,
+    loading: staffLoading,
+    error: staffError,
+  } = useStaffManagement(userId);
+
+  const [unavailableStaffIds, setUnavailableStaffIds] = useState<string[]>([]);
+
   useEffect(() => {
     fetchMenuItems();
   }, []);
@@ -98,9 +114,38 @@ const AuthenticatedMenuSettingsPage: React.FC<{ userId: string }> = ({
     setIsModalOpen(true);
   };
 
+  useEffect(() => {
+    if (editingMenu) {
+      const fetchUnavailableStaff = async () => {
+        const { data: unavailableStaffData, error: unavailableStaffError } =
+          await supabase
+            .from("menu_item_unavailable_staff")
+            .select("staff_id")
+            .eq("menu_item_id", editingMenu.id);
+
+        if (unavailableStaffError) {
+          console.error(
+            "Error fetching unavailable staff:",
+            unavailableStaffError
+          );
+          setUnavailableStaffIds([]);
+        } else {
+          setUnavailableStaffIds(
+            unavailableStaffData.map((item) => item.staff_id)
+          );
+        }
+      };
+
+      fetchUnavailableStaff();
+    } else {
+      setUnavailableStaffIds([]);
+    }
+  }, [editingMenu]);
+
   const handleAdd = () => {
     setEditingMenu(null);
     setImageFile(null);
+    setUnavailableStaffIds([]);
     setIsModalOpen(true);
   };
 
@@ -108,7 +153,7 @@ const AuthenticatedMenuSettingsPage: React.FC<{ userId: string }> = ({
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
     formData.append("user_id", userId);
-    
+
     if (editingMenu) {
       formData.append("id", editingMenu.id.toString());
     }
@@ -117,11 +162,18 @@ const AuthenticatedMenuSettingsPage: React.FC<{ userId: string }> = ({
       formData.append("image", imageFile);
     }
 
+    unavailableStaffIds.forEach((staffId) => {
+      formData.append("unavailable_staff_ids[]", staffId);
+    });
+
     try {
-      const response = await fetch(editingMenu ? "/api/update-menu-item" : "/api/post-menu-item", {
-        method: editingMenu ? "PATCH" : "POST",
-        body: formData,
-      });
+      const response = await fetch(
+        editingMenu ? "/api/update-menu-item" : "/api/post-menu-item",
+        {
+          method: editingMenu ? "PATCH" : "POST",
+          body: formData,
+        }
+      );
 
       if (!response.ok) {
         throw new Error("Failed to save menu item");
@@ -129,16 +181,20 @@ const AuthenticatedMenuSettingsPage: React.FC<{ userId: string }> = ({
 
       const updatedMenuItem = await response.json();
 
-      setMenuItems(prevItems => 
+      setMenuItems((prevItems) =>
         editingMenu
-          ? prevItems.map(item => item.id === updatedMenuItem.id ? updatedMenuItem : item)
-          : [updatedMenuItem, ...prevItems] // Add new item to the top of the list
+          ? prevItems.map((item) =>
+              item.id === updatedMenuItem.id ? updatedMenuItem : item
+            )
+          : [updatedMenuItem, ...prevItems]
       );
 
       setIsModalOpen(false);
       toast({
         title: editingMenu ? "メニュー更新" : "メニュー追加",
-        description: `メニューが正常に${editingMenu ? "更新" : "追加"}されました。`,
+        description: `メニューが正常に${
+          editingMenu ? "更新" : "追加"
+        }されました。`,
       });
     } catch (error) {
       console.error("操作に失敗しました:", error);
@@ -149,7 +205,6 @@ const AuthenticatedMenuSettingsPage: React.FC<{ userId: string }> = ({
       });
     }
   };
-
 
   const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files[0]) {
@@ -167,103 +222,127 @@ const AuthenticatedMenuSettingsPage: React.FC<{ userId: string }> = ({
           },
           body: JSON.stringify({ menuItemId }),
         });
-  
+
         const data = await response.json();
-  
+
         if (!response.ok) {
-          throw new Error(data.message || "メニューの削除中にエラーが発生しました。");
+          throw new Error(
+            data.message || "メニューの削除中にエラーが発生しました。"
+          );
         }
-  
-        setMenuItems(prevItems => prevItems.filter(item => item.id !== menuItemId));
-  
+
+        setMenuItems((prevItems) =>
+          prevItems.filter((item) => item.id !== menuItemId)
+        );
+
         toast({
           title: "削除成功",
-          description: data.message || `メニューID: ${menuItemId} が削除されました`,
+          description:
+            data.message || `メニューID: ${menuItemId} が削除されました`,
         });
       } catch (error) {
         console.error("Error deleting menu item:", error);
         toast({
           title: "削除エラー",
-          description: error instanceof Error ? error.message : "メニューの削除中にエラーが発生しました。",
+          description:
+            error instanceof Error
+              ? error.message
+              : "メニューの削除中にエラーが発生しました。",
           variant: "destructive",
         });
       }
     }
   };
 
-  const handleToggleReservable = async (menuItemId: number | string, isReservable: boolean) => {
-  try {
-    const response = await fetch("/api/update-menu-item-reservable", {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ menuItemId, isReservable }),
-    });
+  const handleToggleReservable = async (
+    menuItemId: number | string,
+    isReservable: boolean
+  ) => {
+    try {
+      const response = await fetch("/api/update-menu-item-reservable", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ menuItemId, isReservable }),
+      });
 
-    if (!response.ok) {
-      throw new Error("Failed to update menu item reservable status");
+      if (!response.ok) {
+        throw new Error("Failed to update menu item reservable status");
+      }
+
+      const updatedMenuItem = await response.json();
+
+      setMenuItems((prevItems) =>
+        prevItems.map((item) =>
+          item.id === updatedMenuItem.id ? updatedMenuItem : item
+        )
+      );
+
+      toast({
+        title: "予約可能状態変更",
+        description: `メニューID: ${menuItemId} の予約可能状態が ${
+          isReservable ? "可能" : "不可能"
+        } に変更されました`,
+      });
+    } catch (error) {
+      console.error("Error updating menu item reservable status:", error);
+      toast({
+        title: "エラー",
+        description: "予約可能状態の更新に失敗しました",
+        variant: "destructive",
+      });
     }
+  };
 
-    const updatedMenuItem = await response.json();
-
-    setMenuItems(prevItems =>
-      prevItems.map(item => item.id === updatedMenuItem.id ? updatedMenuItem : item)
+  const handleStaffCheckboxChange = (staffId: string) => {
+    setUnavailableStaffIds((prev) =>
+      prev.includes(staffId)
+        ? prev.filter((id) => id !== staffId)
+        : [...prev, staffId]
     );
+  };
 
-    toast({
-      title: "予約可能状態変更",
-      description: `メニューID: ${menuItemId} の予約可能状態が ${
-        isReservable ? "可能" : "不可能"
-      } に変更されました`,
-    });
-  } catch (error) {
-    console.error("Error updating menu item reservable status:", error);
-    toast({
-      title: "エラー",
-      description: "予約可能状態の更新に失敗しました",
-      variant: "destructive",
-    });
+  if (loading || staffLoading) {
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
   }
-};
 
-if (loading) {
+  if (error || staffError) {
+    return (
+      <div className="text-red-500 text-center">
+        {error?.message || staffError?.message}
+      </div>
+    );
+  }
+
   return (
-    <div className="flex justify-center items-center h-screen">
-      <Loader2 className="h-8 w-8 animate-spin" />
-    </div>
-  );
-}
-
-if (error) {
-  return <div className="text-red-500 text-center">{error.message}</div>;
-}
-
-
-return (
-  <div className="p-6">
-    <h1 className="text-2xl font-bold mb-4">メニュー掲載情報一覧</h1>
-    <div className="flex justify-between items-center mb-4">
-      <Button onClick={handleAdd}>
-        <PlusCircle className="mr-2 h-4 w-4" />
-        メニュー新規追加
-      </Button>
-    </div>
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>No.</TableHead>
-          <TableHead>メニュー写真</TableHead>
-          <TableHead>メニュー名</TableHead>
-          <TableHead>カテゴリ</TableHead>
-          <TableHead>価格</TableHead>
-          <TableHead>所要時間</TableHead>
-          <TableHead>編集</TableHead>
-          <TableHead>予約可能</TableHead>
-          <TableHead>削除</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
+    <div className="p-6">
+      <h1 className="text-2xl font-bold mb-4">メニュー掲載情報一覧</h1>
+      <div className="flex justify-between items-center mb-4">
+        <Button onClick={handleAdd}>
+          <PlusCircle className="mr-2 h-4 w-4" />
+          メニュー新規追加
+        </Button>
+      </div>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>No.</TableHead>
+            <TableHead>メニュー写真</TableHead>
+            <TableHead>メニュー名</TableHead>
+            <TableHead>カテゴリ</TableHead>
+            <TableHead>価格</TableHead>
+            <TableHead>所要時間</TableHead>
+            <TableHead>編集</TableHead>
+            <TableHead>予約可能</TableHead>
+            <TableHead>削除</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {menuItems.map((item, index) => (
             <TableRow key={item.id}>
               <TableCell>{index + 1}</TableCell>
@@ -280,142 +359,165 @@ return (
                   </div>
                 )}
               </TableCell>
-            <TableCell>{item.name}</TableCell>
-            <TableCell>{item.category}</TableCell>
-            <TableCell>¥{item.price.toLocaleString()}</TableCell>
-            <TableCell>{item.duration}分</TableCell>
-            <TableCell>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleEdit(item)}
-              >
-                <Pencil className="h-4 w-4" />
-              </Button>
-            </TableCell>
-            <TableCell>
-              <Switch
-                checked={item.is_reservable}
-                onCheckedChange={(checked) =>
-                  handleToggleReservable(item.id, checked)
-                }
-              />
-            </TableCell>
-            <TableCell>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleDelete(item.id)}
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
-    <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>
-            {editingMenu ? "メニュー編集" : "新規メニュー追加"}
-          </DialogTitle>
-        </DialogHeader>
-        <form onSubmit={handleModalSubmit}>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="name" className="text-right">
-                メニュー名
-              </Label>
-              <Input
-                id="name"
-                name="name"
-                defaultValue={editingMenu?.name}
-                className="col-span-3"
-              />
+              <TableCell>{item.name}</TableCell>
+              <TableCell>{item.category}</TableCell>
+              <TableCell>¥{item.price.toLocaleString()}</TableCell>
+              <TableCell>{item.duration}分</TableCell>
+              <TableCell>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleEdit(item)}
+                >
+                  <Pencil className="h-4 w-4" />
+                </Button>
+              </TableCell>
+              <TableCell>
+                <Switch
+                  checked={item.is_reservable}
+                  onCheckedChange={(checked) =>
+                    handleToggleReservable(item.id, checked)
+                  }
+                />
+              </TableCell>
+              <TableCell>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleDelete(item.id)}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {editingMenu ? "メニュー編集" : "新規メニュー追加"}
+            </DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleModalSubmit}>
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="name" className="text-right">
+                  メニュー名
+                </Label>
+                <Input
+                  id="name"
+                  name="name"
+                  defaultValue={editingMenu?.name}
+                  className="col-span-3"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="category" className="text-right">
+                  カテゴリ
+                </Label>
+                <Select
+                  name="category"
+                  defaultValue={editingMenu?.category}
+                  required
+                >
+                  <SelectTrigger className="col-span-3">
+                    <SelectValue placeholder="カテゴリを選択" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="リラクゼーション">
+                      リラクゼーション
+                    </SelectItem>
+                    <SelectItem value="ヘッドスパ">ヘッドスパ</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid  grid-cols-4 items-center gap-4">
+                <Label htmlFor="description" className="text-right">
+                  説明
+                </Label>
+                <Textarea
+                  id="description"
+                  name="description"
+                  defaultValue={editingMenu?.description}
+                  className="col-span-3"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="price" className="text-right">
+                  価格（税込）
+                </Label>
+                <Input
+                  id="price"
+                  name="price"
+                  type="number"
+                  defaultValue={editingMenu?.price}
+                  className="col-span-3"
+                  required
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="duration" className="text-right">
+                  所要時間（分）
+                </Label>
+                <Input
+                  id="duration"
+                  name="duration"
+                  type="number"
+                  defaultValue={editingMenu?.duration}
+                  className="col-span-3"
+                  required
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="image" className="text-right">
+                  画像
+                </Label>
+                {editingMenu?.image_url && (
+                  <div className="col-span-3">
+                    <img
+                      src={editingMenu.image_url}
+                      alt="現在の画像"
+                      className="w-32 h-32 object-cover mb-4"
+                    />
+                  </div>
+                )}
+                <Input
+                  id="image"
+                  name="image"
+                  type="file"
+                  onChange={handleImageChange}
+                  className="col-span-3"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-start gap-4">
+                <Label className="text-right">対応不可スタッフ</Label>
+                <div className="col-span-3 grid gap-2">
+                  {staffList.map((staff) => (
+                    <div key={staff.id} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`staff-${staff.id}`}
+                        checked={unavailableStaffIds.includes(staff.id)}
+                        onCheckedChange={() =>
+                          handleStaffCheckboxChange(staff.id)
+                        }
+                      />
+                      <Label htmlFor={`staff-${staff.id}`}>{staff.name}</Label>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="category" className="text-right">
-                カテゴリ
-              </Label>
-              <Select name="category" defaultValue={editingMenu?.category}>
-                <SelectTrigger className="col-span-3">
-                  <SelectValue placeholder="カテゴリを選択" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="リラクゼーション">
-                    リラクゼーション
-                  </SelectItem>
-                  <SelectItem value="ヘッドスパ">ヘッドスパ</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="flex justify-end">
+              <Button type="submit">保存</Button>
             </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="description" className="text-right">
-                説明
-              </Label>
-              <Textarea
-                id="description"
-                name="description"
-                defaultValue={editingMenu?.description}
-                className="col-span-3"
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="price" className="text-right">
-                価格（税込）
-              </Label>
-              <Input
-                id="price"
-                name="price"
-                type="number"
-                defaultValue={editingMenu?.price}
-                className="col-span-3"
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="duration" className="text-right">
-                所要時間（分）
-              </Label>
-              <Input
-                id="duration"
-                name="duration"
-                type="number"
-                defaultValue={editingMenu?.duration}
-                className="col-span-3"
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-  <Label htmlFor="image" className="text-right">
-    現在の画像
-  </Label>
-  {editingMenu?.image_url && (
-    <div className="col-span-3">
-      <img
-        src={editingMenu.image_url}
-        alt="現在の画像"
-        className="w-32 h-32 object-cover mb-4"
-      />
+          </form>
+        </DialogContent>
+      </Dialog>
+      <Toaster />
     </div>
-  )}
-  <Input
-    id="image"
-    name="image"
-    type="file"
-    onChange={handleImageChange}
-    className="col-span-3"
-  />
-</div>
-          </div>
-          <div className="flex justify-end">
-            <Button type="submit">保存</Button>
-          </div>
-        </form>
-      </DialogContent>
-    </Dialog>
-    <Toaster />
-  </div>
-);
+  );
 };
 
 export default MenuSettingsPage;

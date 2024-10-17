@@ -12,7 +12,11 @@ export async function PATCH(request: NextRequest) {
     const formData = await request.formData();
     const menuItemId = formData.get("id") as string;
 
-    if (!menuItemId || typeof menuItemId !== 'string' || menuItemId.length === 0) {
+    if (
+      !menuItemId ||
+      typeof menuItemId !== "string" ||
+      menuItemId.length === 0
+    ) {
       return NextResponse.json(
         { message: "Invalid menu item ID" },
         { status: 400 }
@@ -25,6 +29,9 @@ export async function PATCH(request: NextRequest) {
     const price = parseInt(formData.get("price") as string);
     const duration = parseInt(formData.get("duration") as string);
     const image = formData.get("image") as File;
+    const unavailableStaffIds = formData.getAll(
+      "unavailable_staff_ids[]"
+    ) as string[];
 
     let imageUrl = null;
     if (image && image.size > 0) {
@@ -63,6 +70,28 @@ export async function PATCH(request: NextRequest) {
       .single();
 
     if (error) throw error;
+
+    // 既存の対応不可スタッフを削除
+    const { error: deleteError } = await supabase
+      .from("menu_item_unavailable_staff")
+      .delete()
+      .eq("menu_item_id", menuItemId);
+
+    if (deleteError) throw deleteError;
+
+    // 新しい対応不可スタッフを挿入
+    if (unavailableStaffIds && unavailableStaffIds.length > 0) {
+      const insertData = unavailableStaffIds.map((staffId) => ({
+        menu_item_id: menuItemId,
+        staff_id: staffId,
+      }));
+
+      const { error: insertError } = await supabase
+        .from("menu_item_unavailable_staff")
+        .insert(insertData);
+
+      if (insertError) throw insertError;
+    }
 
     return NextResponse.json(data);
   } catch (error) {
