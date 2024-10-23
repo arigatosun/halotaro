@@ -53,18 +53,8 @@ const StaffScheduleForm: React.FC<StaffScheduleFormProps> = ({
     if (staffSchedule) {
       setFormData({
         ...staffSchedule,
-        start_time: staffSchedule.start_time
-          ? moment
-              .utc(staffSchedule.start_time) // 修正ポイント
-              .tz("Asia/Tokyo")
-              .format("YYYY-MM-DDTHH:mm")
-          : "",
-        end_time: staffSchedule.end_time
-          ? moment
-              .utc(staffSchedule.end_time) // 修正ポイント
-              .tz("Asia/Tokyo")
-              .format("YYYY-MM-DDTHH:mm")
-          : "",
+        start_time: staffSchedule.start_time || "",
+        end_time: staffSchedule.end_time || "",
         event: staffSchedule.event || "",
         staff_id: staffSchedule.staff_id || "",
         is_staff_schedule: true,
