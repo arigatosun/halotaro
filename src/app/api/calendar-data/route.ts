@@ -277,20 +277,6 @@ async function handlePostStaffScheduleProcesses(
           },
         },
       });
-
-      // 同期エラーメールを送信
-      const recipientEmails = await getRecipientEmails(userId);
-      const formattedReservationData = {
-        customerName: reservation.customer_name,
-        startTime: reservation.start_time,
-        endTime: reservation.end_time,
-        staffName: reservation.staff_name,
-      };
-      await sendSyncErrorEmail(
-        recipientEmails,
-        automationResponse.error,
-        formattedReservationData
-      );
     }
   } catch (error: any) {
     console.error("Error in sendReservationToAutomation:", error);
@@ -356,7 +342,6 @@ export async function GET(request: Request) {
       .utc()
       .format("YYYY-MM-DD HH:mm:ss");
 
-    // スタッフリストの取得
     // スタッフリストの取得（is_published が true のみ）
     const { data: staffList, error: staffError } = await supabase
       .from("staff")
