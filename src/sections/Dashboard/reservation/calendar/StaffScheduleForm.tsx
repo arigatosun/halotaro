@@ -53,8 +53,12 @@ const StaffScheduleForm: React.FC<StaffScheduleFormProps> = ({
     if (staffSchedule) {
       setFormData({
         ...staffSchedule,
-        start_time: staffSchedule.start_time || "",
-        end_time: staffSchedule.end_time || "",
+        start_time: staffSchedule.start_time
+          ? formatDateTimeLocal(staffSchedule.start_time)
+          : "",
+        end_time: staffSchedule.end_time
+          ? formatDateTimeLocal(staffSchedule.end_time)
+          : "",
         event: staffSchedule.event || "",
         staff_id: staffSchedule.staff_id || "",
         is_staff_schedule: true,
@@ -127,6 +131,10 @@ const StaffScheduleForm: React.FC<StaffScheduleFormProps> = ({
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const formatDateTimeLocal = (dateString: string): string => {
+    return moment(dateString).format("YYYY-MM-DDTHH:mm");
   };
 
   const handleDelete = async () => {
