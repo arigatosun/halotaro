@@ -2,6 +2,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
+import timezone from "dayjs/plugin/timezone";
 
 // 環境変数の取得
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -175,7 +177,7 @@ export async function GET(req: NextRequest) {
         const staffName = reservation.staff?.name || "スタッフ未設定";
 
         return {
-          time: dayjs(reservation.start_time).format("HH:mm"),
+          time: dayjs(reservation.start_time).tz("Asia/Tokyo").format("HH:mm"),
           client: clientName,
           service: serviceName,
           staff: staffName,

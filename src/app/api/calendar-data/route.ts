@@ -72,6 +72,7 @@ function formatReservation(reservation: any) {
       .format("YYYY-MM-DDTHH:mm"),
     is_staff_schedule: reservation.is_staff_schedule || false,
     editable: reservation.is_staff_schedule === true,
+    is_hair_sync: reservation.is_hair_sync || false, // この行を修正
   };
 }
 
@@ -375,6 +376,7 @@ export async function GET(request: Request) {
       .select(
         `
         *,
+        is_hair_sync,
         reservation_customers!fk_customer (
           id, name, email, phone, name_kana
         ),

@@ -42,6 +42,11 @@ const StyledFullCalendar = styled(FullCalendar)<CalendarOptions>(
       borderColor: "#B0B0B0 !important",
       color: "white !important",
     },
+    "& .fc-timeline-event-harness.hair-reservation": {
+      backgroundColor: "#FFA500 !important",
+      borderColor: "#FFA500 !important",
+      color: "black !important",
+    },
     "& .fc-timeline-event.customer-reservation": {
       backgroundColor: "#F2CA52 !important",
       borderColor: "#F2CA52 !important",
@@ -226,6 +231,8 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
           end: reservation.end_time,
           classNames: reservation.is_staff_schedule
             ? ["staff-schedule"]
+            : reservation.is_hair_sync
+            ? ["hair-reservation"] // 追加
             : ["customer-reservation"],
           editable: reservation.editable,
           extendedProps: reservation,
@@ -334,7 +341,19 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
           eventOverlap={false}
           selectMinDistance={10}
           eventDidMount={(info) => {
+            const reservation = info.event.extendedProps as Reservation;
+
+            // 既存のログ
             console.log("Event mounted:", info.event.toPlainObject());
+
+            // 親要素にクラスを追加
+            if (reservation.is_staff_schedule) {
+              info.el.parentElement?.classList.add("staff-schedule");
+            } else if (reservation.is_hair_sync) {
+              info.el.parentElement?.classList.add("hair-reservation");
+            } else {
+              info.el.parentElement?.classList.add("customer-reservation");
+            }
           }}
           businessHours={businessHoursConfig}
           dateClick={onDateClick}

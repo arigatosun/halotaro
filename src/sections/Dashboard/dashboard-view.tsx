@@ -84,7 +84,9 @@ const Dashboard = () => {
   const [yesterdayReservations, setYesterdayReservations] = useState<number>(0);
   const [todaySales, setTodaySales] = useState<number>(0);
   const [yesterdaySales, setYesterdaySales] = useState<number>(0);
-  const [upcomingAppointments, setUpcomingAppointments] = useState<Appointment[]>([]);
+  const [upcomingAppointments, setUpcomingAppointments] = useState<
+    Appointment[]
+  >([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -115,7 +117,9 @@ const Dashboard = () => {
 
         if (!response.ok) {
           const errorData = await response.json();
-          throw new Error(errorData.error || "ダッシュボードデータの取得に失敗しました");
+          throw new Error(
+            errorData.error || "ダッシュボードデータの取得に失敗しました"
+          );
         }
 
         const data: DashboardData = await response.json();
@@ -143,7 +147,9 @@ const Dashboard = () => {
       : `前日比 ${reservationDifference}`;
 
   const salesDifference =
-    yesterdaySales > 0 ? ((todaySales - yesterdaySales) / yesterdaySales) * 100 : 0;
+    yesterdaySales > 0
+      ? ((todaySales - yesterdaySales) / yesterdaySales) * 100
+      : 0;
   const salesDifferenceText =
     salesDifference >= 0
       ? `前日比 +${salesDifference.toFixed(2)}%`
@@ -152,7 +158,9 @@ const Dashboard = () => {
   if (authLoading || loading) {
     return (
       <div className="p-4 md:p-8 pt-0">
-        <h2 className="text-2xl md:text-3xl font-bold mb-4 md:mb-8">ダッシュボード</h2>
+        <h2 className="text-2xl md:text-3xl font-bold mb-4 md:mb-8">
+          ダッシュボード
+        </h2>
         <p>読み込み中...</p>
       </div>
     );
@@ -161,7 +169,9 @@ const Dashboard = () => {
   if (error) {
     return (
       <div className="p-4 md:p-8 pt-0">
-        <h2 className="text-2xl md:text-3xl font-bold mb-4 md:mb-8">ダッシュボード</h2>
+        <h2 className="text-2xl md:text-3xl font-bold mb-4 md:mb-8">
+          ダッシュボード
+        </h2>
         <p className="text-red-500">エラー: {error}</p>
       </div>
     );
@@ -169,7 +179,9 @@ const Dashboard = () => {
 
   return (
     <div className="p-4 md:p-8 pt-0">
-      <h2 className="text-2xl md:text-3xl font-bold mb-4 md:mb-8">ダッシュボード</h2>
+      <h2 className="text-2xl md:text-3xl font-bold mb-4 md:mb-8">
+        ダッシュボード
+      </h2>
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 mb-4 md:mb-8">
         <StatCard
           title="本日の予約"

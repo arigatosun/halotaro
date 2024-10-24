@@ -4,9 +4,9 @@ export interface Reservation {
   id?: string;
   user_id?: string;
   staff_id?: string; // UUID（文字列）
-  menu_id?: number;  // 整数
+  menu_id?: number; // 整数
   start_time?: string; // 'null'を許容しない
-  end_time?: string;   // 'null'を許容しない
+  end_time?: string; // 'null'を許容しない
   status?: string;
   total_price?: number;
   is_staff_schedule?: boolean;
@@ -19,6 +19,7 @@ export interface Reservation {
   staff_name?: string; // 追加
   is_closed_day?: boolean; // 追加（休業日用）
   editable?: boolean; // この行を追加
+  is_hair_sync?: boolean; // この行を追加
   // その他のフィールドがある場合はここに追加
 }
 

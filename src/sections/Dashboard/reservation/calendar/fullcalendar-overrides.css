@@ -5,3 +5,9 @@
   border-color: #b0b0b0 !important;
   color: white !important;
 }
+
+.fc-event.hair-reservation {
+  background-color: #ffa500 !important;
+  border-color: #ffa500 !important;
+  color: black !important;
+}
