@@ -1,5 +1,4 @@
-// CalendarView.tsx
-
+//CalendarView.tsx
 import React, { forwardRef, useRef, useEffect } from "react";
 import FullCalendar from "@fullcalendar/react";
 import resourceTimelinePlugin from "@fullcalendar/resource-timeline";
@@ -16,7 +15,6 @@ import { Reservation, Staff, BusinessHour } from "@/types/reservation";
 import moment from "moment";
 import "moment/locale/ja";
 import { Box } from "@mui/material";
-// 日本語ロケールをインポート
 import jaLocale from "@fullcalendar/core/locales/ja";
 
 moment.locale("ja");
@@ -38,7 +36,7 @@ interface CalendarViewProps {
 const StyledFullCalendar = styled(FullCalendar)<CalendarOptions>(
   ({ theme }) => ({
     "& .fc-timeline-event-harness.staff-schedule": {
-      backgroundColor: "#B0B0B0 !important", // 灰色のカラーコード
+      backgroundColor: "#B0B0B0 !important",
       borderColor: "#B0B0B0 !important",
       color: "white !important",
     },
@@ -232,7 +230,7 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
           classNames: reservation.is_staff_schedule
             ? ["staff-schedule"]
             : reservation.is_hair_sync
-            ? ["hair-reservation"] // 追加
+            ? ["hair-reservation"]
             : ["customer-reservation"],
           editable: reservation.editable,
           extendedProps: reservation,
@@ -271,7 +269,6 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
 
     const plugins = [resourceTimelinePlugin, interactionPlugin, listPlugin];
 
-    // initialViewをモバイル時にはlistDayに設定
     const initialView = isMobile ? "listDay" : "resourceTimelineDay";
 
     const businessHoursConfig = businessHours
@@ -317,21 +314,17 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
           timeZone="local"
           height="100%"
           headerToolbar={false}
-          dayHeaderFormat={
-            isMobile
-              ? {
-                  weekday: "long",
-                  month: "short",
-                  day: "numeric",
-                  omitCommas: true,
-                }
-              : undefined
-          }
-          slotLabelFormat={
-            isMobile
-              ? [{ hour: "2-digit", minute: "2-digit", hour12: false }]
-              : undefined
-          }
+          dayHeaderFormat={{
+            weekday: "long",
+            month: "short",
+            day: "numeric",
+            omitCommas: true,
+          }}
+          slotLabelFormat={{
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: false,
+          }}
           resourceAreaHeaderContent=""
           resourceAreaWidth="200px"
           resourcesInitiallyExpanded={false}
@@ -342,11 +335,8 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
           selectMinDistance={10}
           eventDidMount={(info) => {
             const reservation = info.event.extendedProps as Reservation;
-
-            // 既存のログ
             console.log("Event mounted:", info.event.toPlainObject());
 
-            // 親要素にクラスを追加
             if (reservation.is_staff_schedule) {
               info.el.parentElement?.classList.add("staff-schedule");
             } else if (reservation.is_hair_sync) {
@@ -357,7 +347,6 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
           }}
           businessHours={businessHoursConfig}
           dateClick={onDateClick}
-          // 日本語ロケールをモバイル時に適用
           locale={isMobile ? "ja" : undefined}
           visibleRange={
             isMobile
