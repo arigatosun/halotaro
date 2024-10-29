@@ -1,7 +1,7 @@
 // listing-staff-view.tsx
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useAuth } from "@/contexts/authcontext";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -36,6 +36,7 @@ interface Staff {
   description?: string;
   is_published: boolean;
   image?: string | null;
+  schedule_order: number; // 新しく追加したフィールド
 }
 
 interface ErrorWithMessage {
@@ -257,6 +258,11 @@ const AuthenticatedStaffManagement: React.FC<{ userId: string }> = ({
     }
   };
 
+  // スタッフリストを schedule_order でソート
+  const sortedStaffList = useMemo(() => {
+    return [...staffList].sort((a, b) => a.schedule_order - b.schedule_order);
+  }, [staffList]);
+
   if (loading) {
     return <div>スタッフデータを読み込み中...</div>;
   }
@@ -337,6 +343,25 @@ const AuthenticatedStaffManagement: React.FC<{ userId: string }> = ({
                     className="col-span-3"
                   />
                 </div>
+                {/* 新しい「スケジュール表示順」フィールド */}
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="schedule_order" className="text-right">
+                    スケジュール表示順
+                  </Label>
+                  <select
+                    id="schedule_order"
+                    name="schedule_order"
+                    defaultValue={editingStaff?.schedule_order ?? 1}
+                    required
+                    className="col-span-3 border rounded px-3 py-2"
+                  >
+                    {[...Array(20)].map((_, index) => (
+                      <option key={index + 1} value={index + 1}>
+                        {index + 1}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor="image" className="text-right">
                     スタッフ写真
@@ -376,13 +401,14 @@ const AuthenticatedStaffManagement: React.FC<{ userId: string }> = ({
             <TableHead>スタッフ写真</TableHead>
             <TableHead>氏名/職種/施術歴</TableHead>
             <TableHead>キャッチ</TableHead>
+            <TableHead>スケジュール表示順</TableHead> {/* 新しく追加したヘッダー */}
             <TableHead>詳細</TableHead>
             <TableHead>掲載/非掲載</TableHead>
             <TableHead>削除</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {staffList.map((staff) => (
+          {sortedStaffList.map((staff) => (
             <TableRow key={staff.id}>
               <TableCell>
                 <img
@@ -397,6 +423,7 @@ const AuthenticatedStaffManagement: React.FC<{ userId: string }> = ({
                 <div>{staff.experience}</div>
               </TableCell>
               <TableCell>{staff.description}</TableCell>
+              <TableCell>{staff.schedule_order}</TableCell> {/* 新しく追加したセル */}
               <TableCell>
                 <Button
                   variant="outline"

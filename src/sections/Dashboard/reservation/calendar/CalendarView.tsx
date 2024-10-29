@@ -1,4 +1,4 @@
-//CalendarView.tsx
+// CalendarView.tsx
 import React, { forwardRef, useRef, useEffect } from "react";
 import FullCalendar from "@fullcalendar/react";
 import resourceTimelinePlugin from "@fullcalendar/resource-timeline";
@@ -305,6 +305,7 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
           schedulerLicenseKey="GPL-My-Project-Is-Open-Source"
           events={events}
           resources={resources}
+          resourceOrder={() => 0} // 並べ替えを無効化
           eventClick={onEventClick}
           eventDrop={onEventDrop}
           slotDuration="00:30:00"

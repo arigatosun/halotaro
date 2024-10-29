@@ -52,11 +52,24 @@ export async function POST(request: NextRequest) {
     const description = formData.get("description") as string;
     const is_published = formData.get("is_published") === "true";
     const image = formData.get("image") as File;
+    const schedule_order = parseInt(formData.get("schedule_order") as string, 10);
 
     // バリデーション: 必須フィールドが存在するか確認
     if (!name || !role) {
       return NextResponse.json(
         { message: "Name and Role are required." },
+        { status: 400 }
+      );
+    }
+
+    // スケジュール表示順のバリデーション
+    if (
+      isNaN(schedule_order) ||
+      schedule_order < 1 ||
+      schedule_order > 20
+    ) {
+      return NextResponse.json(
+        { message: "Schedule order must be between 1 and 20." },
         { status: 400 }
       );
     }
@@ -88,6 +101,7 @@ export async function POST(request: NextRequest) {
         description,
         is_published,
         image: imageUrl,
+        schedule_order, // 新しく追加したフィールド
       })
       .select()
       .single();
@@ -158,6 +172,22 @@ export async function PATCH(request: NextRequest) {
       updateData.is_published = is_published === "true";
     }
 
+    const schedule_order = formData.get("schedule_order");
+    if (schedule_order !== null) {
+      const orderNumber = parseInt(schedule_order as string, 10);
+      if (
+        isNaN(orderNumber) ||
+        orderNumber < 1 ||
+        orderNumber > 20
+      ) {
+        return NextResponse.json(
+          { message: "Schedule order must be between 1 and 20." },
+          { status: 400 }
+        );
+      }
+      updateData.schedule_order = orderNumber;
+    }
+
     const image = formData.get("image") as File;
     if (image && image.size > 0) {
       const fileExt = image.name.split(".").pop();
@@ -173,21 +203,6 @@ export async function PATCH(request: NextRequest) {
         .getPublicUrl(fileName);
 
       updateData.image = publicUrlData.publicUrl;
-    }
-
-    // バリデーション: 必須フィールドが存在するか確認（部分更新を許可）
-    if ("name" in updateData && (!updateData.name || updateData.name.trim() === "")) {
-      return NextResponse.json(
-        { message: "Name cannot be empty." },
-        { status: 400 }
-      );
-    }
-
-    if ("role" in updateData && (!updateData.role || updateData.role.trim() === "")) {
-      return NextResponse.json(
-        { message: "Role cannot be empty." },
-        { status: 400 }
-      );
     }
 
     const { data, error } = await supabase

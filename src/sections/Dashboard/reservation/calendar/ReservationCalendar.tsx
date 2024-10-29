@@ -20,7 +20,7 @@ import {
   DateSelectArg,
 } from "@fullcalendar/core";
 import { DateClickArg } from "@fullcalendar/interaction";
-import { Reservation } from "@/types/reservation";
+import { Reservation, Staff } from "@/types/reservation"; // Staff 型をインポート
 import { useAuth } from "@/contexts/authcontext";
 import FullCalendar from "@fullcalendar/react";
 import { useMediaQuery } from "react-responsive";
@@ -83,19 +83,18 @@ const ReservationCalendar: React.FC = () => {
     return reservation.staff_id === selectedStaffId;
   });
 
-   // スタッフリストのソート処理を追加
-   const sortedStaffList = useMemo(() => {
+  // スタッフリストのソート処理を追加
+  const sortedStaffList = useMemo(() => {
     return [...staffList].sort((a, b) => {
       if (a.name === "フリー") return 1;
       if (b.name === "フリー") return -1;
-      return a.name.localeCompare(b.name);
+      return a.schedule_order - b.schedule_order;
     });
   }, [staffList]);
 
-
   const filteredStaffList = selectedStaffId === "all"
-  ? sortedStaffList  // すでにソート済みのリストを使用
-  : sortedStaffList.filter((staff) => staff.id === selectedStaffId);
+    ? sortedStaffList  // すでにソート済みのリストを使用
+    : sortedStaffList.filter((staff) => staff.id === selectedStaffId);
 
   // 日付クリックハンドラ（予約追加）
   const handleDateClick = (dateClickInfo: DateClickArg) => {
@@ -655,7 +654,7 @@ const ReservationCalendar: React.FC = () => {
               label="スタッフ選択"
             >
               <MenuItem value="all">全スタッフ</MenuItem>
-              {sortedStaffList.map((staff) => ( // staffList を sortedStaffList に変更
+              {sortedStaffList.map((staff) => (
                 <MenuItem key={staff.id} value={staff.id}>
                   {staff.name}
                 </MenuItem>

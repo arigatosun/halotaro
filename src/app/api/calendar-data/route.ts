@@ -345,11 +345,12 @@ export async function GET(request: Request) {
 
     // スタッフリストの取得（is_published が true のみ）
     const { data: staffList, error: staffError } = await supabase
-      .from("staff")
-      .select("id, name")
-      .eq("user_id", userId)
-      .eq("is_published", true) // この行を追加
-      .order("name", { ascending: true });
+  .from("staff")
+  .select("id, name, schedule_order") // schedule_order を含める
+  .eq("user_id", userId)
+  .eq("is_published", true)
+  .order("schedule_order", { ascending: true }); // schedule_order に基づいてソート
+
 
     if (staffError) {
       console.error("Error fetching staff list:", staffError);
@@ -372,23 +373,24 @@ export async function GET(request: Request) {
 
     // 予約データの取得
     const { data: reservations, error: reservationError } = await supabase
-      .from("reservations")
-      .select(
-        `
-        *,
-        is_hair_sync,
-        reservation_customers!fk_customer (
-          id, name, email, phone, name_kana
-        ),
-        menu_items (id, name, duration, price),
-        staff (id, name)
-      `
-      )
-      .eq("user_id", userId)
-      .gte("start_time", startDate)
-      .lte("end_time", endDate)
-      .in("status", includedStatuses)
-      .order("start_time", { ascending: true });
+  .from("reservations")
+  .select(
+    `
+    *,
+    is_hair_sync,
+    reservation_customers!fk_customer (
+      id, name, email, phone, name_kana
+    ),
+    menu_items (id, name, duration, price),
+    staff (id, name, schedule_order) // schedule_order を含める
+  `
+  )
+  .eq("user_id", userId)
+  .gte("start_time", startDate)
+  .lte("end_time", endDate)
+  .in("status", includedStatuses)
+  .order("start_time", { ascending: true });
+
 
     if (reservationError) {
       console.error("Error fetching reservations:", reservationError);
