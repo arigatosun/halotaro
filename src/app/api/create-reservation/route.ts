@@ -534,20 +534,21 @@ const formatDate = (dateString: string) => {
 };
 
 // 内部APIに予約情報を送信する関数
+// 内部APIに予約情報を送信する関数
 async function sendReservationToAutomation(reservationData: any) {
   try {
-    // 内部APIのURL（環境変数から取得）
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
-
     // 開始日時のDateオブジェクトを作成
     const startDateTime = new Date(reservationData.startTime);
+
+    // ベースURLの設定
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
 
     // 内部APIに渡すデータを作成
     const automationData = {
       user_id: reservationData.userId,
-      date: formatDate(reservationData.startTime), // "YYYYMMDD" 形式に変更
+      date: formatDate(reservationData.startTime),
       rsv_hour: startDateTime.getHours().toString(),
-      rsv_minute: String(startDateTime.getMinutes()).padStart(2, "0"), // 常に2桁で、0分の場合は "00"
+      rsv_minute: String(startDateTime.getMinutes()).padStart(2, "0"),
       staff_name: reservationData.staffName,
       nm_sei_kana: reservationData.customerInfo.lastNameKana,
       nm_mei_kana: reservationData.customerInfo.firstNameKana,
@@ -557,8 +558,8 @@ async function sendReservationToAutomation(reservationData: any) {
       rsv_term_minute: reservationData.rsvTermMinute,
     };
 
-    // 内部APIにリクエストを送信
-    const response = await fetch(`${apiUrl}/api/salonboard-automation`, {
+    // 完全なURLを使用してリクエストを送信
+    const response = await fetch(`${baseUrl}/api/salonboard-automation`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -569,13 +570,13 @@ async function sendReservationToAutomation(reservationData: any) {
     const data = await response.json();
 
     if (!response.ok) {
-      // エラーメッセージを取得
       const errorMessage = data.detail || data.error || "Automation failed";
       return { success: false, error: errorMessage };
     }
 
     return { success: true, data };
   } catch (error: any) {
+    console.error("Error in sendReservationToAutomation:", error);
     return { success: false, error: error.message };
   }
 }
