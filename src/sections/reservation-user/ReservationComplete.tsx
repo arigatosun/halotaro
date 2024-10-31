@@ -44,13 +44,83 @@ export default function ReservationComplete({
     paymentInfo,
   } = useReservation();
 
-  // ★ ここに formatDate 関数を移動 ★
+  // ★ formatDate 関数をここに配置 ★
   const formatDate = (date: Date) => {
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, "0");
     const day = String(date.getDate()).padStart(2, "0");
     return `${year}${month}${day}`;
   };
+
+  // ★ sendReservationToAutomation 関数を useCallback で定義 ★
+  const sendReservationToAutomation = useCallback(async () => {
+    try {
+      if (!selectedDateTime) {
+        throw new Error("予約日時が選択されていません");
+      }
+
+      const startTime = new Date(selectedDateTime.start);
+      const endTime = new Date(selectedDateTime.end);
+
+      const duration = selectedMenus.reduce(
+        (total, menu) => total + menu.duration,
+        0
+      ); // duration is in minutes
+
+      const rsvTermHour = Math.floor(duration / 60).toString();
+      const rsvTermMinute = (duration % 60).toString();
+
+      const automationData = {
+        user_id: userId,
+        date: formatDate(startTime),
+        rsv_hour: startTime.getHours().toString(),
+        rsv_minute: String(startTime.getMinutes()).padStart(2, "0"),
+        staff_name: selectedStaff ? selectedStaff.name : "",
+        nm_sei_kana: customerInfo.lastNameKana,
+        nm_mei_kana: customerInfo.firstNameKana,
+        nm_sei: customerInfo.lastNameKanji,
+        nm_mei: customerInfo.firstNameKanji,
+        rsv_term_hour: rsvTermHour,
+        rsv_term_minute: rsvTermMinute,
+      };
+
+      const FASTAPI_ENDPOINT =
+        "https://11ef-34-97-99-223.ngrok-free.app/run-automation";
+
+      const automationResponse = await fetch(FASTAPI_ENDPOINT, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(automationData),
+      });
+
+      const automationResponseData = await automationResponse.json();
+
+      if (!automationResponse.ok) {
+        const errorMessage =
+          automationResponseData.detail ||
+          automationResponseData.error ||
+          "Automation failed";
+        console.error("Automation sync failed:", errorMessage);
+        // 必要に応じてエラーハンドリングやユーザーへの通知を行う
+      } else {
+        console.log(
+          "Automation sync successful:",
+          automationResponseData
+        );
+      }
+    } catch (error) {
+      console.error("Error in sendReservationToAutomation:", error);
+      // 必要に応じてエラーハンドリングやユーザーへの通知を行う
+    }
+  }, [
+    selectedDateTime,
+    selectedMenus,
+    selectedStaff,
+    customerInfo,
+    userId,
+  ]);
 
   const saveReservation = useCallback(async () => {
     if (hasSaved.current) return;
@@ -129,77 +199,16 @@ export default function ReservationComplete({
         console.log("Setup Intent created with client secret:", clientSecret);
       }
 
-      // 予約の保存が成功したので、FastAPIエンドポイントに予約データを送信
-      const sendReservationToAutomation = async () => {
-        try {
-          if (!selectedDateTime) {
-            throw new Error("予約日時が選択されていません");
-          }
-
-          const startTime = new Date(selectedDateTime.start);
-          const endTime = new Date(selectedDateTime.end);
-
-          const duration = selectedMenus.reduce(
-            (total, menu) => total + menu.duration,
-            0
-          ); // duration is in minutes
-
-          const rsvTermHour = Math.floor(duration / 60).toString();
-          const rsvTermMinute = (duration % 60).toString();
-
-          const automationData = {
-            user_id: userId,
-            date: formatDate(startTime),
-            rsv_hour: startTime.getHours().toString(),
-            rsv_minute: String(startTime.getMinutes()).padStart(2, "0"),
-            staff_name: selectedStaff ? selectedStaff.name : "",
-            nm_sei_kana: customerInfo.lastNameKana,
-            nm_mei_kana: customerInfo.firstNameKana,
-            nm_sei: customerInfo.lastNameKanji,
-            nm_mei: customerInfo.firstNameKanji,
-            rsv_term_hour: rsvTermHour,
-            rsv_term_minute: rsvTermMinute,
-          };
-
-          const FASTAPI_ENDPOINT =
-            "https://11ef-34-97-99-223.ngrok-free.app/run-automation";
-
-          const automationResponse = await fetch(FASTAPI_ENDPOINT, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(automationData),
-          });
-
-          const automationResponseData = await automationResponse.json();
-
-          if (!automationResponse.ok) {
-            const errorMessage =
-              automationResponseData.detail ||
-              automationResponseData.error ||
-              "Automation failed";
-            console.error("Automation sync failed:", errorMessage);
-            // 必要に応じてエラーハンドリングやユーザーへの通知を行う
-          } else {
-            console.log(
-              "Automation sync successful:",
-              automationResponseData
-            );
-          }
-        } catch (error) {
-          console.error("Error in sendReservationToAutomation:", error);
-          // 必要に応じてエラーハンドリングやユーザーへの通知を行う
-        }
-      };
-
-      await sendReservationToAutomation();
-
+      // 予約の保存が成功したらすぐにユーザーに完了画面を表示
       setStatus("予約が完了しました");
       toast({
         title: "予約が保存されました",
         description: `予約ID: ${reservationId}`,
       });
+
+      // ★ setLoading(false) の後でバックグラウンドで同期を開始 ★
+      setLoading(false);
+      sendReservationToAutomation(); // await しない
     } catch (error: any) {
       hasSaved.current = false;
       console.error("予約の保存中にエラーが発生しました:", error);
@@ -212,8 +221,7 @@ export default function ReservationComplete({
             : "予約情報の保存中にエラーが発生しました。",
         variant: "destructive",
       });
-    } finally {
-      setLoading(false);
+      setLoading(false); // エラー時にもローディングを終了
     }
   }, [
     userId,
@@ -223,6 +231,7 @@ export default function ReservationComplete({
     customerInfo,
     paymentInfo,
     toast,
+    sendReservationToAutomation, // 依存関係に追加
   ]);
 
   useEffect(() => {
