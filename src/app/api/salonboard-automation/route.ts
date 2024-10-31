@@ -19,9 +19,11 @@ export async function POST(request: NextRequest) {
       rsv_term_minute,
     } = await request.json();
 
-    const apiUrl = process.env.FASTAPI_URL || "https://1ee6-34-97-99-223.ngrok-free.app";
+    const FASTAPI_ENDPOINT ="https://1ee6-34-97-99-223.ngrok-free.app/run-automation";
 
-    const response = await fetch(`${apiUrl}/run-automation`, {
+    //const apiUrl = process.env.FASTAPI_URL || "https://1ee6-34-97-99-223.ngrok-free.app";
+
+    const response = await fetch(FASTAPI_ENDPOINT, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
