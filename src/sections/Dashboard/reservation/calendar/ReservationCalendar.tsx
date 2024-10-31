@@ -1,7 +1,7 @@
 // ReservationCalendar.tsx
 "use client";
 
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { Box, Select, MenuItem, FormControl, InputLabel, SelectChangeEvent } from "@mui/material";
 import moment from "moment";
 import "moment/locale/ja";
@@ -20,7 +20,7 @@ import {
   DateSelectArg,
 } from "@fullcalendar/core";
 import { DateClickArg } from "@fullcalendar/interaction";
-import { Reservation } from "@/types/reservation";
+import { Reservation, Staff } from "@/types/reservation"; // Staff 型をインポート
 import { useAuth } from "@/contexts/authcontext";
 import FullCalendar from "@fullcalendar/react";
 import { useMediaQuery } from "react-responsive";
@@ -83,10 +83,18 @@ const ReservationCalendar: React.FC = () => {
     return reservation.staff_id === selectedStaffId;
   });
 
-  const filteredStaffList =
-    selectedStaffId === "all"
-      ? staffList
-      : staffList.filter((staff) => staff.id === selectedStaffId);
+  // スタッフリストのソート処理を追加
+  const sortedStaffList = useMemo(() => {
+    return [...staffList].sort((a, b) => {
+      if (a.name === "フリー") return 1;
+      if (b.name === "フリー") return -1;
+      return a.schedule_order - b.schedule_order;
+    });
+  }, [staffList]);
+
+  const filteredStaffList = selectedStaffId === "all"
+    ? sortedStaffList  // すでにソート済みのリストを使用
+    : sortedStaffList.filter((staff) => staff.id === selectedStaffId);
 
   // 日付クリックハンドラ（予約追加）
   const handleDateClick = (dateClickInfo: DateClickArg) => {
@@ -646,7 +654,7 @@ const ReservationCalendar: React.FC = () => {
               label="スタッフ選択"
             >
               <MenuItem value="all">全スタッフ</MenuItem>
-              {staffList.map((staff) => (
+              {sortedStaffList.map((staff) => (
                 <MenuItem key={staff.id} value={staff.id}>
                   {staff.name}
                 </MenuItem>
@@ -689,7 +697,7 @@ const ReservationCalendar: React.FC = () => {
           onClose={() => setIsFormOpen(false)}
           onSubmit={handleFormSubmit}
           onDelete={handleDeleteReservation}
-          staffList={staffList}
+          staffList={sortedStaffList}
           menuList={menuList}
           reservations={reservations}
           hideReservationType={isCreatingFromButton}
@@ -710,7 +718,7 @@ const ReservationCalendar: React.FC = () => {
           }}
           onSubmit={handleStaffScheduleFormSubmit}
           onDelete={handleDeleteStaffSchedule}
-          staffList={staffList}
+          staffList={sortedStaffList}
         />
       )}
 
@@ -742,7 +750,7 @@ const ReservationCalendar: React.FC = () => {
           onClose={() => setIsEditFormOpen(false)}
           onSubmit={handleEditFormSubmit}
           onDelete={handleDeleteReservation}
-          staffList={staffList}
+          staffList={sortedStaffList}
           menuList={menuList}
           reservations={reservations}
           businessHours={businessHours}

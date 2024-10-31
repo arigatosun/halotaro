@@ -1,5 +1,4 @@
-// src/sections/Dashboard/reservation/calendar/useReservationCalendar.ts
-
+// useReservationCalendar.ts
 import { useState, useEffect } from 'react';
 import { Reservation, Staff, MenuItem, BusinessHour } from '@/types/reservation';
 import { useAuth } from '@/lib/useAuth';
@@ -58,6 +57,9 @@ const useReservationCalendar = (): UseReservationCalendarReturn => {
       setMenuList(data.menuList);
       setClosedDays(data.closedDays || []);
       setBusinessHours(data.businessHours || []);
+  
+      // staffList の確認
+      console.log('スタッフデータ:', data.staffList);
     } catch (error) {
       console.error('Error in loadData:', error);
       setSnackbar({ message: 'データの取得に失敗しました', severity: 'error' });

@@ -26,6 +26,7 @@ export interface Reservation {
 export interface Staff {
   id: string;
   name: string;
+  schedule_order: number; // この行を追加
   // その他のプロパティがあれば追加
 }
 

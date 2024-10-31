@@ -31,6 +31,7 @@ export interface Staff {
   id: number;
   name: string;
   shifts: ShiftData[];
+  
 }
 
 export type StaffShift = Pick<Staff, 'id' | 'name'> & {

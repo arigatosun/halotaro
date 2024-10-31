@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
       rsv_term_minute,
     } = await request.json();
 
-    const apiUrl = process.env.FASTAPI_URL || "http://localhost:8000";
+    const apiUrl = "https://3940-34-97-99-223.ngrok-free.app";
 
     const response = await fetch(`${apiUrl}/run-automation`, {
       method: "POST",
