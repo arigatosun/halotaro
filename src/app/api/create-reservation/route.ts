@@ -1,6 +1,5 @@
-//api/create-reservation/route.ts
 import { NextResponse } from "next/server";
-import { createClient, PostgrestError } from "@supabase/supabase-js";
+import { createClient } from "@supabase/supabase-js";
 import { Resend } from "resend";
 import { ReservationConfirmation } from "../../../emails/ReservationConfirmation";
 import { NewReservationNotification } from "../../../emails/NewReservationNotification";
@@ -417,93 +416,60 @@ export async function POST(request: Request) {
       // メール送信エラーはログに記録するが、予約プロセス自体は中断しない
     }
 
-    // 予約情報の保存が成功したので、内部APIにリクエストを送信（非同期）
-    sendReservationToAutomation({
+    // *** ここで変更を加えました：sendReservationToAutomation を await します ***
+    // 予約情報の保存が成功したので、内部APIにリクエストを送信（同期的に待機）
+    const automationResponse = await sendReservationToAutomation({
       userId,
-      reservationId: reservationId,
+      reservationId,
       startTime,
       endTime,
       staffName,
       customerInfo,
       rsvTermHour,
       rsvTermMinute,
-    })
-      .then((automationResponse) => {
-        if (!automationResponse.success) {
-          console.error("Automation sync failed:", automationResponse.error);
+    });
 
-          // Sentryにエラーを送信
-          Sentry.captureException(new Error(automationResponse.error), {
-            contexts: {
-              reservation: {
-                userId: userId,
-                reservationId: reservationId,
-              },
-            },
-          });
+    if (!automationResponse.success) {
+      console.error("Automation sync failed:", automationResponse.error);
 
-          // エラーメールの送信
-          if (recipientEmails.length > 0) {
-            resend.emails
-              .send({
-                from: "Harotalo運営 <noreply@harotalo.com>",
-                to: recipientEmails,
-                subject: "【重要】予約同期エラーのお知らせ",
-                react: SynchronizationErrorNotification({
-                  adminName: "管理者",
-                  errorMessage: automationResponse.error,
-                  reservationData: {
-                    customerName: `${customerInfo.lastNameKanji} ${customerInfo.firstNameKanji}`,
-                    startTime: startTime,
-                    endTime: endTime,
-                    staffName: staffName,
-                  },
-                }),
-              })
-              .then(() => {
-                console.log(
-                  `Error notification sent to ${recipientEmails.join(", ")}`
-                );
-              })
-              .catch((error) => {
-                console.error(`Failed to send error notification:`, error);
-              });
-          }
-        }
-      })
-      .catch((error) => {
-        console.error("Error in sendReservationToAutomation:", error);
-
-        // *** エラー時にサロンオーナーとスタッフへエラーメールを送信 ***
-        if (recipientEmails.length > 0) {
-          resend.emails
-            .send({
-              from: "Harotalo運営 <noreply@harotalo.com>",
-              to: recipientEmails,
-              subject: "【重要】予約同期エラーのお知らせ",
-              react: SynchronizationErrorNotification({
-                adminName: "管理者",
-                errorMessage: error.message,
-                reservationData: {
-                  customerName: `${customerInfo.lastNameKanji} ${customerInfo.firstNameKanji}`,
-                  startTime: startTime,
-                  endTime: endTime,
-                  staffName: staffName,
-                },
-              }),
-            })
-            .then(() => {
-              console.log(
-                `Error notification sent to ${recipientEmails.join(", ")}`
-              );
-            })
-            .catch((error) => {
-              console.error(`Failed to send error notification:`, error);
-            });
-        }
+      // Sentryにエラーを送信
+      Sentry.captureException(new Error(automationResponse.error), {
+        contexts: {
+          reservation: {
+            userId: userId,
+            reservationId: reservationId,
+          },
+        },
       });
 
-    // クライアントへのレスポンスを即座に返す
+      // エラーメールの送信
+      if (recipientEmails.length > 0) {
+        try {
+          await resend.emails.send({
+            from: "Harotalo運営 <noreply@harotalo.com>",
+            to: recipientEmails,
+            subject: "【重要】予約同期エラーのお知らせ",
+            react: SynchronizationErrorNotification({
+              adminName: "管理者",
+              errorMessage: automationResponse.error,
+              reservationData: {
+                customerName: customerFullName,
+                startTime: startTime,
+                endTime: endTime,
+                staffName: staffName,
+              },
+            }),
+          });
+          console.log(
+            `Error notification sent to ${recipientEmails.join(", ")}`
+          );
+        } catch (error) {
+          console.error("Failed to send error notification:", error);
+        }
+      }
+    }
+
+    // クライアントへのレスポンスを返す
     return NextResponse.json({
       success: true,
       reservationId: reservationId,
@@ -534,14 +500,14 @@ const formatDate = (dateString: string) => {
 };
 
 // 内部APIに予約情報を送信する関数
-// 内部APIに予約情報を送信する関数
 async function sendReservationToAutomation(reservationData: any) {
   try {
     // 開始日時のDateオブジェクトを作成
     const startDateTime = new Date(reservationData.startTime);
 
     // ベースURLの設定
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
+    const baseUrl =
+      process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
 
     // 内部APIに渡すデータを作成
     const automationData = {
