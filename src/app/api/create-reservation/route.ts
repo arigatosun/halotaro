@@ -1,5 +1,6 @@
+//api/create-reservation/route.ts
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, PostgrestError } from "@supabase/supabase-js";
 import { Resend } from "resend";
 import { ReservationConfirmation } from "../../../emails/ReservationConfirmation";
 import { NewReservationNotification } from "../../../emails/NewReservationNotification";
@@ -416,60 +417,93 @@ export async function POST(request: Request) {
       // メール送信エラーはログに記録するが、予約プロセス自体は中断しない
     }
 
-    // *** ここで変更を加えました：sendReservationToAutomation を await します ***
-    // 予約情報の保存が成功したので、内部APIにリクエストを送信（同期的に待機）
-    const automationResponse = await sendReservationToAutomation({
+    // 予約情報の保存が成功したので、内部APIにリクエストを送信（非同期）
+    sendReservationToAutomation({
       userId,
-      reservationId,
+      reservationId: reservationId,
       startTime,
       endTime,
       staffName,
       customerInfo,
       rsvTermHour,
       rsvTermMinute,
-    });
+    })
+      .then((automationResponse) => {
+        if (!automationResponse.success) {
+          console.error("Automation sync failed:", automationResponse.error);
 
-    if (!automationResponse.success) {
-      console.error("Automation sync failed:", automationResponse.error);
+          // Sentryにエラーを送信
+          Sentry.captureException(new Error(automationResponse.error), {
+            contexts: {
+              reservation: {
+                userId: userId,
+                reservationId: reservationId,
+              },
+            },
+          });
 
-      // Sentryにエラーを送信
-      Sentry.captureException(new Error(automationResponse.error), {
-        contexts: {
-          reservation: {
-            userId: userId,
-            reservationId: reservationId,
-          },
-        },
+          // エラーメールの送信
+          if (recipientEmails.length > 0) {
+            resend.emails
+              .send({
+                from: "Harotalo運営 <noreply@harotalo.com>",
+                to: recipientEmails,
+                subject: "【重要】予約同期エラーのお知らせ",
+                react: SynchronizationErrorNotification({
+                  adminName: "管理者",
+                  errorMessage: automationResponse.error,
+                  reservationData: {
+                    customerName: `${customerInfo.lastNameKanji} ${customerInfo.firstNameKanji}`,
+                    startTime: startTime,
+                    endTime: endTime,
+                    staffName: staffName,
+                  },
+                }),
+              })
+              .then(() => {
+                console.log(
+                  `Error notification sent to ${recipientEmails.join(", ")}`
+                );
+              })
+              .catch((error) => {
+                console.error(`Failed to send error notification:`, error);
+              });
+          }
+        }
+      })
+      .catch((error) => {
+        console.error("Error in sendReservationToAutomation:", error);
+
+        // *** エラー時にサロンオーナーとスタッフへエラーメールを送信 ***
+        if (recipientEmails.length > 0) {
+          resend.emails
+            .send({
+              from: "Harotalo運営 <noreply@harotalo.com>",
+              to: recipientEmails,
+              subject: "【重要】予約同期エラーのお知らせ",
+              react: SynchronizationErrorNotification({
+                adminName: "管理者",
+                errorMessage: error.message,
+                reservationData: {
+                  customerName: `${customerInfo.lastNameKanji} ${customerInfo.firstNameKanji}`,
+                  startTime: startTime,
+                  endTime: endTime,
+                  staffName: staffName,
+                },
+              }),
+            })
+            .then(() => {
+              console.log(
+                `Error notification sent to ${recipientEmails.join(", ")}`
+              );
+            })
+            .catch((error) => {
+              console.error(`Failed to send error notification:`, error);
+            });
+        }
       });
 
-      // エラーメールの送信
-      if (recipientEmails.length > 0) {
-        try {
-          await resend.emails.send({
-            from: "Harotalo運営 <noreply@harotalo.com>",
-            to: recipientEmails,
-            subject: "【重要】予約同期エラーのお知らせ",
-            react: SynchronizationErrorNotification({
-              adminName: "管理者",
-              errorMessage: automationResponse.error,
-              reservationData: {
-                customerName: customerFullName,
-                startTime: startTime,
-                endTime: endTime,
-                staffName: staffName,
-              },
-            }),
-          });
-          console.log(
-            `Error notification sent to ${recipientEmails.join(", ")}`
-          );
-        } catch (error) {
-          console.error("Failed to send error notification:", error);
-        }
-      }
-    }
-
-    // クライアントへのレスポンスを返す
+    // クライアントへのレスポンスを即座に返す
     return NextResponse.json({
       success: true,
       reservationId: reservationId,
@@ -502,19 +536,18 @@ const formatDate = (dateString: string) => {
 // 内部APIに予約情報を送信する関数
 async function sendReservationToAutomation(reservationData: any) {
   try {
+    // 内部APIのURL（環境変数から取得）
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
+
     // 開始日時のDateオブジェクトを作成
     const startDateTime = new Date(reservationData.startTime);
-
-    // ベースURLの設定
-    const baseUrl =
-      process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
 
     // 内部APIに渡すデータを作成
     const automationData = {
       user_id: reservationData.userId,
-      date: formatDate(reservationData.startTime),
+      date: formatDate(reservationData.startTime), // "YYYYMMDD" 形式に変更
       rsv_hour: startDateTime.getHours().toString(),
-      rsv_minute: String(startDateTime.getMinutes()).padStart(2, "0"),
+      rsv_minute: String(startDateTime.getMinutes()).padStart(2, "0"), // 常に2桁で、0分の場合は "00"
       staff_name: reservationData.staffName,
       nm_sei_kana: reservationData.customerInfo.lastNameKana,
       nm_mei_kana: reservationData.customerInfo.firstNameKana,
@@ -524,8 +557,8 @@ async function sendReservationToAutomation(reservationData: any) {
       rsv_term_minute: reservationData.rsvTermMinute,
     };
 
-    // 完全なURLを使用してリクエストを送信
-    const response = await fetch(`${baseUrl}/api/salonboard-automation`, {
+    // 内部APIにリクエストを送信
+    const response = await fetch(`${apiUrl}/api/salonboard-automation`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -536,13 +569,13 @@ async function sendReservationToAutomation(reservationData: any) {
     const data = await response.json();
 
     if (!response.ok) {
+      // エラーメッセージを取得
       const errorMessage = data.detail || data.error || "Automation failed";
       return { success: false, error: errorMessage };
     }
 
     return { success: true, data };
   } catch (error: any) {
-    console.error("Error in sendReservationToAutomation:", error);
     return { success: false, error: error.message };
   }
 }
