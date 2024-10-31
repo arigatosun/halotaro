@@ -44,16 +44,28 @@ export default function ReservationComplete({
     paymentInfo,
   } = useReservation();
 
+  // ★ ここに formatDate 関数を移動 ★
+  const formatDate = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}${month}${day}`;
+  };
+
   const saveReservation = useCallback(async () => {
     if (hasSaved.current) return;
     hasSaved.current = true;
     try {
+      if (!selectedDateTime) {
+        throw new Error("予約日時が選択されていません");
+      }
+
       const reservationData = {
         userId,
         menuId: selectedMenus[0].id,
         staffId: selectedStaff?.id,
-        startTime: selectedDateTime?.start.toISOString(),
-        endTime: selectedDateTime?.end.toISOString(),
+        startTime: selectedDateTime.start.toISOString(),
+        endTime: selectedDateTime.end.toISOString(),
         totalPrice: selectedMenus.reduce(
           (total, menu) => total + menu.price,
           0
@@ -74,7 +86,6 @@ export default function ReservationComplete({
         body: JSON.stringify(reservationData),
       });
 
-      // 一度だけresponse.json()を呼び出す
       const responseData = await response.json();
 
       if (!response.ok) {
@@ -93,11 +104,7 @@ export default function ReservationComplete({
         );
       }
 
-      // responseDataをそのまま使用
-      const {
-        reservation_id: reservationId,
-        reservation_customer_id: reservationCustomerId,
-      } = responseData;
+      const { reservationId, reservationCustomerId } = responseData;
 
       // 30日以上先の予約の場合の処理
       if (paymentInfo?.isOver30Days && reservationCustomerId) {
@@ -110,7 +117,6 @@ export default function ReservationComplete({
           }),
         });
 
-        // 一度だけsetupIntentResponse.json()を呼び出す
         const setupIntentData = await setupIntentResponse.json();
 
         if (!setupIntentResponse.ok) {
@@ -120,9 +126,74 @@ export default function ReservationComplete({
         }
 
         const { clientSecret } = setupIntentData;
-        // 必要に応じてclientSecretを保存または使用
         console.log("Setup Intent created with client secret:", clientSecret);
       }
+
+      // 予約の保存が成功したので、FastAPIエンドポイントに予約データを送信
+      const sendReservationToAutomation = async () => {
+        try {
+          if (!selectedDateTime) {
+            throw new Error("予約日時が選択されていません");
+          }
+
+          const startTime = new Date(selectedDateTime.start);
+          const endTime = new Date(selectedDateTime.end);
+
+          const duration = selectedMenus.reduce(
+            (total, menu) => total + menu.duration,
+            0
+          ); // duration is in minutes
+
+          const rsvTermHour = Math.floor(duration / 60).toString();
+          const rsvTermMinute = (duration % 60).toString();
+
+          const automationData = {
+            user_id: userId,
+            date: formatDate(startTime),
+            rsv_hour: startTime.getHours().toString(),
+            rsv_minute: String(startTime.getMinutes()).padStart(2, "0"),
+            staff_name: selectedStaff ? selectedStaff.name : "",
+            nm_sei_kana: customerInfo.lastNameKana,
+            nm_mei_kana: customerInfo.firstNameKana,
+            nm_sei: customerInfo.lastNameKanji,
+            nm_mei: customerInfo.firstNameKanji,
+            rsv_term_hour: rsvTermHour,
+            rsv_term_minute: rsvTermMinute,
+          };
+
+          const FASTAPI_ENDPOINT =
+            "https://11ef-34-97-99-223.ngrok-free.app/run-automation";
+
+          const automationResponse = await fetch(FASTAPI_ENDPOINT, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(automationData),
+          });
+
+          const automationResponseData = await automationResponse.json();
+
+          if (!automationResponse.ok) {
+            const errorMessage =
+              automationResponseData.detail ||
+              automationResponseData.error ||
+              "Automation failed";
+            console.error("Automation sync failed:", errorMessage);
+            // 必要に応じてエラーハンドリングやユーザーへの通知を行う
+          } else {
+            console.log(
+              "Automation sync successful:",
+              automationResponseData
+            );
+          }
+        } catch (error) {
+          console.error("Error in sendReservationToAutomation:", error);
+          // 必要に応じてエラーハンドリングやユーザーへの通知を行う
+        }
+      };
+
+      await sendReservationToAutomation();
 
       setStatus("予約が完了しました");
       toast({
