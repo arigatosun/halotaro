@@ -5,9 +5,7 @@ import { Resend } from "resend";
 import { SynchronizationErrorNotification } from "@/emails/SynchronizationErrorNotification";
 
 // Edge Function の設定
-export const config = {
-  runtime: 'edge',
-};
+export const runtime = 'edge';
 
 // 日付形式を "YYYYMMDD" に変更するヘルパー関数
 const formatDate = (dateString: string) => {
