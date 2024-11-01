@@ -264,7 +264,12 @@ const DateSelection: React.FC<DateSelectionProps> = ({
   const [operatingHours, setOperatingHours] = useState<
     Record<
       string,
-      { isHoliday: boolean; openTime: string | null; closeTime: string | null }
+      {
+        isHoliday: boolean;
+        openTime: string | null;
+        closeTime: string | null;
+        capacity: number | null;
+      }
     >
   >({}); // 営業時間情報
   const [selectedDateTime, setSelectedDateTime] =
@@ -582,7 +587,7 @@ const DateSelection: React.FC<DateSelectionProps> = ({
       const dateStr = date.format("YYYY-MM-DD");
 
       if (isHoliday(date)) {
-        continue; // 休業日はスキップ
+        continue;
       }
 
       availability[dateStr] = {};
@@ -597,6 +602,9 @@ const DateSelection: React.FC<DateSelectionProps> = ({
 
         let isAvailable = true;
 
+        // その日の最大予約可能数を取得
+        const maxCapacity = operatingHours[dateStr]?.capacity ?? 1; // デフォルト値として1を設定
+
         // 時間帯ごとの重複予約数をチェック
         for (
           let currentTime = moment(startDateTime);
@@ -604,7 +612,7 @@ const DateSelection: React.FC<DateSelectionProps> = ({
           currentTime.add(slotInterval, "minutes")
         ) {
           const timeStr = currentTime.format("YYYY-MM-DD HH:mm");
-          if ((overlappingCounts[timeStr] || 0) >= 3) {
+          if ((overlappingCounts[timeStr] || 0) >= maxCapacity) {
             isAvailable = false;
             break;
           }
@@ -618,7 +626,9 @@ const DateSelection: React.FC<DateSelectionProps> = ({
         // スタッフの利用可能性をチェック
         let availableStaffIds = selectedStaffProp
           ? [selectedStaffProp.id]
-          : staffList.map((staff) => staff.id);
+          : staffList
+              .filter((staff) => staff.name !== "フリー") // フリースタッフを除外
+              .map((staff) => staff.id);
 
         for (
           let currentTime = moment(startDateTime);
@@ -673,9 +683,10 @@ const DateSelection: React.FC<DateSelectionProps> = ({
     reservedSlots,
     timeSlots,
     isHoliday,
+    operatingHours,
   ]);
 
-  // 時間スロットクリック時の処理
+  // handleTimeSlotClick を修正
   const handleTimeSlotClick = (date: moment.Moment, time: string): void => {
     const dateStr = date.format("YYYY-MM-DD");
     if (!slotAvailability[dateStr]?.[time]) {
@@ -711,14 +722,42 @@ const DateSelection: React.FC<DateSelectionProps> = ({
       }
     });
 
-    // スタッフの利用可能性をチェック
-    let availableStaffIds: string[] = [];
+    // その日の最大予約可能数を取得
+    const maxCapacity = operatingHours[dateStr]?.capacity ?? 1;
 
-    if (selectedStaffProp) {
-      availableStaffIds = [selectedStaffProp.id];
-    } else {
-      availableStaffIds = staffList.map((staff) => staff.id);
+    // 予約数チェック
+    const overlappingCounts: Record<string, number> = {};
+    allReservations.forEach((reservation) => {
+      const start = moment.utc(reservation.startTime).tz("Asia/Tokyo");
+      const end = moment.utc(reservation.endTime).tz("Asia/Tokyo");
+
+      for (
+        let time = moment(start);
+        time.isBefore(end);
+        time.add(slotInterval, "minutes")
+      ) {
+        const timeStr = time.format("YYYY-MM-DD HH:mm");
+        overlappingCounts[timeStr] = (overlappingCounts[timeStr] || 0) + 1;
+      }
+    });
+    for (
+      let currentTime = moment(startDateTime);
+      currentTime.isBefore(endDateTime);
+      currentTime.add(slotInterval, "minutes")
+    ) {
+      const timeStr = currentTime.format("YYYY-MM-DD HH:mm");
+      if ((overlappingCounts[timeStr] || 0) >= maxCapacity) {
+        setError("この時間帯は予約が満席です");
+        return;
+      }
     }
+
+    // スタッフの利用可能性をチェック
+    let availableStaffIds = selectedStaffProp
+      ? [selectedStaffProp.id]
+      : staffList
+          .filter((staff) => staff.name !== "フリー")
+          .map((staff) => staff.id);
 
     for (
       let currentTime = moment(startDateTime);
@@ -760,9 +799,14 @@ const DateSelection: React.FC<DateSelectionProps> = ({
     let selectedStaff = selectedStaffProp;
 
     if (!selectedStaff) {
-      // スタッフを自動的に割り当てる（ランダムに選択）
-      const randomIndex = Math.floor(Math.random() * availableStaffIds.length);
-      const assignedStaffId = availableStaffIds[randomIndex];
+      // 利用可能なスタッフからフリースタッフを除外して割り当て
+      const assignableStaffIds = availableStaffIds.filter((staffId) => {
+        const staff = staffList.find((s) => s.id === staffId);
+        return staff && staff.name !== "フリー";
+      });
+
+      const randomIndex = Math.floor(Math.random() * assignableStaffIds.length);
+      const assignedStaffId = assignableStaffIds[randomIndex];
       selectedStaff =
         staffList.find((staff) => staff.id === assignedStaffId) || null;
       setAssignedStaff(selectedStaff);
@@ -798,7 +842,10 @@ const DateSelection: React.FC<DateSelectionProps> = ({
 
   // 前の期間へ移動
   const handlePreviousPeriod = (): void => {
-    const newStartDate = moment(startDate).subtract(isMobile ? 7 : 14, "days");
+    const newStartDate = moment(startDate).subtract(
+      isMobile ? 7 : 14,
+      "days"
+    );
     if (newStartDate.isSameOrAfter(moment().startOf("day"), "day")) {
       setStartDate(newStartDate);
     }
