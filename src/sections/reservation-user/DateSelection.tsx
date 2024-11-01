@@ -354,6 +354,7 @@ const DateSelection: React.FC<DateSelectionProps> = ({
 
   // 利用可能なスロットを取得
   const fetchAvailableSlots = async () => {
+    console.time("fetchAvailableSlots");
     const endDate = moment(startDate)
       .add(displayDays - 1, "days")
       .format("YYYY-MM-DD");
@@ -384,6 +385,7 @@ const DateSelection: React.FC<DateSelectionProps> = ({
       console.error("利用可能な時間枠の取得中にエラーが発生しました:", error);
       setError("利用可能な時間枠の取得に失敗しました");
     }
+    console.timeEnd("fetchAvailableSlots");
   };
 
   // 予約済みのスロットを取得
@@ -535,10 +537,45 @@ const DateSelection: React.FC<DateSelectionProps> = ({
 
   // 利用可能なスロットを計算し、メモ化
   const slotAvailability = useMemo(() => {
-    const availability: Record<string, Record<string, boolean>> = {};
+    console.time("computeSlotAvailability");
 
+    const availability: Record<string, Record<string, boolean>> = {};
     const duration = selectedMenus[0]?.duration || 60;
+
+    // 予約データを効率的に検索できるようにマッピング
     const allReservations = Object.values(reservedSlots).flat();
+
+    const reservationMap = new Map<string, boolean>();
+    allReservations.forEach((reservation) => {
+      const staffId = reservation.staffId;
+      const start = moment.utc(reservation.startTime).tz("Asia/Tokyo");
+      const end = moment.utc(reservation.endTime).tz("Asia/Tokyo");
+
+      for (
+        let time = moment(start);
+        time.isBefore(end);
+        time.add(slotInterval, "minutes")
+      ) {
+        const key = `${time.format("YYYY-MM-DD HH:mm")}_${staffId}`;
+        reservationMap.set(key, true);
+      }
+    });
+
+    // 重複予約数を時間スロットごとに計算
+    const overlappingCounts: Record<string, number> = {};
+    allReservations.forEach((reservation) => {
+      const start = moment.utc(reservation.startTime).tz("Asia/Tokyo");
+      const end = moment.utc(reservation.endTime).tz("Asia/Tokyo");
+
+      for (
+        let time = moment(start);
+        time.isBefore(end);
+        time.add(slotInterval, "minutes")
+      ) {
+        const timeStr = time.format("YYYY-MM-DD HH:mm");
+        overlappingCounts[timeStr] = (overlappingCounts[timeStr] || 0) + 1;
+      }
+    });
 
     for (let i = 0; i < displayDays; i++) {
       const date = moment(startDate).add(i, "days");
@@ -550,7 +587,7 @@ const DateSelection: React.FC<DateSelectionProps> = ({
 
       availability[dateStr] = {};
 
-      timeSlots.forEach((time) => {
+      for (const time of timeSlots) {
         const startDateTime = moment.tz(
           `${dateStr} ${time}`,
           "YYYY-MM-DD HH:mm",
@@ -560,31 +597,14 @@ const DateSelection: React.FC<DateSelectionProps> = ({
 
         let isAvailable = true;
 
-        // 希望する予約時間帯をスロット間隔ごとに分割し、各時間点での重複予約数をチェック
+        // 時間帯ごとの重複予約数をチェック
         for (
           let currentTime = moment(startDateTime);
           currentTime.isBefore(endDateTime);
           currentTime.add(slotInterval, "minutes")
         ) {
-          const overlappingReservationsAtTime = allReservations.filter(
-            (reservation) => {
-              const reservationStart = moment
-                .utc(reservation.startTime)
-                .tz("Asia/Tokyo");
-              const reservationEnd = moment
-                .utc(reservation.endTime)
-                .tz("Asia/Tokyo");
-
-              return (
-                currentTime.isSameOrAfter(reservationStart) &&
-                currentTime.isBefore(reservationEnd)
-              );
-            }
-          );
-
-          const numOverlappingReservations = overlappingReservationsAtTime.length;
-
-          if (numOverlappingReservations >= 3) {
+          const timeStr = currentTime.format("YYYY-MM-DD HH:mm");
+          if ((overlappingCounts[timeStr] || 0) >= 3) {
             isAvailable = false;
             break;
           }
@@ -592,17 +612,13 @@ const DateSelection: React.FC<DateSelectionProps> = ({
 
         if (!isAvailable) {
           availability[dateStr][time] = false;
-          return;
+          continue;
         }
 
         // スタッフの利用可能性をチェック
-        let availableStaffIds: string[] = [];
-
-        if (selectedStaffProp) {
-          availableStaffIds = [selectedStaffProp.id];
-        } else {
-          availableStaffIds = staffList.map((staff) => staff.id);
-        }
+        let availableStaffIds = selectedStaffProp
+          ? [selectedStaffProp.id]
+          : staffList.map((staff) => staff.id);
 
         for (
           let currentTime = moment(startDateTime);
@@ -612,34 +628,18 @@ const DateSelection: React.FC<DateSelectionProps> = ({
           const currentTimeStr = currentTime.format("HH:mm");
           const currentDateStr = currentTime.format("YYYY-MM-DD");
 
-          const staffIdsAtTime = availableSlots[currentDateStr]?.[currentTimeStr];
+          const staffIdsAtTime =
+            availableSlots[currentDateStr]?.[currentTimeStr] || [];
 
-          if (!staffIdsAtTime || staffIdsAtTime.length === 0) {
+          if (staffIdsAtTime.length === 0) {
             isAvailable = false;
             break;
           }
 
           // 予約が入っていないスタッフを抽出
           const staffIdsNotReservedAtTime = staffIdsAtTime.filter((staffId) => {
-            const reservationsForStaff =
-              allReservations.filter(
-                (reservation) => reservation.staffId === staffId
-              ) || [];
-
-            const isStaffReserved = reservationsForStaff.some((reservation) => {
-              const reservationStart = moment
-                .utc(reservation.startTime)
-                .tz("Asia/Tokyo");
-              const reservationEnd = moment
-                .utc(reservation.endTime)
-                .tz("Asia/Tokyo");
-              return (
-                currentTime.isBefore(reservationEnd) &&
-                currentTime.isSameOrAfter(reservationStart)
-              );
-            });
-
-            return !isStaffReserved;
+            const key = `${currentTime.format("YYYY-MM-DD HH:mm")}_${staffId}`;
+            return !reservationMap.has(key);
           });
 
           if (staffIdsNotReservedAtTime.length === 0) {
@@ -647,7 +647,6 @@ const DateSelection: React.FC<DateSelectionProps> = ({
             break;
           }
 
-          // スタッフの利用可能性を更新
           availableStaffIds = availableStaffIds.filter((staffId) =>
             staffIdsNotReservedAtTime.includes(staffId)
           );
@@ -659,9 +658,10 @@ const DateSelection: React.FC<DateSelectionProps> = ({
         }
 
         availability[dateStr][time] = isAvailable;
-      });
+      }
     }
 
+    console.timeEnd("computeSlotAvailability");
     return availability;
   }, [
     startDate,
@@ -672,6 +672,7 @@ const DateSelection: React.FC<DateSelectionProps> = ({
     availableSlots,
     reservedSlots,
     timeSlots,
+    isHoliday,
   ]);
 
   // 時間スロットクリック時の処理
@@ -692,6 +693,23 @@ const DateSelection: React.FC<DateSelectionProps> = ({
 
     // 全ての予約を取得
     const allReservations = Object.values(reservedSlots).flat();
+
+    // 予約データを効率的に検索できるようにマッピング
+    const reservationMap = new Map<string, boolean>();
+    allReservations.forEach((reservation) => {
+      const staffId = reservation.staffId;
+      const start = moment.utc(reservation.startTime).tz("Asia/Tokyo");
+      const end = moment.utc(reservation.endTime).tz("Asia/Tokyo");
+
+      for (
+        let time = moment(start);
+        time.isBefore(end);
+        time.add(slotInterval, "minutes")
+      ) {
+        const key = `${time.format("YYYY-MM-DD HH:mm")}_${staffId}`;
+        reservationMap.set(key, true);
+      }
+    });
 
     // スタッフの利用可能性をチェック
     let availableStaffIds: string[] = [];
@@ -719,25 +737,8 @@ const DateSelection: React.FC<DateSelectionProps> = ({
 
       // 予約が入っていないスタッフを抽出
       const staffIdsNotReservedAtTime = staffIdsAtTime.filter((staffId) => {
-        const reservationsForStaff =
-          allReservations.filter(
-            (reservation) => reservation.staffId === staffId
-          ) || [];
-
-        const isStaffReserved = reservationsForStaff.some((reservation) => {
-          const reservationStart = moment
-            .utc(reservation.startTime)
-            .tz("Asia/Tokyo");
-          const reservationEnd = moment
-            .utc(reservation.endTime)
-            .tz("Asia/Tokyo");
-          return (
-            currentTime.isBefore(reservationEnd) &&
-            currentTime.isSameOrAfter(reservationStart)
-          );
-        });
-
-        return !isStaffReserved;
+        const key = `${currentTime.format("YYYY-MM-DD HH:mm")}_${staffId}`;
+        return !reservationMap.has(key);
       });
 
       if (staffIdsNotReservedAtTime.length === 0) {
@@ -765,13 +766,14 @@ const DateSelection: React.FC<DateSelectionProps> = ({
       selectedStaff =
         staffList.find((staff) => staff.id === assignedStaffId) || null;
       setAssignedStaff(selectedStaff);
+    } else {
+      setAssignedStaff(selectedStaff);
     }
 
     setSelectedDateTime({
       start: startDateTime.toDate(),
       end: endDateTime.toDate(),
     });
-    setAssignedStaff(selectedStaff);
     setIsDialogOpen(true);
   };
 
@@ -824,13 +826,15 @@ const DateSelection: React.FC<DateSelectionProps> = ({
 
     return (
       <Tooltip title={isAvailable ? "予約可能" : "予約不可"} arrow>
-        <TimeSlotButton
-          onClick={() => isAvailable && handleTimeSlotClick(date, time)}
-          disabled={!isAvailable}
-          className={isAvailable ? "available" : "unavailable"}
-        >
-          {isAvailable ? "〇" : "×"}
-        </TimeSlotButton>
+        <span>
+          <TimeSlotButton
+            onClick={() => isAvailable && handleTimeSlotClick(date, time)}
+            disabled={!isAvailable}
+            className={isAvailable ? "available" : "unavailable"}
+          >
+            {isAvailable ? "〇" : "×"}
+          </TimeSlotButton>
+        </span>
       </Tooltip>
     );
   };
