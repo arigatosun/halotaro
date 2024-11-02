@@ -16,8 +16,8 @@ interface UseReservationCalendarReturn {
   setMenuList: React.Dispatch<React.SetStateAction<MenuItem[]>>;
   setClosedDays: React.Dispatch<React.SetStateAction<string[]>>;
   setBusinessHours: React.Dispatch<React.SetStateAction<BusinessHour[]>>;
-  dateRange: { start: string; end: string } | null; // dateRangeを追加
-  setDateRange: React.Dispatch<React.SetStateAction<{ start: string; end: string } | null>>;
+  dateRange: { start: string; end: string };
+  setDateRange: React.Dispatch<React.SetStateAction<{ start: string; end: string }>>;
   snackbar: { message: string; severity: 'success' | 'error' } | null;
   setSnackbar: React.Dispatch<React.SetStateAction<{ message: string; severity: 'success' | 'error' } | null>>;
 }
@@ -29,7 +29,14 @@ const useReservationCalendar = (): UseReservationCalendarReturn => {
   const [closedDays, setClosedDays] = useState<string[]>([]);
   const [businessHours, setBusinessHours] = useState<BusinessHour[]>([]);
   const [snackbar, setSnackbar] = useState<{ message: string; severity: 'success' | 'error' } | null>(null);
-  const [dateRange, setDateRange] = useState<{ start: string; end: string } | null>(null);
+
+  // dateRangeを広い範囲に設定（例：現在の日付から1ヶ月先）
+  const [dateRange, setDateRange] = useState<{ start: string; end: string }>(() => {
+    const start = moment().startOf('day').format('YYYY-MM-DD');
+    const end = moment().add(1, 'months').endOf('month').format('YYYY-MM-DD');
+    return { start, end };
+  });
+
   const { user, session } = useAuth();
 
   const loadData = async () => {
@@ -57,7 +64,7 @@ const useReservationCalendar = (): UseReservationCalendarReturn => {
       setMenuList(data.menuList);
       setClosedDays(data.closedDays || []);
       setBusinessHours(data.businessHours || []);
-  
+
       // staffList の確認
       console.log('スタッフデータ:', data.staffList);
     } catch (error) {
@@ -84,7 +91,7 @@ const useReservationCalendar = (): UseReservationCalendarReturn => {
     setMenuList,
     setClosedDays,
     setBusinessHours,
-    dateRange, // dateRangeを追加
+    dateRange,
     setDateRange,
     snackbar,
     setSnackbar,

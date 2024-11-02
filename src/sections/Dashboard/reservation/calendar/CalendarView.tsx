@@ -1,4 +1,3 @@
-// CalendarView.tsx
 import React, { forwardRef, useRef, useEffect } from "react";
 import FullCalendar from "@fullcalendar/react";
 import resourceTimelinePlugin from "@fullcalendar/resource-timeline";
@@ -68,6 +67,9 @@ const StyledFullCalendar = styled(FullCalendar)<CalendarOptions>(
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
+      cursor: "pointer",
+      opacity: "0.9", // 重複時の透明度を設定
+      zIndex: "auto", // z-indexを自動設定に変更
     },
     "& .fc-timeline-event *": {
       height: "100% !important",
@@ -129,6 +131,11 @@ const StyledFullCalendar = styled(FullCalendar)<CalendarOptions>(
       backgroundColor: "#ff9f89",
       border: "none",
       cursor: "default",
+    },
+    // ドラッグ中のスタイルを追加
+    "& .fc-event-dragging": {
+      opacity: "0.7",
+      cursor: "move",
     },
   })
 );
@@ -232,7 +239,7 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
             : reservation.is_hair_sync
             ? ["hair-reservation"]
             : ["customer-reservation"],
-          editable: reservation.editable,
+          editable: !reservation.is_closed_day && !reservation.is_staff_schedule && !reservation.is_hair_sync,
           extendedProps: reservation,
         })),
       ...businessHours
@@ -244,6 +251,7 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
           display: "background",
           classNames: ["closed-day"],
           allDay: true,
+          editable: false,
         })),
       ...closedDays.map((dateStr) => ({
         id: `closed-${dateStr}`,
@@ -254,6 +262,7 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
         display: "background",
         classNames: ["closed-day"],
         overlap: false,
+        editable: false,
       })),
     ];
 
@@ -298,14 +307,19 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
           datesSet={handleDatesSet}
           initialView={initialView}
           initialDate={currentDate.format("YYYY-MM-DD")}
-          editable={false}
+          editable={true}
+          eventStartEditable={true}
+          eventDurationEditable={true}
+          droppable={true}
           selectable={true}
           selectConstraint="businessHours"
+          eventConstraint="businessHours"
+          dragRevertDuration={0}
           select={onDateSelect}
           schedulerLicenseKey="GPL-My-Project-Is-Open-Source"
           events={events}
           resources={resources}
-          resourceOrder={() => 0} // 並べ替えを無効化
+          resourceOrder={() => 0}
           eventClick={onEventClick}
           eventDrop={onEventDrop}
           slotDuration="00:30:00"
@@ -332,7 +346,8 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
           scrollTimeReset={false}
           viewDidMount={handleViewDidMount}
           eventDisplay="block"
-          eventOverlap={false}
+          eventOverlap={true} 
+          selectOverlap={true} // 選択の重複を許可
           selectMinDistance={10}
           eventDidMount={(info) => {
             const reservation = info.event.extendedProps as Reservation;
@@ -409,5 +424,7 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
     );
   }
 );
+
+CalendarView.displayName = "CalendarView";
 
 export default CalendarView;

@@ -62,17 +62,11 @@ function formatReservation(reservation: any) {
       reservation.reservation_customers?.name_kana || "Unknown",
     menu_name: reservation.menu_items?.name || "Unknown",
     staff_name: reservation.staff?.name || "Unknown",
-    start_time: moment
-      .utc(reservation.start_time)
-      .tz("Asia/Tokyo")
-      .format("YYYY-MM-DDTHH:mm"),
-    end_time: moment
-      .utc(reservation.end_time)
-      .tz("Asia/Tokyo")
-      .format("YYYY-MM-DDTHH:mm"),
+    start_time: moment.utc(reservation.start_time).toISOString(),
+    end_time: moment.utc(reservation.end_time).toISOString(),
     is_staff_schedule: reservation.is_staff_schedule || false,
     editable: reservation.is_staff_schedule === true,
-    is_hair_sync: reservation.is_hair_sync || false, // この行を修正
+    is_hair_sync: reservation.is_hair_sync || false,
   };
 }
 
@@ -127,7 +121,8 @@ async function getRecipientEmails(userId: string): Promise<string[]> {
 // 予約後の処理（メール送信と自動化システム連携）を行うヘルパー関数
 async function handlePostReservationProcesses(
   userId: string,
-  reservation: any
+  reservation: any,
+  isUpdate: boolean = false // 新しいパラメータを追加
 ) {
   try {
     console.log("Attempting to send reservation emails...");
@@ -155,18 +150,25 @@ async function handlePostReservationProcesses(
       reservationId: reservation.id,
     };
 
-    // 予約完了メールを送信
+    // 予約完了メールを送信（コメントアウト）
+    /*
     await sendReservationEmails(
       customerInfo,
       reservationDetails,
       recipientEmails,
       baseUrl
     );
+    */
 
-    console.log("Emails sent successfully");
+    console.log("Emails sent successfully (skipped)");
   } catch (emailError) {
     console.error("Error sending emails:", emailError);
     // エラーを記録しますが、予約プロセスは中断しません
+  }
+
+  if (isUpdate) {
+    console.log("Skipping synchronization during reservation update.");
+    return;
   }
 
   // 自動化システムとの連携処理
@@ -200,7 +202,8 @@ async function handlePostReservationProcesses(
         },
       });
 
-      // 同期エラーメールを送信
+      // 同期エラーメールを送信（コメントアウト）
+      
       const recipientEmails = await getRecipientEmails(userId);
       const formattedReservationData = {
         customerName: reservation.customer_name,
@@ -213,6 +216,7 @@ async function handlePostReservationProcesses(
         automationResponse.error,
         formattedReservationData
       );
+      
     }
   } catch (error: any) {
     console.error("Error in sendReservationToAutomation:", error);
@@ -227,7 +231,8 @@ async function handlePostReservationProcesses(
       },
     });
 
-    // 同期エラーメールを送信
+    // 同期エラーメールを送信（コメントアウト）
+    
     const recipientEmails = await getRecipientEmails(userId);
     const formattedReservationData = {
       customerName: reservation.customer_name,
@@ -240,6 +245,7 @@ async function handlePostReservationProcesses(
       error.message,
       formattedReservationData
     );
+    
   }
 }
 
@@ -292,7 +298,8 @@ async function handlePostStaffScheduleProcesses(
       },
     });
 
-    // 同期エラーメールを送信
+    // 同期エラーメールを送信（コメントアウト）
+    
     const recipientEmails = await getRecipientEmails(userId);
     const formattedReservationData = {
       customerName: reservation.customer_name,
@@ -305,6 +312,7 @@ async function handlePostStaffScheduleProcesses(
       error.message,
       formattedReservationData
     );
+    
   }
 }
 
@@ -345,12 +353,11 @@ export async function GET(request: Request) {
 
     // スタッフリストの取得（is_published が true のみ）
     const { data: staffList, error: staffError } = await supabase
-  .from("staff")
-  .select("id, name, schedule_order") // schedule_order を含める
-  .eq("user_id", userId)
-  .eq("is_published", true)
-  .order("schedule_order", { ascending: true }); // schedule_order に基づいてソート
-
+      .from("staff")
+      .select("id, name, schedule_order") // schedule_order を含める
+      .eq("user_id", userId)
+      .eq("is_published", true)
+      .order("schedule_order", { ascending: true }); // schedule_order に基づいてソート
 
     if (staffError) {
       console.error("Error fetching staff list:", staffError);
@@ -373,24 +380,23 @@ export async function GET(request: Request) {
 
     // 予約データの取得
     const { data: reservations, error: reservationError } = await supabase
-  .from("reservations")
-  .select(
-    `
-    *,
-    is_hair_sync,
-    reservation_customers!fk_customer (
-      id, name, email, phone, name_kana
-    ),
-    menu_items (id, name, duration, price),
-    staff (id, name, schedule_order) // schedule_order を含める
-  `
-  )
-  .eq("user_id", userId)
-  .gte("start_time", startDate)
-  .lte("end_time", endDate)
-  .in("status", includedStatuses)
-  .order("start_time", { ascending: true });
-
+      .from("reservations")
+      .select(
+        `
+        *,
+        is_hair_sync,
+        reservation_customers!fk_customer (
+          id, name, email, phone, name_kana
+        ),
+        menu_items (id, name, duration, price),
+        staff (id, name, schedule_order) // schedule_order を含める
+      `
+      )
+      .eq("user_id", userId)
+      .gte("start_time", startDate)
+      .lte("end_time", endDate)
+      .in("status", includedStatuses)
+      .order("start_time", { ascending: true });
 
     if (reservationError) {
       console.error("Error fetching reservations:", reservationError);
@@ -573,16 +579,10 @@ export async function POST(request: Request) {
           user_id: authResult.user.id,
           staff_id: staff_id || undefined,
           start_time: start_time
-            ? moment
-                .tz(start_time, "YYYY-MM-DDTHH:mm", "Asia/Tokyo")
-                .utc()
-                .format("YYYY-MM-DD HH:mm:ss")
+            ? moment.utc(start_time).format("YYYY-MM-DD HH:mm:ss")
             : undefined,
           end_time: end_time
-            ? moment
-                .tz(end_time, "YYYY-MM-DDTHH:mm", "Asia/Tokyo")
-                .utc()
-                .format("YYYY-MM-DD HH:mm:ss")
+            ? moment.utc(end_time).format("YYYY-MM-DD HH:mm:ss")
             : undefined,
           status: "staff",
           total_price: 0,
@@ -648,10 +648,10 @@ export async function POST(request: Request) {
         const rpcParams = {
           p_user_id: authResult.user.id,
           p_start_time: start_time
-            ? moment(start_time).utc().format("YYYY-MM-DD HH:mm:ss")
+            ? moment.utc(start_time).format("YYYY-MM-DD HH:mm:ss")
             : null,
           p_end_time: end_time
-            ? moment(end_time).utc().format("YYYY-MM-DD HH:mm:ss")
+            ? moment.utc(end_time).format("YYYY-MM-DD HH:mm:ss")
             : null,
           p_total_price: total_price || 0,
           p_customer_name: customer_name,
@@ -727,13 +727,15 @@ export async function POST(request: Request) {
         // フォーマット処理
         const formattedReservation = formatReservation(newReservation);
 
-        // メール送信と自動化システムの処理を実行
-        await handlePostReservationProcesses(
-          authResult.user.id,
-          formattedReservation
+        // メール送信と自動化システムの処理を実行（メール送信部分をコメントアウト）
+        handlePostReservationProcesses(authResult.user.id, formattedReservation).catch(
+          (error) => {
+            console.error("Error in post-processing:", error);
+            // 必要に応じてエラーハンドリング
+          }
         );
 
-        // 成功レスポンスを返す
+        // レスポンスを返す
         return NextResponse.json(formattedReservation);
       } catch (error: any) {
         console.error("Error saving reservation:", error);
@@ -850,10 +852,7 @@ export async function PUT(request: Request) {
       if (updateFields[field] !== undefined) {
         if (field === "start_time" || field === "end_time") {
           updatedData[field] = updateFields[field]
-            ? moment
-                .tz(updateFields[field], "YYYY-MM-DDTHH:mm", "Asia/Tokyo")
-                .utc()
-                .format("YYYY-MM-DD HH:mm:ss")
+            ? moment.utc(updateFields[field]).format("YYYY-MM-DD HH:mm:ss")
             : undefined;
         } else {
           updatedData[field] = updateFields[field];
@@ -931,11 +930,15 @@ export async function PUT(request: Request) {
     // フォーマット処理
     const formattedReservation = formatReservation(updatedReservation);
 
-    // メール送信と自動化システムの処理を実行
-    await handlePostReservationProcesses(
+    // メール送信と自動化システムの処理を実行（メール送信部分をコメントアウト）
+    handlePostReservationProcesses(
       authResult.user.id,
-      formattedReservation
-    );
+      formattedReservation,
+      true // isUpdate = true
+    ).catch((error) => {
+      console.error("Error in post-processing:", error);
+      // 必要に応じてエラーハンドリング
+    });
 
     console.log("Reservation updated:", formattedReservation);
     return NextResponse.json(formattedReservation);

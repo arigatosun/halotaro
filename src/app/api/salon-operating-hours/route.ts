@@ -1,3 +1,5 @@
+//src/app/api/salon-operating-hours/route.ts
+
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
@@ -11,6 +13,7 @@ interface OperatingHourData {
   is_holiday: boolean;
   open_time: string | null;
   close_time: string | null;
+  capacity: number | null;  // capacityを追加
 }
 
 interface OperatingHoursByDate {
@@ -18,6 +21,7 @@ interface OperatingHoursByDate {
     isHoliday: boolean;
     openTime: string | null;
     closeTime: string | null;
+    capacity: number | null;  // capacityを追加
   };
 }
 
@@ -34,7 +38,7 @@ export async function GET(request: Request) {
   try {
     const { data, error } = await supabase
       .from('salon_business_hours')
-      .select('date, is_holiday, open_time, close_time')
+      .select('date, is_holiday, open_time, close_time, capacity')  // capacityを追加
       .eq('salon_id', salonId)
       .gte('date', startDate)
       .lte('date', endDate)
@@ -46,7 +50,8 @@ export async function GET(request: Request) {
       acc[day.date] = {
         isHoliday: day.is_holiday,
         openTime: day.open_time,
-        closeTime: day.close_time
+        closeTime: day.close_time,
+        capacity: day.capacity  // capacityを追加
       };
       return acc;
     }, {});

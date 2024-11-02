@@ -8,6 +8,7 @@ import {
   Select,
   Table,
   message,
+  InputNumber,
 } from "antd";
 import { QuestionCircleOutlined } from "@ant-design/icons";
 import moment from "moment";
@@ -26,7 +27,7 @@ interface DaySettings {
   isHoliday: boolean;
   openTime: string;
   closeTime: string;
-  capacity: number | null; // null を許可
+  capacity: number | null;
 }
 
 interface MonthlyReceptionSettingsDetailProps {
@@ -75,7 +76,7 @@ const MonthlyReceptionSettingsDetail: React.FC<
           isHoliday: item.is_holiday,
           openTime: item.open_time || "",
           closeTime: item.close_time || "",
-          capacity: item.capacity || 0,
+          capacity: item.capacity,
         };
       });
 
@@ -109,8 +110,7 @@ const MonthlyReceptionSettingsDetail: React.FC<
         isHoliday: values.isHoliday,
         openTime: values.isHoliday ? "" : values.businessHours?.start || "",
         closeTime: values.isHoliday ? "" : values.businessHours?.end || "",
-        // capacity: values.isHoliday ? undefined : values.capacity,
-        capacity: values.isHoliday ? undefined : values.capacity || null,
+        capacity: values.isHoliday ? null : values.capacity,
       };
     };
 
@@ -215,7 +215,7 @@ const MonthlyReceptionSettingsDetail: React.FC<
       isHoliday: false,
       openTime: "",
       closeTime: "",
-      capacity: 0,
+      capacity: null,
     };
     const isWeekend = day.day() === 0 || day.day() === 6;
     const isSunday = day.day() === 0;
@@ -293,7 +293,7 @@ const MonthlyReceptionSettingsDetail: React.FC<
         >
           {generateTimeOptions()}
         </Select>
-        {/* <Text
+        <Text
           style={{
             color: "#8c8c8c",
             fontSize: "12px",
@@ -301,22 +301,18 @@ const MonthlyReceptionSettingsDetail: React.FC<
             marginTop: "4px",
           }}
         >
-          受付可能数（任意）
+          受付可能数（必須）
         </Text>
-        <Select
+        <InputNumber
           style={{ width: "100%", marginTop: "2px" }}
           value={settings.capacity}
           onChange={(value) => handleCapacityChange(dayNumber, value)}
           disabled={settings.isHoliday}
-          placeholder="選択"
-          allowClear // クリアボタンを追加
-        >
-          {[...Array(20)].map((_, i) => (
-            <Option key={i + 1} value={i + 1}>
-              {i + 1}
-            </Option>
-          ))}
-        </Select> */}
+          placeholder="入力"
+          min={1}
+          max={999}
+          required
+        />
       </div>
     );
   };
@@ -329,7 +325,7 @@ const MonthlyReceptionSettingsDetail: React.FC<
         isHoliday: checked,
         openTime: checked ? "" : prev[day]?.openTime || "",
         closeTime: checked ? "" : prev[day]?.closeTime || "",
-        capacity: checked ? 0 : prev[day]?.capacity || 0,
+        capacity: checked ? null : prev[day]?.capacity || null,
       },
     }));
   };
@@ -364,7 +360,6 @@ const MonthlyReceptionSettingsDetail: React.FC<
       return;
     }
 
-    // 入力が不完全な日付をチェック
     const daysInMonth = moment(`${year}-${month}-01`).daysInMonth();
     const incompleteDays = [];
 
@@ -375,22 +370,18 @@ const MonthlyReceptionSettingsDetail: React.FC<
         (!settings.isHoliday &&
           (settings.openTime === "" ||
             settings.closeTime === "" ||
-            settings.capacity === 0))
+            settings.capacity === null ||
+            settings.capacity === undefined))
       ) {
         incompleteDays.push(day);
       }
     }
 
     if (incompleteDays.length > 0) {
-      // message.error(
-      //   `以下の日付の設定が不完全です: ${incompleteDays.join(
-      //     ", "
-      //   )}。すべての日付に対して休業日か営業時間と受付可能数を設定してください。`
-      // );
       message.error(
         `以下の日付の設定が不完全です: ${incompleteDays.join(
           ", "
-        )}。すべての日付に対して休業日か営業時間を設定してください。`
+        )}。すべての営業日に対して営業時間と受付可能数を設定してください。`
       );
       return;
     }
@@ -405,7 +396,7 @@ const MonthlyReceptionSettingsDetail: React.FC<
         is_holiday: isHoliday,
         open_time: isHoliday ? null : settings.openTime,
         close_time: isHoliday ? null : settings.closeTime,
-        capacity: isHoliday ? null : settings.capacity || null, // null if not set
+        capacity: isHoliday ? null : settings.capacity,
       };
     });
 
@@ -416,10 +407,10 @@ const MonthlyReceptionSettingsDetail: React.FC<
 
       if (error) throw error;
 
-      message.success("営業時間が正常に保存されました");
+      message.success("営業時間と受付可能数が正常に保存されました");
     } catch (error) {
       console.error("Error saving business hours:", error);
-      message.error("営業時間の保存中にエラーが発生しました");
+      message.error("営業時間と受付可能数の保存中にエラーが発生しました");
     } finally {
       setIsSubmitting(false);
     }
@@ -436,11 +427,7 @@ const MonthlyReceptionSettingsDetail: React.FC<
             marginBottom: "20px",
           }}
         >
-          {/* 変更点1: タイトルから年月を削除 */}
-          <Title level={3}>
-            {/* サロンの営業時間・受付可能数設定  */}
-            サロンの営業時間設定
-          </Title>
+          <Title level={3}>サロンの営業時間・受付可能数設定</Title>
           <QuestionCircleOutlined style={{ fontSize: "24px" }} />
         </div>
         <Text>
@@ -449,25 +436,23 @@ const MonthlyReceptionSettingsDetail: React.FC<
         <div style={{ margin: "20px 0" }}>
           <Button
             type="primary"
-            size="large" // ボタンを大きくするために size を large に設定
-            style={{ padding: "10px 20px", fontSize: "18px" }} // フォントサイズを18pxに設定
+            size="large"
+            style={{ padding: "10px 20px", fontSize: "18px" }}
             onClick={showBulkInputModal}
           >
             一括入力
           </Button>
           <Text style={{ marginLeft: "10px" }}>
-            {/* 日・期間・曜日を指定して営業時間・受付可能数の一括入力ができます。 */}
-            日・期間・曜日を指定して営業時間の一括入力ができます。
+            日・期間・曜日を指定して営業時間・受付可能数の一括入力ができます。
           </Text>
         </div>
-        {/* 変更点2: 年月表示を追加 */}
         <div
           style={{
             textAlign: "right",
             marginBottom: "10px",
             fontSize: "24px",
             fontWeight: "bold",
-            color: "000000", // Antデザインのプライマリカラー
+            color: "#1890ff",
           }}
         >
           {`${year}年${month}月`}
@@ -486,7 +471,6 @@ const MonthlyReceptionSettingsDetail: React.FC<
             },
           }}
           columns={[
-            // 変更点3: 曜日ヘッダーのスタイルを変更
             {
               title: "日",
               dataIndex: "sun",
@@ -571,7 +555,6 @@ const MonthlyReceptionSettingsDetail: React.FC<
                 },
               }),
             },
-            // ... 火、水、木、金も同様に設定
             {
               title: "土",
               dataIndex: "sat",

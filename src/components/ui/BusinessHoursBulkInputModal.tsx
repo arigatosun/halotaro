@@ -1,15 +1,6 @@
-import React, { useState } from "react";
-import {
-  Modal,
-  Form,
-  Radio,
-  Select,
-  Button,
-  Checkbox,
-  InputNumber,
-  Input,
-} from "antd";
-import moment from "moment";
+import React, { useState } from 'react';
+import { Modal, Form, Input, Select, Checkbox, TimePicker, InputNumber, Button } from 'antd';
+import moment from 'moment';
 
 const { Option } = Select;
 
@@ -20,39 +11,51 @@ interface BusinessHoursBulkInputModalProps {
   currentDate: moment.Moment;
 }
 
-const BusinessHoursBulkInputModal: React.FC<
-  BusinessHoursBulkInputModalProps
-> = ({ visible, onCancel, onSubmit, currentDate }) => {
+const BusinessHoursBulkInputModal: React.FC<BusinessHoursBulkInputModalProps> = ({
+  visible,
+  onCancel,
+  onSubmit,
+  currentDate,
+}) => {
   const [form] = Form.useForm();
-  const [dateType, setDateType] = useState<string>("specific");
-
-  const generateTimeOptions = () => {
-    const options = [];
-    for (let hour = 0; hour < 24; hour++) {
-      for (let minute = 0; minute < 60; minute += 30) {
-        const time = `${hour.toString().padStart(2, "0")}:${minute
-          .toString()
-          .padStart(2, "0")}`;
-        options.push(
-          <Option key={time} value={time}>
-            {time}
-          </Option>
-        );
-      }
-    }
-    return options;
-  };
+  const [isHoliday, setIsHoliday] = useState(false);
 
   const handleSubmit = () => {
     form.validateFields().then((values) => {
+      // 休業日の場合、capacityをnullに設定
+      if (values.isHoliday) {
+        values.capacity = null;
+        values.businessHours = null;
+      } else if (values.businessHours) {
+        // businessHoursの値が配列であることを確認
+        if (Array.isArray(values.businessHours) && values.businessHours.length === 2) {
+          values.businessHours = {
+            start: values.businessHours[0].format('HH:mm'),
+            end: values.businessHours[1].format('HH:mm')
+          };
+        } else {
+          // 値が期待通りでない場合はエラーを表示
+          return;
+        }
+      }
       onSubmit(values);
       form.resetFields();
     });
   };
 
+  const handleHolidayChange = (checked: boolean) => {
+    setIsHoliday(checked);
+    if (checked) {
+      form.setFieldsValue({
+        businessHours: null,
+        capacity: null,
+      });
+    }
+  };
+
   return (
     <Modal
-      title="一括入力"
+      title="営業時間・受付可能数の一括入力"
       open={visible}
       onCancel={onCancel}
       footer={[
@@ -66,69 +69,88 @@ const BusinessHoursBulkInputModal: React.FC<
       width={800}
     >
       <Form form={form} layout="vertical">
-        <Form.Item name="dateType" label="日を指定">
-          <Radio.Group onChange={(e) => setDateType(e.target.value)}>
-            <Radio value="specific">日付</Radio>
-            <Radio value="range">期間</Radio>
-            <Radio value="weekday">曜日</Radio>
-            <Radio value="everyday">毎日</Radio>
-          </Radio.Group>
+        <Form.Item
+          name="dateType"
+          label="日付の選択方法"
+          rules={[{ required: true, message: '日付の選択方法を選んでください' }]}
+        >
+          <Select>
+            <Option value="specific">特定の日付</Option>
+            <Option value="range">期間</Option>
+            <Option value="weekday">曜日</Option>
+            <Option value="everyday">毎日</Option>
+          </Select>
         </Form.Item>
 
-        {dateType === "specific" && (
-          <Form.Item name="specificDates" label="日付を選択">
-            <Select mode="multiple" style={{ width: "100%" }}>
-              {[...Array(currentDate.daysInMonth())].map((_, index) => (
-                <Option key={index + 1} value={index + 1}>
-                  {index + 1}日
-                </Option>
-              ))}
-            </Select>
-          </Form.Item>
-        )}
-
-        {dateType === "range" && (
-          <Form.Item label="期間を選択">
-            <Input.Group compact>
-              <Form.Item name={["range", "start"]} noStyle>
-                <Select style={{ width: 120 }}>
-                  {[...Array(currentDate.daysInMonth())].map((_, index) => (
-                    <Option key={index + 1} value={index + 1}>
-                      {index + 1}日
-                    </Option>
-                  ))}
-                </Select>
-              </Form.Item>
-              <span style={{ padding: "0 8px" }}>から</span>
-              <Form.Item name={["range", "end"]} noStyle>
-                <Select style={{ width: 120 }}>
-                  {[...Array(currentDate.daysInMonth())].map((_, index) => (
-                    <Option key={index + 1} value={index + 1}>
-                      {index + 1}日
-                    </Option>
-                  ))}
-                </Select>
-              </Form.Item>
-            </Input.Group>
-          </Form.Item>
-        )}
-
-        {dateType === "weekday" && (
-          <Form.Item name="weekdays" label="曜日を選択">
-            <Checkbox.Group>
-              <Checkbox value="日曜">日曜</Checkbox>
-              <Checkbox value="月曜">月曜</Checkbox>
-              <Checkbox value="火曜">火曜</Checkbox>
-              <Checkbox value="水曜">水曜</Checkbox>
-              <Checkbox value="木曜">木曜</Checkbox>
-              <Checkbox value="金曜">金曜</Checkbox>
-              <Checkbox value="土曜">土曜</Checkbox>
-            </Checkbox.Group>
-          </Form.Item>
-        )}
+        <Form.Item
+          noStyle
+          shouldUpdate={(prevValues, currentValues) => prevValues.dateType !== currentValues.dateType}
+        >
+          {({ getFieldValue }) => {
+            const dateType = getFieldValue('dateType');
+            switch (dateType) {
+              case 'specific':
+                return (
+                  <Form.Item
+                    name="specificDates"
+                    label="日付"
+                    rules={[{ required: true, message: '日付を入力してください' }]}
+                  >
+                    <Input placeholder="例: 1,5,10,15" />
+                  </Form.Item>
+                );
+              case 'range':
+                return (
+                  <Form.Item label="期間" required>
+                    <Input.Group compact>
+                      <Form.Item
+                        name={['range', 'start']}
+                        noStyle
+                        rules={[{ required: true, message: '開始日を入力してください' }]}
+                      >
+                        <InputNumber min={1} max={31} placeholder="開始日" style={{ width: '45%' }} />
+                      </Form.Item>
+                      <Input
+                        style={{ width: '10%', borderLeft: 0, pointerEvents: 'none', backgroundColor: '#fff' }}
+                        placeholder="~"
+                        disabled
+                      />
+                      <Form.Item
+                        name={['range', 'end']}
+                        noStyle
+                        rules={[{ required: true, message: '終了日を入力してください' }]}
+                      >
+                        <InputNumber min={1} max={31} placeholder="終了日" style={{ width: '45%' }} />
+                      </Form.Item>
+                    </Input.Group>
+                  </Form.Item>
+                );
+              case 'weekday':
+                return (
+                  <Form.Item
+                    name="weekdays"
+                    label="曜日"
+                    rules={[{ required: true, message: '曜日を選択してください' }]}
+                  >
+                    <Select mode="multiple">
+                      <Option value="日曜">日曜</Option>
+                      <Option value="月曜">月曜</Option>
+                      <Option value="火曜">火曜</Option>
+                      <Option value="水曜">水曜</Option>
+                      <Option value="木曜">木曜</Option>
+                      <Option value="金曜">金曜</Option>
+                      <Option value="土曜">土曜</Option>
+                    </Select>
+                  </Form.Item>
+                );
+              default:
+                return null;
+            }
+          }}
+        </Form.Item>
 
         <Form.Item name="isHoliday" valuePropName="checked">
-          <Checkbox>休業日</Checkbox>
+          <Checkbox onChange={(e) => handleHolidayChange(e.target.checked)}>休業日</Checkbox>
         </Form.Item>
 
         <Form.Item
@@ -140,23 +162,18 @@ const BusinessHoursBulkInputModal: React.FC<
           {({ getFieldValue }) =>
             !getFieldValue("isHoliday") && (
               <>
-                {/* <Form.Item name="capacity" label="受付可能数を指定">
-                  <InputNumber min={1} />
-                </Form.Item> */}
-                <Form.Item label="営業時間を指定">
-                  <Input.Group compact>
-                    <Form.Item name={["businessHours", "start"]} noStyle>
-                      <Select style={{ width: 120 }}>
-                        {generateTimeOptions()}
-                      </Select>
-                    </Form.Item>
-                    <span style={{ padding: "0 8px" }}>から</span>
-                    <Form.Item name={["businessHours", "end"]} noStyle>
-                      <Select style={{ width: 120 }}>
-                        {generateTimeOptions()}
-                      </Select>
-                    </Form.Item>
-                  </Input.Group>
+                <Form.Item name="capacity" label="受付可能数を指定">
+                  <InputNumber min={1} max={999} />
+                </Form.Item>
+                <Form.Item
+                  name="businessHours"
+                  label="営業時間を指定"
+                  rules={[{ required: true, message: '営業時間を入力してください' }]}
+                >
+                  <TimePicker.RangePicker 
+                    format="HH:mm"
+                    placeholder={['開始時間', '終了時間']}
+                  />
                 </Form.Item>
               </>
             )
