@@ -68,6 +68,8 @@ const StyledFullCalendar = styled(FullCalendar)<CalendarOptions>(
       alignItems: "center",
       justifyContent: "center",
       cursor: "pointer",
+      opacity: "0.9", // 重複時の透明度を設定
+      zIndex: "auto", // z-indexを自動設定に変更
     },
     "& .fc-timeline-event *": {
       height: "100% !important",
@@ -344,7 +346,8 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
           scrollTimeReset={false}
           viewDidMount={handleViewDidMount}
           eventDisplay="block"
-          eventOverlap={false}
+          eventOverlap={true} 
+          selectOverlap={true} // 選択の重複を許可
           selectMinDistance={10}
           eventDidMount={(info) => {
             const reservation = info.event.extendedProps as Reservation;

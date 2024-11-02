@@ -150,15 +150,17 @@ async function handlePostReservationProcesses(
       reservationId: reservation.id,
     };
 
-    // 予約完了メールを送信
+    // 予約完了メールを送信（コメントアウト）
+    /*
     await sendReservationEmails(
       customerInfo,
       reservationDetails,
       recipientEmails,
       baseUrl
     );
+    */
 
-    console.log("Emails sent successfully");
+    console.log("Emails sent successfully (skipped)");
   } catch (emailError) {
     console.error("Error sending emails:", emailError);
     // エラーを記録しますが、予約プロセスは中断しません
@@ -200,7 +202,8 @@ async function handlePostReservationProcesses(
         },
       });
 
-      // 同期エラーメールを送信
+      // 同期エラーメールを送信（コメントアウト）
+      
       const recipientEmails = await getRecipientEmails(userId);
       const formattedReservationData = {
         customerName: reservation.customer_name,
@@ -213,6 +216,7 @@ async function handlePostReservationProcesses(
         automationResponse.error,
         formattedReservationData
       );
+      
     }
   } catch (error: any) {
     console.error("Error in sendReservationToAutomation:", error);
@@ -227,7 +231,8 @@ async function handlePostReservationProcesses(
       },
     });
 
-    // 同期エラーメールを送信
+    // 同期エラーメールを送信（コメントアウト）
+    
     const recipientEmails = await getRecipientEmails(userId);
     const formattedReservationData = {
       customerName: reservation.customer_name,
@@ -240,6 +245,7 @@ async function handlePostReservationProcesses(
       error.message,
       formattedReservationData
     );
+    
   }
 }
 
@@ -292,7 +298,8 @@ async function handlePostStaffScheduleProcesses(
       },
     });
 
-    // 同期エラーメールを送信
+    // 同期エラーメールを送信（コメントアウト）
+    
     const recipientEmails = await getRecipientEmails(userId);
     const formattedReservationData = {
       customerName: reservation.customer_name,
@@ -305,6 +312,7 @@ async function handlePostStaffScheduleProcesses(
       error.message,
       formattedReservationData
     );
+    
   }
 }
 
@@ -719,14 +727,14 @@ export async function POST(request: Request) {
         // フォーマット処理
         const formattedReservation = formatReservation(newReservation);
 
-        // メール送信と自動化システムの処理を実行
+        // メール送信と自動化システムの処理を実行（メール送信部分をコメントアウト）
         handlePostReservationProcesses(authResult.user.id, formattedReservation).catch(
           (error) => {
             console.error("Error in post-processing:", error);
             // 必要に応じてエラーハンドリング
           }
         );
-      
+
         // レスポンスを返す
         return NextResponse.json(formattedReservation);
       } catch (error: any) {
@@ -922,7 +930,7 @@ export async function PUT(request: Request) {
     // フォーマット処理
     const formattedReservation = formatReservation(updatedReservation);
 
-    // メール送信と自動化システムの処理を実行
+    // メール送信と自動化システムの処理を実行（メール送信部分をコメントアウト）
     handlePostReservationProcesses(
       authResult.user.id,
       formattedReservation,

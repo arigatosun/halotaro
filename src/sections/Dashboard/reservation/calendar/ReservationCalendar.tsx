@@ -226,33 +226,13 @@ const ReservationCalendar: React.FC = () => {
   // イベントドロップハンドラ
   const handleEventDrop = async (dropInfo: EventDropArg) => {
     if (!user) return;
-
+  
     const eventData = dropInfo.event.extendedProps as Reservation;
-    const isStaffSchedule = eventData.is_staff_schedule;
     const newStart = dropInfo.event.start;
     const newEnd = dropInfo.event.end;
-    const staffId =
-      dropInfo.newResource?.id || dropInfo.event.getResources()[0]?.id;
+    const staffId = dropInfo.newResource?.id || dropInfo.event.getResources()[0]?.id;
     const reservationId = eventData.id;
-
-    // 重複チェック
-    if (
-      isSlotOverlapping(
-        newStart,
-        newEnd,
-        staffId,
-        reservationId,
-        isStaffSchedule
-      )
-    ) {
-      dropInfo.revert();
-      setSnackbar({
-        message: "この時間帯は既に予約が入っています",
-        severity: "error",
-      });
-      return;
-    }
-
+  
     try {
       // 更新データの準備
       const updatedReservation = {
@@ -273,7 +253,7 @@ const ReservationCalendar: React.FC = () => {
         event: eventData.event,
         is_hair_sync: eventData.is_hair_sync,
       };
-
+  
       // APIリクエスト
       const response = await fetch("/api/calendar-data", {
         method: "PUT",
@@ -283,25 +263,25 @@ const ReservationCalendar: React.FC = () => {
         },
         body: JSON.stringify(updatedReservation),
       });
-
+  
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.message || "Failed to update reservation");
       }
-
+  
       const updatedData = await response.json();
-
+  
       // ローカルの予約データを更新
       setReservations((prevReservations) =>
         prevReservations.map((res) =>
           res.id === updatedData.id ? { ...res, ...updatedData } : res
         )
       );
-
+  
       const message = eventData.is_staff_schedule
         ? "スタッフスケジュールが更新されました"
         : "予約が更新されました";
-
+  
       setSnackbar({ message, severity: "success" });
     } catch (error) {
       console.error("Error in handleEventDrop:", error);
