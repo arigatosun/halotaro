@@ -62,17 +62,11 @@ function formatReservation(reservation: any) {
       reservation.reservation_customers?.name_kana || "Unknown",
     menu_name: reservation.menu_items?.name || "Unknown",
     staff_name: reservation.staff?.name || "Unknown",
-    start_time: moment
-      .utc(reservation.start_time)
-      .tz("Asia/Tokyo")
-      .format("YYYY-MM-DDTHH:mm"),
-    end_time: moment
-      .utc(reservation.end_time)
-      .tz("Asia/Tokyo")
-      .format("YYYY-MM-DDTHH:mm"),
+    start_time: moment.utc(reservation.start_time).toISOString(),
+    end_time: moment.utc(reservation.end_time).toISOString(),
     is_staff_schedule: reservation.is_staff_schedule || false,
     editable: reservation.is_staff_schedule === true,
-    is_hair_sync: reservation.is_hair_sync || false, // この行を修正
+    is_hair_sync: reservation.is_hair_sync || false,
   };
 }
 

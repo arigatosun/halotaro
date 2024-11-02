@@ -1,5 +1,5 @@
-// src/sections/Dashboard/reservation/calendar/ReservationForm.tsx
-
+// ReservationForm.tsx
+// ReservationForm.tsx
 import React, { useState, useEffect } from "react";
 import {
   Dialog,
@@ -48,6 +48,7 @@ interface ReservationFormProps {
   hideReservationType?: boolean;
   isCreatingFromButton?: boolean;
   businessHours: BusinessHour[];
+  // setDateRange を削除しました
 }
 
 const ReservationForm: React.FC<ReservationFormProps> = ({
@@ -62,6 +63,7 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
   businessHours,
   hideReservationType = false,
   isCreatingFromButton = false,
+  // setDateRange を削除しました
 }) => {
   const [formType, setFormType] = useState<"reservation" | "staffSchedule">(
     "reservation"
@@ -159,6 +161,8 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
     }
   }, [formData.menu_id, menuList]);
 
+  // setDateRange の更新は削除
+
   useEffect(() => {
     if (
       selectedDate &&
@@ -166,19 +170,15 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
       formData.menu_id &&
       formType === "reservation"
     ) {
-      const selectedMenu = menuList.find(
-        (menu) => menu.id === formData.menu_id
-      );
+      const selectedMenu = menuList.find((menu) => menu.id === formData.menu_id);
       if (selectedMenu) {
         const menuDuration = selectedMenu.duration;
         const staffId = formData.staff_id;
         const dateStr = moment(selectedDate).format("YYYY-MM-DD");
-
-        let businessHourForDate = businessHours.find(
-          (bh) => bh.date === dateStr
-        );
+  
+        // 営業時間の取得
+        let businessHourForDate = businessHours.find((bh) => bh.date === dateStr);
         if (!businessHourForDate) {
-          // デフォルトの営業時間を使用
           const isWeekend = [0, 6].includes(moment(dateStr).day());
           businessHourForDate = {
             date: dateStr,
@@ -187,52 +187,57 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
             is_holiday: false,
           };
         }
-
+  
         if (businessHourForDate.is_holiday) {
           setAvailableTimes([]);
           return;
         }
-
-        const openingTime = moment(
-          `${dateStr} ${businessHourForDate.open_time}`,
-          "YYYY-MM-DD HH:mm:ss"
-        );
-        const closingTime = moment(
-          `${dateStr} ${businessHourForDate.close_time}`,
-          "YYYY-MM-DD HH:mm:ss"
-        );
-
+  
+        // 営業時間の設定
+        const openingTime = moment(`${dateStr} ${businessHourForDate.open_time}`, "YYYY-MM-DD HH:mm:ss");
+        const closingTime = moment(`${dateStr} ${businessHourForDate.close_time}`, "YYYY-MM-DD HH:mm:ss");
+  
+        // 30分単位のタイムスロット生成
         const timeSlots = [];
         let currentTime = openingTime.clone();
         while (currentTime.isBefore(closingTime)) {
           timeSlots.push(currentTime.format("HH:mm"));
           currentTime.add(30, "minutes");
         }
-
-        const available: string[] = [];
-
-        timeSlots.forEach((time) => {
+  
+        // 予約可能な時間帯を特定
+        const available = timeSlots.filter(time => {
           const start = moment(`${dateStr} ${time}`, "YYYY-MM-DD HH:mm");
           const end = start.clone().add(menuDuration, "minutes");
-
-          if (end.isAfter(closingTime)) return;
-
-          const overlapping = reservations.some((res) => {
+  
+          // 営業時間外の場合は除外
+          if (end.isAfter(closingTime)) return false;
+  
+          // 既存予約との重複チェック
+          return !reservations.some(res => {
+            // 異なるスタッフの予約は無視
             if (res.staff_id !== staffId) return false;
-            if (res.status === "cancelled" || res.status === "completed")
+            
+            // キャンセル済み予約は無視
+            if (res.status && ['cancelled', 'salon_cancelled', 'same_day_cancelled', 'no_show'].includes(res.status)) {
               return false;
-
+            }
+  
             const resStart = moment.utc(res.start_time).local();
             const resEnd = moment.utc(res.end_time).local();
-
-            return start.isBefore(resEnd) && end.isAfter(resStart);
+            
+            // 同じ日付の予約のみチェック
+            if (resStart.format('YYYY-MM-DD') !== dateStr) return false;
+  
+            // 時間の重複チェック
+            return (
+              (start.isSameOrAfter(resStart) && start.isBefore(resEnd)) ||
+              (end.isAfter(resStart) && end.isSameOrBefore(resEnd)) ||
+              (start.isBefore(resStart) && end.isAfter(resEnd))
+            );
           });
-
-          if (!overlapping) {
-            available.push(time);
-          }
         });
-
+  
         setAvailableTimes(available);
       }
     } else {
@@ -242,7 +247,7 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
     selectedDate,
     formData.staff_id,
     formData.menu_id,
-    reservations,
+    reservations,  // reservationsの変更を監視
     menuList,
     businessHours,
     formType,
@@ -550,20 +555,19 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
                     <div className="space-y-2 col-span-2">
                       <Label>予約可能な時間帯</Label>
                       <div className="grid grid-cols-6 gap-2 max-h-24 overflow-y-auto">
-  {availableTimes.map((time) => (
-    <Button
-      type="button"
-      key={time}
-      variant={
-        selectedTimeSlot === time ? "default" : "outline"
-      }
-      onClick={() => setSelectedTimeSlot(time)}
-    >
-      {time}
-    </Button>
-  ))}
-</div>
-
+                        {availableTimes.map((time) => (
+                          <Button
+                            type="button"
+                            key={time}
+                            variant={
+                              selectedTimeSlot === time ? "default" : "outline"
+                            }
+                            onClick={() => setSelectedTimeSlot(time)}
+                          >
+                            {time}
+                          </Button>
+                        ))}
+                      </div>
                     </div>
                   ) : selectedDate && formData.staff_id && formData.menu_id ? (
                     <p>この日に予約可能な時間帯はありません。</p>

@@ -175,6 +175,13 @@ const ReservationCalendar: React.FC = () => {
 
   // 新規予約クリックハンドラ
   const handleAddReservation = () => {
+    // 現在表示中の予約情報をフィルタリングして渡す
+    const currentDateStr = currentDate.format('YYYY-MM-DD');
+    const relevantReservations = reservations.filter(res => {
+      const resDate = moment(res.start_time).format('YYYY-MM-DD');
+      return resDate === currentDateStr;
+    });
+  
     setSelectedReservation(null);
     setIsNewReservation(true);
     setIsFormOpen(true);
@@ -761,20 +768,21 @@ const ReservationCalendar: React.FC = () => {
 
       {/* 予約フォームモーダル */}
       {isFormOpen && (
-        <ReservationForm
-          reservation={selectedReservation}
-          isNew={isNewReservation}
-          onClose={() => setIsFormOpen(false)}
-          onSubmit={handleFormSubmit}
-          onDelete={handleDeleteReservation}
-          staffList={sortedStaffList}
-          menuList={menuList}
-          reservations={reservations}
-          hideReservationType={isCreatingFromButton}
-          isCreatingFromButton={isCreatingFromButton}
-          businessHours={businessHours}
-        />
-      )}
+      <ReservationForm
+        reservation={selectedReservation}
+        isNew={isNewReservation}
+        onClose={() => setIsFormOpen(false)}
+        onSubmit={handleFormSubmit}
+        onDelete={handleDeleteReservation}
+        staffList={sortedStaffList}
+        menuList={menuList}
+        reservations={reservations}
+        hideReservationType={isCreatingFromButton}
+        isCreatingFromButton={isCreatingFromButton}
+        businessHours={businessHours}
+        
+      />
+    )}
 
       {/* スタッフスケジュールフォームモーダル */}
       {isStaffScheduleFormOpen && (
