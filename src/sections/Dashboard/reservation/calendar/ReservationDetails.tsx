@@ -35,7 +35,8 @@ const ReservationDetails: React.FC<ReservationDetailsProps> = ({ reservation, on
   }, [reservation.start_time]);
 
   const handleCancelReservation = () => {
-    const cancellationType = buttonText === '無断キャンセル' ? 'no_show' : 'salon_cancellation';
+    // キャンセル種別を修正（API側のステータスと合わせる）
+    const cancellationType = buttonText === '無断キャンセル' ? 'no_show' : 'salon_cancelled';
     onCancel(reservation.id!, cancellationType);
   };
 

@@ -465,53 +465,56 @@ const ReservationCalendar: React.FC = () => {
   };
 
   // 予約削除ハンドラ（キャンセル処理）
-  const handleDeleteReservation = async (id: string) => {
-    if (!session || !user) {
-      setSnackbar({
-        message: "セッションが無効です。再度ログインしてください。",
-        severity: "error",
-      });
-      return;
+  // ReservationCalendar.tsx の handleDeleteReservation 関数を修正
+
+const handleDeleteReservation = async (id: string, cancellationType: string) => {
+  if (!session || !user) {
+    setSnackbar({
+      message: "セッションが無効です。再度ログインしてください。",
+      severity: "error",
+    });
+    return;
+  }
+
+  try {
+    const response = await fetch(`/api/calendar-data?id=${id}`, {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+      },
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error("Error cancelling reservation:", errorData);
+      throw new Error("予約のキャンセルに失敗しました");
     }
 
-    try {
-      // キャンセルAPIを呼び出す
-      const response = await fetch("/api/cancel-reservation", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({
-          reservationId: id,
-          cancellationType: "cancelled",
-        }),
-      });
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error("Error cancelling reservation:", errorData);
-        throw new Error("予約のキャンセルに失敗しました");
-      }
+    const data = await response.json();
 
+    if (data.success) {
       // ローカルの予約データを更新
       setReservations((prevReservations) =>
         prevReservations.filter((res) => res.id !== id)
       );
-
       setIsFormOpen(false);
       setIsDetailsOpen(false);
+      setIsEditFormOpen(false); // 編集フォームも閉じる
       setSnackbar({
         message: "予約がキャンセルされました",
         severity: "success",
       });
-    } catch (error) {
-      console.error("Error in handleDeleteReservation:", error);
-      setSnackbar({
-        message: "予約のキャンセルに失敗しました",
-        severity: "error",
-      });
+    } else {
+      throw new Error("予約のキャンセルに失敗しました");
     }
-  };
+  } catch (error) {
+    console.error("Error in handleDeleteReservation:", error);
+    setSnackbar({
+      message: "予約のキャンセルに失敗しました",
+      severity: "error",
+    });
+  }
+};
 
   // スタッフスケジュール追加ボタンハンドラ
   const handleAddStaffSchedule = () => {

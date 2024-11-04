@@ -21,7 +21,8 @@ interface ReservationEditFormProps {
   reservation: Reservation;
   onClose: () => void;
   onSubmit: (data: Partial<Reservation>) => void;
-  onDelete: (id: string) => void;
+  // キャンセル種別を受け取れるように修正
+  onDelete: (id: string, cancellationType: string) => void;
   staffList: Staff[];
   menuList: MenuItemType[];
   reservations: Reservation[];
@@ -208,11 +209,26 @@ const ReservationEditForm: React.FC<ReservationEditFormProps> = ({
     }
   };
 
+  // handleDelete関数を修正
   const handleDelete = async () => {
     if (window.confirm('この予約をキャンセルしますか？')) {
-      if (editingFormData.id) {
-        await onDelete(editingFormData.id);
-        onClose();
+      if (editingFormData.id && editingFormData.start_time) {
+        try {
+          const now = moment();
+          const startTime = moment(editingFormData.start_time);
+          
+          // 予約時間が過ぎているかどうかでキャンセル種別を決定
+          const cancellationType = now.isAfter(startTime) ? 'no_show' : 'salon_cancelled';
+          
+          await onDelete(editingFormData.id, cancellationType);
+          onClose();
+        } catch (error) {
+          console.error('Error cancelling reservation:', error);
+          setSnackbar({
+            message: '予約のキャンセルに失敗しました',
+            severity: 'error'
+          });
+        }
       }
     }
   };

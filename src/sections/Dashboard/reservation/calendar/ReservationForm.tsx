@@ -41,14 +41,14 @@ interface ReservationFormProps {
   isNew: boolean;
   onClose: () => void;
   onSubmit: (data: Partial<Reservation>, isNew: boolean) => void;
-  onDelete: (id: string) => void;
+  // onDeleteの型を更新
+  onDelete: (id: string, cancellationType: string) => void;
   staffList: Staff[];
   menuList: MenuItemType[];
   reservations: Reservation[];
   hideReservationType?: boolean;
   isCreatingFromButton?: boolean;
   businessHours: BusinessHour[];
-  // setDateRange を削除しました
 }
 
 const ReservationForm: React.FC<ReservationFormProps> = ({
@@ -322,10 +322,24 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
   };
 
   const handleDelete = () => {
-    if (window.confirm("この予約をキャンセルしますか？")) {
-      if (formData.id) {
-        onDelete(formData.id);
-        onClose();
+    if (window.confirm('この予約をキャンセルしますか？')) {
+      if (formData.id && formData.start_time) {
+        try {
+          const now = moment();
+          const startTime = moment(formData.start_time);
+          
+          // 予約時間が過ぎているかどうかでキャンセル種別を決定
+          const cancellationType = now.isAfter(startTime) ? 'no_show' : 'salon_cancelled';
+          
+          onDelete(formData.id, cancellationType);
+          onClose();
+        } catch (error) {
+          console.error('Error cancelling reservation:', error);
+          setSnackbar({
+            message: '予約のキャンセルに失敗しました',
+            severity: 'error'
+          });
+        }
       }
     }
   };
