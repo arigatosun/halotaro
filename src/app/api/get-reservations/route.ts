@@ -3,6 +3,8 @@ import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
 import { cookies } from "next/headers";
 import { getReservations } from "@/app/actions/reservationActions";
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   const supabase = createRouteHandlerClient({ cookies });
 

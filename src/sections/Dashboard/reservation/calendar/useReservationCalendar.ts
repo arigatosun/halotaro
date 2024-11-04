@@ -43,8 +43,15 @@ const useReservationCalendar = (): UseReservationCalendarReturn => {
     if (!session || !user || !dateRange) return;
 
     try {
+      // userId をクエリパラメータとして追加
+      const queryParams = new URLSearchParams({
+        startDate: dateRange.start,
+        endDate: dateRange.end,
+        userId: user.id
+      });
+
       const response = await fetch(
-        `/api/calendar-data?startDate=${dateRange.start}&endDate=${dateRange.end}`,
+        `/api/calendar-data?${queryParams.toString()}`,
         {
           headers: {
             'Authorization': `Bearer ${session.access_token}`,
@@ -52,24 +59,33 @@ const useReservationCalendar = (): UseReservationCalendarReturn => {
           cache: 'no-store',
         }
       );
+
       if (!response.ok) {
         const errorData = await response.json();
         console.error('Error fetching data:', errorData);
         throw new Error('Failed to fetch data');
       }
+
       const data = await response.json();
+      
+      // デバッグログ
       console.log('Loaded data:', data);
+      console.log('メニューデータ:', data.menuList);
+      console.log('スタッフデータ:', data.staffList);
+
+      // 各データをステートに設定
       setReservations(data.reservations);
       setStaffList(data.staffList);
       setMenuList(data.menuList);
       setClosedDays(data.closedDays || []);
       setBusinessHours(data.businessHours || []);
 
-      // staffList の確認
-      console.log('スタッフデータ:', data.staffList);
     } catch (error) {
       console.error('Error in loadData:', error);
-      setSnackbar({ message: 'データの取得に失敗しました', severity: 'error' });
+      setSnackbar({ 
+        message: 'データの取得に失敗しました', 
+        severity: 'error' 
+      });
     }
   };
 

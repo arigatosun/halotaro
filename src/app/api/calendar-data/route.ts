@@ -365,15 +365,16 @@ export async function GET(request: Request) {
     }
 
     // メニューリストの取得
-    const { data: menuList, error: menuError } = await supabase
-      .from("menu_items")
-      .select("id, name, duration, price")
-      .order("name", { ascending: true });
+const { data: menuList, error: menuError } = await supabase
+.from("menu_items")
+.select("id, name, duration, price")
+.eq("user_id", userId)  // ユーザーIDでフィルタリング
+.order("name", { ascending: true });
 
-    if (menuError) {
-      console.error("Error fetching menu list:", menuError);
-      return NextResponse.json({ error: menuError.message }, { status: 500 });
-    }
+if (menuError) {
+console.error("Error fetching menu list:", menuError);
+return NextResponse.json({ error: menuError.message }, { status: 500 });
+}
 
     // 表示対象のステータスリスト
     const includedStatuses = ["confirmed", "paid", "staff"];
@@ -969,7 +970,7 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: "ID is required" }, { status: 400 });
     }
 
-    // 予約の取得（is_staff_schedule を含めるように修正）
+    // 予約の取得
     const { data: reservation, error: fetchError } = await supabase
       .from("reservations")
       .select("start_time, is_staff_schedule")
@@ -1040,20 +1041,7 @@ export async function DELETE(request: Request) {
         `Reservation ${reservationId} status updated to ${newStatus}`
       );
 
-      // メール送信と自動化システムの処理を実行
-      // 予約データの詳細を取得する必要がある場合は、追加でデータを取得してください
-      // ここでは既存のデータを使用していると仮定しています
-      const formattedReservation = {
-        id: reservationId,
-        status: newStatus,
-        // 必要に応じて他のフィールドを追加
-      };
-
-      await handlePostReservationProcesses(
-        authResult.user.id,
-        formattedReservation
-      );
-
+      // キャンセル時は自動化プロセスを実行しない
       return NextResponse.json({ success: true, status: newStatus });
     }
   } catch (error: any) {

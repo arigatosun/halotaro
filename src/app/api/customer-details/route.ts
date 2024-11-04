@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 
+export const dynamic = 'force-dynamic';
+
 // 認証チェック関数
 async function checkAuth(request: Request) {
   const supabase = createRouteHandlerClient({ cookies });

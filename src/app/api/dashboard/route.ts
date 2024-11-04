@@ -4,6 +4,8 @@ import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
 
+export const dynamic = 'force-dynamic';
+
 // プラグインを設定
 dayjs.extend(utc);
 dayjs.extend(timezone);
