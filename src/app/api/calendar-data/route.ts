@@ -365,15 +365,16 @@ export async function GET(request: Request) {
     }
 
     // メニューリストの取得
-    const { data: menuList, error: menuError } = await supabase
-      .from("menu_items")
-      .select("id, name, duration, price")
-      .order("name", { ascending: true });
+const { data: menuList, error: menuError } = await supabase
+.from("menu_items")
+.select("id, name, duration, price")
+.eq("user_id", userId)  // ユーザーIDでフィルタリング
+.order("name", { ascending: true });
 
-    if (menuError) {
-      console.error("Error fetching menu list:", menuError);
-      return NextResponse.json({ error: menuError.message }, { status: 500 });
-    }
+if (menuError) {
+console.error("Error fetching menu list:", menuError);
+return NextResponse.json({ error: menuError.message }, { status: 500 });
+}
 
     // 表示対象のステータスリスト
     const includedStatuses = ["confirmed", "paid", "staff"];
