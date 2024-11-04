@@ -9,6 +9,7 @@ import {
   FormControl,
   InputLabel,
   SelectChangeEvent,
+  CircularProgress
 } from "@mui/material";
 import moment from "moment";
 import "moment/locale/ja";
@@ -53,14 +54,11 @@ const ReservationCalendar: React.FC = () => {
     businessHours,
     loadData,
     setReservations,
-    setStaffList,
-    setMenuList,
-    setClosedDays,
-    setBusinessHours,
     dateRange,
     setDateRange,
     snackbar,
     setSnackbar,
+    isLoading, // ローディング状態を取得
   } = useReservationCalendar();
 
   useEffect(() => {
@@ -770,9 +768,25 @@ const ReservationCalendar: React.FC = () => {
     [dateRange, setDateRange, currentDate, setCurrentDate]
   );
 
-  if (!staffList.length || !businessHours.length) {
-    return <div>データを読み込んでいます...</div>;
-  }
+  if (isLoading || !staffList.length || !businessHours.length) {
+    return (
+      <Box 
+        sx={{ 
+          display: 'flex', 
+          justifyContent: 'center', 
+          alignItems: 'center', 
+          height: '80vh',
+          flexDirection: 'column',
+          gap: 2
+        }}
+      >
+        <CircularProgress />
+        <Box sx={{ color: 'text.secondary' }}>
+          データを読み込んでいます...
+        </Box>
+      </Box>
+    );
+}
 
   return (
     <Box sx={{ p: 3, backgroundColor: "background.default" }}>

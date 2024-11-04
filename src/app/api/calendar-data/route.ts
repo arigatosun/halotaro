@@ -98,30 +98,7 @@ export async function GET(request: Request) {
       .utc()
       .format("YYYY-MM-DD HH:mm:ss");
 
-    // スタッフリストの取得（is_published が true のみ）
-    const { data: staffList, error: staffError } = await supabase
-      .from("staff")
-      .select("id, name, schedule_order") // schedule_order を含める
-      .eq("user_id", userId)
-      .eq("is_published", true)
-      .order("schedule_order", { ascending: true }); // schedule_order に基づいてソート
-
-    if (staffError) {
-      console.error("Error fetching staff list:", staffError);
-      return NextResponse.json({ error: staffError.message }, { status: 500 });
-    }
-
-    // メニューリストの取得
-    const { data: menuList, error: menuError } = await supabase
-      .from("menu_items")
-      .select("id, name, duration, price")
-      .eq("user_id", userId) // ユーザーIDでフィルタリング
-      .order("name", { ascending: true });
-
-    if (menuError) {
-      console.error("Error fetching menu list:", menuError);
-      return NextResponse.json({ error: menuError.message }, { status: 500 });
-    }
+   
 
     // 表示対象のステータスリスト
     const includedStatuses = ["confirmed", "paid", "staff"];
@@ -174,8 +151,6 @@ export async function GET(request: Request) {
 
       // 休業日がない場合もレスポンスを返す
       return NextResponse.json({
-        staffList,
-        menuList,
         reservations: formattedReservations,
         closedDays: [],
         businessHours: [],
@@ -248,8 +223,6 @@ export async function GET(request: Request) {
       .map((bh) => bh.date);
 
     return NextResponse.json({
-      staffList,
-      menuList,
       reservations: formattedReservations,
       closedDays,
       businessHours: dateRange,

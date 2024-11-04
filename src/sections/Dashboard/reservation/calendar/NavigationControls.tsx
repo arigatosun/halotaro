@@ -1,3 +1,4 @@
+//NavigationControls.tsx
 import React from 'react';
 import { Box, Typography, Button, useMediaQuery, Theme } from '@mui/material';
 import { PlusCircle, ChevronLeft, ChevronRight } from 'lucide-react';
