@@ -3,15 +3,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
+// force-dynamic を追加して動的ルートであることを明示
+export const dynamic = 'force-dynamic';
+
 const supabase: SupabaseClient = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY! // またはサービスキー
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
 export async function GET(request: NextRequest) {
   try {
     const authHeader = request.headers.get("Authorization");
-
     if (!authHeader) {
       return NextResponse.json(
         { message: "認証情報が提供されていません" },
@@ -20,25 +22,19 @@ export async function GET(request: NextRequest) {
     }
 
     const token = authHeader.replace("Bearer ", "").trim();
-
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser(token);
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
 
     if (authError || !user) {
       return NextResponse.json(
-        { message: "ユーザーの認証に失敗しました" },
+        { message: "認証に失敗しました" },
         { status: 401 }
       );
     }
 
-    const userId = user.id;
-
     const { data, error } = await supabase
       .from("sales_menu_items")
       .select("*")
-      .eq("user_id", userId)
+      .eq("user_id", user.id)
       .order("created_at", { ascending: false });
 
     if (error) throw error;
