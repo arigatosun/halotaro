@@ -32,13 +32,11 @@ moment.locale("ja");
 
 const ReservationCalendar: React.FC = () => {
   const [isNewStaffSchedule, setIsNewStaffSchedule] = useState(false);
-  const [selectedReservation, setSelectedReservation] =
-    useState<Reservation | null>(null);
+  const [selectedReservation, setSelectedReservation] = useState<Reservation | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isNewReservation, setIsNewReservation] = useState(false);
   const [isStaffScheduleFormOpen, setIsStaffScheduleFormOpen] = useState(false);
-  const [selectedStaffSchedule, setSelectedStaffSchedule] =
-    useState<Reservation | null>(null);
+  const [selectedStaffSchedule, setSelectedStaffSchedule] = useState<Reservation | null>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [isEditFormOpen, setIsEditFormOpen] = useState(false);
   const [currentDate, setCurrentDate] = useState(moment());
@@ -348,6 +346,11 @@ const ReservationCalendar: React.FC = () => {
         message: `予約が${isNew ? "作成" : "更新"}されました`,
         severity: "success",
       });
+
+      // ★ 新規予約の場合のみ同期処理を行う
+      if (isNew) {
+        await sendReservationToAutomation(newReservation);
+      }
     } catch (error: any) {
       console.error("handleFormSubmit エラー:", error);
       setSnackbar({
@@ -355,6 +358,78 @@ const ReservationCalendar: React.FC = () => {
         severity: "error",
       });
     }
+  };
+
+  // ★ sendReservationToAutomation 関数の追加
+  const sendReservationToAutomation = async (reservation: Reservation) => {
+    try {
+      if (!reservation.start_time || !reservation.end_time) {
+        throw new Error("予約の開始時間または終了時間が不明です");
+      }
+
+      const startTime = new Date(reservation.start_time);
+      const endTime = new Date(reservation.end_time);
+
+      const duration = (endTime.getTime() - startTime.getTime()) / 1000 / 60; // 分単位
+
+      const rsvTermHour = Math.floor(duration / 60).toString();
+      const rsvTermMinute = (duration % 60).toString();
+
+      const [lastNameKanji, firstNameKanji] = reservation.customer_name
+        ? reservation.customer_name.split(" ")
+        : ["", ""];
+      const [lastNameKana, firstNameKana] = reservation.customer_name_kana
+        ? reservation.customer_name_kana.split(" ")
+        : ["", ""];
+
+      const automationData = {
+        user_id: user?.id ?? '',  // nullチェックを追加
+        date: formatDate(startTime),
+        rsv_hour: startTime.getHours().toString(),
+        rsv_minute: String(startTime.getMinutes()).padStart(2, "0"),
+        staff_name: reservation.staff_name || "",
+        nm_sei_kana: lastNameKana || "",
+        nm_mei_kana: firstNameKana || "",
+        nm_sei: lastNameKanji || "",
+        nm_mei: firstNameKanji || "",
+        rsv_term_hour: rsvTermHour,
+        rsv_term_minute: rsvTermMinute,
+      };
+
+      const FASTAPI_ENDPOINT = "https://f356-34-97-99-223.ngrok-free.app/run-automation";
+
+      const automationResponse = await fetch(FASTAPI_ENDPOINT, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(automationData),
+      });
+
+      const automationResponseData = await automationResponse.json();
+
+      if (!automationResponse.ok) {
+        const errorMessage =
+          automationResponseData.detail ||
+          automationResponseData.error ||
+          "Automation failed";
+        console.error("Automation sync failed:", errorMessage);
+        // 必要に応じてエラーハンドリングやユーザーへの通知を行います
+      } else {
+        console.log("Automation sync successful:", automationResponseData);
+      }
+    } catch (error) {
+      console.error("Error in sendReservationToAutomation:", error);
+      // 必要に応じてエラーハンドリングやユーザーへの通知を行います
+    }
+  };
+
+  // ★ formatDate 関数の追加
+  const formatDate = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}${month}${day}`;
   };
 
   // 予約編集ハンドラ
@@ -465,56 +540,54 @@ const ReservationCalendar: React.FC = () => {
   };
 
   // 予約削除ハンドラ（キャンセル処理）
-  // ReservationCalendar.tsx の handleDeleteReservation 関数を修正
-
-const handleDeleteReservation = async (id: string, cancellationType: string) => {
-  if (!session || !user) {
-    setSnackbar({
-      message: "セッションが無効です。再度ログインしてください。",
-      severity: "error",
-    });
-    return;
-  }
-
-  try {
-    const response = await fetch(`/api/calendar-data?id=${id}`, {
-      method: "DELETE",
-      headers: {
-        Authorization: `Bearer ${session.access_token}`,
-      },
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error("Error cancelling reservation:", errorData);
-      throw new Error("予約のキャンセルに失敗しました");
-    }
-
-    const data = await response.json();
-
-    if (data.success) {
-      // ローカルの予約データを更新
-      setReservations((prevReservations) =>
-        prevReservations.filter((res) => res.id !== id)
-      );
-      setIsFormOpen(false);
-      setIsDetailsOpen(false);
-      setIsEditFormOpen(false); // 編集フォームも閉じる
+  const handleDeleteReservation = async (id: string, cancellationType: string) => {
+    if (!session || !user) {
       setSnackbar({
-        message: "予約がキャンセルされました",
-        severity: "success",
+        message: "セッションが無効です。再度ログインしてください。",
+        severity: "error",
       });
-    } else {
-      throw new Error("予約のキャンセルに失敗しました");
+      return;
     }
-  } catch (error) {
-    console.error("Error in handleDeleteReservation:", error);
-    setSnackbar({
-      message: "予約のキャンセルに失敗しました",
-      severity: "error",
-    });
-  }
-};
+
+    try {
+      const response = await fetch(`/api/calendar-data?id=${id}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error("Error cancelling reservation:", errorData);
+        throw new Error("予約のキャンセルに失敗しました");
+      }
+
+      const data = await response.json();
+
+      if (data.success) {
+        // ローカルの予約データを更新
+        setReservations((prevReservations) =>
+          prevReservations.filter((res) => res.id !== id)
+        );
+        setIsFormOpen(false);
+        setIsDetailsOpen(false);
+        setIsEditFormOpen(false); // 編集フォームも閉じる
+        setSnackbar({
+          message: "予約がキャンセルされました",
+          severity: "success",
+        });
+      } else {
+        throw new Error("予約のキャンセルに失敗しました");
+      }
+    } catch (error) {
+      console.error("Error in handleDeleteReservation:", error);
+      setSnackbar({
+        message: "予約のキャンセルに失敗しました",
+        severity: "error",
+      });
+    }
+  };
 
   // スタッフスケジュール追加ボタンハンドラ
   const handleAddStaffSchedule = () => {
@@ -751,21 +824,20 @@ const handleDeleteReservation = async (id: string, cancellationType: string) => 
 
       {/* 予約フォームモーダル */}
       {isFormOpen && (
-      <ReservationForm
-        reservation={selectedReservation}
-        isNew={isNewReservation}
-        onClose={() => setIsFormOpen(false)}
-        onSubmit={handleFormSubmit}
-        onDelete={handleDeleteReservation}
-        staffList={sortedStaffList}
-        menuList={menuList}
-        reservations={reservations}
-        hideReservationType={isCreatingFromButton}
-        isCreatingFromButton={isCreatingFromButton}
-        businessHours={businessHours}
-        
-      />
-    )}
+        <ReservationForm
+          reservation={selectedReservation}
+          isNew={isNewReservation}
+          onClose={() => setIsFormOpen(false)}
+          onSubmit={handleFormSubmit}
+          onDelete={handleDeleteReservation}
+          staffList={sortedStaffList}
+          menuList={menuList}
+          reservations={reservations}
+          hideReservationType={isCreatingFromButton}
+          isCreatingFromButton={isCreatingFromButton}
+          businessHours={businessHours}
+        />
+      )}
 
       {/* スタッフスケジュールフォームモーダル */}
       {isStaffScheduleFormOpen && (
