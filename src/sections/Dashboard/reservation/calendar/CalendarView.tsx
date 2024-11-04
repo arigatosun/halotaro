@@ -218,30 +218,33 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
       )
       .format("HH:mm:ss");
 
-    const events = [
-      ...reservations
-        .filter(
-          (reservation) =>
-            hasValidStartAndEnd(reservation) && hasStaffId(reservation)
-        )
-        .map((reservation) => ({
-          id: reservation.id,
-          resourceId: reservation.staff_id.toString(),
-          title: reservation.is_staff_schedule
-            ? reservation.event || ""
-            : `${reservation.customer_name || ""} - ${
-                reservation.menu_name || ""
-              }`,
-          start: reservation.start_time,
-          end: reservation.end_time,
-          classNames: reservation.is_staff_schedule
-            ? ["staff-schedule"]
-            : reservation.is_hair_sync
-            ? ["hair-reservation"]
-            : ["customer-reservation"],
-          editable: !reservation.is_closed_day && !reservation.is_staff_schedule && !reservation.is_hair_sync,
-          extendedProps: reservation,
-        })),
+      const events = [
+        ...reservations
+          .filter(
+            (reservation) =>
+              hasValidStartAndEnd(reservation) && hasStaffId(reservation)
+          )
+          .map((reservation) => ({
+            id: reservation.id,
+            resourceId: reservation.staff_id.toString(),
+            title: reservation.is_staff_schedule
+              ? reservation.event || ""
+              : `${reservation.customer_name || ""} - ${
+                  reservation.menu_name || ""
+                }`,
+            start: reservation.start_time,
+            end: reservation.end_time,
+            classNames: reservation.is_staff_schedule
+              ? ["staff-schedule"]
+              : reservation.is_hair_sync
+              ? ["hair-reservation"]
+              : ["customer-reservation"],
+            // スタッフスケジュールも編集可能に修正
+            editable: !reservation.is_closed_day && !reservation.is_hair_sync,
+            // リソース（スタッフ）間の移動を許可
+            resourceEditable: !reservation.is_closed_day && !reservation.is_hair_sync,
+            extendedProps: reservation,
+          })),
       ...businessHours
         .filter((bh) => bh.is_holiday)
         .map((bh) => ({
@@ -314,6 +317,7 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
           selectable={true}
           selectConstraint="businessHours"
           eventConstraint="businessHours"
+          eventResourceEditable={true}
           dragRevertDuration={0}
           select={onDateSelect}
           schedulerLicenseKey="GPL-My-Project-Is-Open-Source"
