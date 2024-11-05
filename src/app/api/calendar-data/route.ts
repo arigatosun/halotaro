@@ -98,30 +98,7 @@ export async function GET(request: Request) {
       .utc()
       .format("YYYY-MM-DD HH:mm:ss");
 
-    // スタッフリストの取得（is_published が true のみ）
-    const { data: staffList, error: staffError } = await supabase
-      .from("staff")
-      .select("id, name, schedule_order") // schedule_order を含める
-      .eq("user_id", userId)
-      .eq("is_published", true)
-      .order("schedule_order", { ascending: true }); // schedule_order に基づいてソート
-
-    if (staffError) {
-      console.error("Error fetching staff list:", staffError);
-      return NextResponse.json({ error: staffError.message }, { status: 500 });
-    }
-
-    // メニューリストの取得
-    const { data: menuList, error: menuError } = await supabase
-      .from("menu_items")
-      .select("id, name, duration, price")
-      .eq("user_id", userId) // ユーザーIDでフィルタリング
-      .order("name", { ascending: true });
-
-    if (menuError) {
-      console.error("Error fetching menu list:", menuError);
-      return NextResponse.json({ error: menuError.message }, { status: 500 });
-    }
+   
 
     // 表示対象のステータスリスト
     const includedStatuses = ["confirmed", "paid", "staff"];
@@ -174,8 +151,6 @@ export async function GET(request: Request) {
 
       // 休業日がない場合もレスポンスを返す
       return NextResponse.json({
-        staffList,
-        menuList,
         reservations: formattedReservations,
         closedDays: [],
         businessHours: [],
@@ -248,8 +223,6 @@ export async function GET(request: Request) {
       .map((bh) => bh.date);
 
     return NextResponse.json({
-      staffList,
-      menuList,
       reservations: formattedReservations,
       closedDays,
       businessHours: dateRange,
@@ -322,63 +295,54 @@ export async function POST(request: Request) {
           );
         }
 
-        // スタッフスケジュールの場合、顧客関連フィールドは除外
-        const insertData: Partial<Reservation> = {
-          user_id: authResult.user.id,
-          staff_id: staff_id || undefined,
-          start_time: start_time
-            ? moment.utc(start_time).format("YYYY-MM-DD HH:mm:ss")
-            : undefined,
-          end_time: end_time
-            ? moment.utc(end_time).format("YYYY-MM-DD HH:mm:ss")
-            : undefined,
-          status: "staff",
-          total_price: 0,
-          is_staff_schedule: true,
-          event: event || "予定あり",
-          // 顧客関連フィールドはスタッフスケジュールには不要
-        };
+// 重要: クライアントから受け取った時間をJSTとして解釈し、UTCに変換
+const utcStartTime = moment.tz(start_time, "Asia/Tokyo").utc().format();
+const utcEndTime = moment.tz(end_time, "Asia/Tokyo").utc().format();
 
-        console.log("Inserting staff schedule:", insertData); // 挿入前のデータログ
+const insertData: Partial<Reservation> = {
+  user_id: authResult.user.id,
+  staff_id: staff_id || undefined,
+  start_time: utcStartTime,
+  end_time: utcEndTime,
+  status: "staff",
+  total_price: 0,
+  is_staff_schedule: true,
+  event: event || "予定あり",
+};
 
-        const { data: newSchedule, error: scheduleError } = await supabase
-          .from("reservations")
-          .insert(insertData)
-          .select(
-            `
-            *,
-            reservation_customers!fk_customer (
-              id, name, email, phone, name_kana
-            ),
-            menu_items (id, name, duration, price),
-            staff (id, name)
-          `
-          )
-          .single();
+console.log("Inserting staff schedule:", insertData);
 
-        if (scheduleError) {
-          console.error("Error creating staff schedule:", scheduleError);
-          return NextResponse.json(
-            { error: scheduleError.message },
-            { status: 500 }
-          );
-        }
+const { data: newSchedule, error: scheduleError } = await supabase
+  .from("reservations")
+  .insert(insertData)
+  .select(
+    `
+    *,
+    reservation_customers!fk_customer (
+      id, name, email, phone, name_kana
+    ),
+    menu_items (id, name, duration, price),
+    staff (id, name)
+  `
+  )
+  .single();
 
-        // 予約データのフォーマット
-        const formattedSchedule = formatReservation(newSchedule);
+if (scheduleError) {
+  console.error("Error creating staff schedule:", scheduleError);
+  return NextResponse.json(
+    { error: scheduleError.message },
+    { status: 500 }
+  );
+}
 
-        // スタッフスケジュール挿入後の追加処理は不要
-
-        return NextResponse.json(formattedSchedule);
-      } catch (error: any) {
-        console.error(
-          "Unexpected error during staff schedule creation:",
-          error
-        );
-        return NextResponse.json(
-          { error: "An unexpected error occurred" },
-          { status: 500 }
-        );
+const formattedSchedule = formatReservation(newSchedule);
+return NextResponse.json(formattedSchedule);
+} catch (error: any) {
+console.error("Unexpected error during staff schedule creation:", error);
+return NextResponse.json(
+  { error: "An unexpected error occurred" },
+  { status: 500 }
+);
       }
     } else {
       // 通常の予約作成時に create_reservation を使用
@@ -584,9 +548,17 @@ export async function PUT(request: Request) {
     for (const field of fieldsToUpdate) {
       if (updateFields[field] !== undefined) {
         if (field === "start_time" || field === "end_time") {
-          updatedData[field] = updateFields[field]
-            ? moment.utc(updateFields[field]).format("YYYY-MM-DD HH:mm:ss")
-            : undefined;
+          // スタッフスケジュールの場合は特別な処理を行う
+          if (existingReservation.is_staff_schedule) {
+            updatedData[field] = updateFields[field]
+              ? moment.tz(updateFields[field], "Asia/Tokyo").utc().format()
+              : undefined;
+          } else {
+            // 通常の予約は既存の処理を使用
+            updatedData[field] = updateFields[field]
+              ? moment.utc(updateFields[field]).format("YYYY-MM-DD HH:mm:ss")
+              : undefined;
+          }
         } else {
           updatedData[field] = updateFields[field];
         }

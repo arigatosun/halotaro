@@ -1,4 +1,5 @@
 // ReservationCalendar.tsx
+// ReservationCalendar.tsx
 "use client";
 
 import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
@@ -9,6 +10,7 @@ import {
   FormControl,
   InputLabel,
   SelectChangeEvent,
+  CircularProgress, // 追加
 } from "@mui/material";
 import moment from "moment";
 import "moment/locale/ja";
@@ -27,6 +29,8 @@ import { Reservation, Staff } from "@/types/reservation";
 import { useAuth } from "@/contexts/authcontext";
 import FullCalendar from "@fullcalendar/react";
 import { useMediaQuery } from "react-responsive";
+import { AdapterMoment } from '@mui/x-date-pickers/AdapterMoment'; // 追加
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'; // 追加
 
 moment.locale("ja");
 
@@ -42,8 +46,22 @@ const ReservationCalendar: React.FC = () => {
   const [currentDate, setCurrentDate] = useState(moment());
   const [isCreatingFromButton, setIsCreatingFromButton] = useState(false);
   const [selectedStaffId, setSelectedStaffId] = useState<string>("all");
+  const [isUpdating, setIsUpdating] = useState(false); // 更新中かどうかの状態を追加
 
   const isMobile = useMediaQuery({ maxWidth: 767 });
+
+  // 日付変更ハンドラを追加
+  const handleDateChange = (date: moment.Moment | null) => {
+    if (date) {
+      setCurrentDate(date);
+      if (calendarRef.current) {
+        const calendarApi = calendarRef.current.getApi();
+        calendarApi.gotoDate(date.toDate());
+      }
+    }
+  };
+
+  
 
   const {
     reservations,
@@ -53,14 +71,11 @@ const ReservationCalendar: React.FC = () => {
     businessHours,
     loadData,
     setReservations,
-    setStaffList,
-    setMenuList,
-    setClosedDays,
-    setBusinessHours,
     dateRange,
     setDateRange,
     snackbar,
     setSnackbar,
+    isLoading, // ローディング状態を取得
   } = useReservationCalendar();
 
   useEffect(() => {
@@ -186,51 +201,17 @@ const ReservationCalendar: React.FC = () => {
     setIsCreatingFromButton(true);
   };
 
-  // 重複チェック関数
-  const isSlotOverlapping = (
-    start: Date | null,
-    end: Date | null,
-    staffId: string,
-    excludeReservationId?: string,
-    isStaffSchedule?: boolean
-  ): boolean => {
-    if (!start || !end) return false;
-
-    return reservations.some((res) => {
-      if (!res.staff_id || res.staff_id !== staffId) return false;
-      if (excludeReservationId && res.id === excludeReservationId) return false;
-      // キャンセルされた予約を除外
-      const excludedStatuses = [
-        "cancelled",
-        "salon_cancelled",
-        "same_day_cancelled",
-        "no_show",
-      ];
-      if (res.status && excludedStatuses.includes(res.status)) return false;
-
-      // スタッフスケジュールを移動する場合、他のスタッフスケジュールとの重複は無視
-      if (isStaffSchedule && res.is_staff_schedule) return false;
-      // 通常の予約を移動する場合、スタッフスケジュールとの重複を無視するかどうか
-      if (!isStaffSchedule && res.is_staff_schedule) return false;
-
-      const resStart = moment.utc(res.start_time).local();
-      const resEnd = moment.utc(res.end_time).local();
-      const newStart = moment(start).local();
-      const newEnd = moment(end).local();
-      return newStart.isBefore(resEnd) && newEnd.isAfter(resStart);
-    });
-  };
-
   // イベントドロップハンドラ
   const handleEventDrop = async (dropInfo: EventDropArg) => {
     if (!user) return;
-  
+
+    setIsUpdating(true); // 更新開始
+
     const eventData = dropInfo.event.extendedProps as Reservation;
     const newStart = dropInfo.event.start;
     const newEnd = dropInfo.event.end;
     const staffId = dropInfo.newResource?.id || dropInfo.event.getResources()[0]?.id;
-    const reservationId = eventData.id;
-  
+
     try {
       // 更新データの準備
       const updatedReservation = {
@@ -239,19 +220,9 @@ const ReservationCalendar: React.FC = () => {
         end_time: newEnd?.toISOString(),
         staff_id: staffId,
         user_id: user.id,
-        // 以下の重要なフィールドを保持
-        menu_id: eventData.menu_id,
-        customer_name: eventData.customer_name,
-        customer_email: eventData.customer_email,
-        customer_phone: eventData.customer_phone,
-        customer_name_kana: eventData.customer_name_kana,
-        total_price: eventData.total_price,
-        status: eventData.status,
-        is_staff_schedule: eventData.is_staff_schedule,
-        event: eventData.event,
-        is_hair_sync: eventData.is_hair_sync,
+        // 必要なフィールドのみを送信
       };
-  
+
       // APIリクエスト
       const response = await fetch("/api/calendar-data", {
         method: "PUT",
@@ -261,25 +232,29 @@ const ReservationCalendar: React.FC = () => {
         },
         body: JSON.stringify(updatedReservation),
       });
-  
+
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.message || "Failed to update reservation");
+        throw new Error(errorData.error || "Failed to update reservation");
       }
-  
+
       const updatedData = await response.json();
-  
+
       // ローカルの予約データを更新
-      setReservations((prevReservations) =>
-        prevReservations.map((res) =>
-          res.id === updatedData.id ? { ...res, ...updatedData } : res
-        )
-      );
-  
+      setReservations((prevReservations) => {
+        const index = prevReservations.findIndex((res) => res.id === updatedData.id);
+        if (index !== -1) {
+          const newReservations = [...prevReservations];
+          newReservations[index] = updatedData;
+          return newReservations;
+        }
+        return prevReservations;
+      });
+
       const message = eventData.is_staff_schedule
         ? "スタッフスケジュールが更新されました"
         : "予約が更新されました";
-  
+
       setSnackbar({ message, severity: "success" });
     } catch (error) {
       console.error("Error in handleEventDrop:", error);
@@ -288,6 +263,8 @@ const ReservationCalendar: React.FC = () => {
         ? "スタッフスケジュールの更新に失敗しました"
         : "予約の更新に失敗しました";
       setSnackbar({ message: errorMessage, severity: "error" });
+    } finally {
+      setIsUpdating(false); // 更新終了
     }
   };
 
@@ -432,8 +409,8 @@ const ReservationCalendar: React.FC = () => {
     return `${year}${month}${day}`;
   };
 
-  // 予約編集ハンドラ
-  const handleEditFormSubmit = async (
+   // 予約編集ハンドラ
+   const handleEditFormSubmit = async (
     updatedReservation: Partial<Reservation>
   ) => {
     console.log("Calendar: Edit form submit received", updatedReservation);
@@ -716,6 +693,7 @@ const ReservationCalendar: React.FC = () => {
   };
 
   // 日付ナビゲーションハンドラ
+  // 日付ナビゲーションハンドラ
   const handlePrevDay = () => {
     const newDate = moment(currentDate).subtract(1, "day");
     setCurrentDate(newDate);
@@ -770,12 +748,39 @@ const ReservationCalendar: React.FC = () => {
     [dateRange, setDateRange, currentDate, setCurrentDate]
   );
 
+  // ローディング状態に応じて表示を切り替え
+  if (isLoading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
+
   if (!staffList.length || !businessHours.length) {
     return <div>データを読み込んでいます...</div>;
   }
 
   return (
     <Box sx={{ p: 3, backgroundColor: "background.default" }}>
+      {isUpdating && (
+        <Box
+          sx={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            backgroundColor: 'rgba(255, 255, 255, 0.7)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 9999,
+          }}
+        >
+          <CircularProgress />
+        </Box>
+      )}
       {isMobile && (
         <Box sx={{ mb: 2 }}>
           <FormControl fullWidth>
@@ -796,6 +801,7 @@ const ReservationCalendar: React.FC = () => {
           </FormControl>
         </Box>
       )}
+      
 
       <NavigationControls
         currentDate={currentDate}
@@ -804,6 +810,7 @@ const ReservationCalendar: React.FC = () => {
         onToday={handleToday}
         onAddReservation={handleAddReservation}
         onAddStaffSchedule={handleAddStaffSchedule}
+        onDateChange={handleDateChange} // 追加
       />
 
       <CalendarView
@@ -820,6 +827,7 @@ const ReservationCalendar: React.FC = () => {
         ref={calendarRef}
         currentDate={currentDate}
         isMobile={isMobile}
+        isUpdating={isUpdating} // 追加
       />
 
       {/* 予約フォームモーダル */}

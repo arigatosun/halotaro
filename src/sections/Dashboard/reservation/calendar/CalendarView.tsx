@@ -1,3 +1,4 @@
+// CalendarView.tsx
 import React, { forwardRef, useRef, useEffect } from "react";
 import FullCalendar from "@fullcalendar/react";
 import resourceTimelinePlugin from "@fullcalendar/resource-timeline";
@@ -14,7 +15,6 @@ import { Reservation, Staff, BusinessHour } from "@/types/reservation";
 import moment from "moment";
 import "moment/locale/ja";
 import { Box } from "@mui/material";
-import jaLocale from "@fullcalendar/core/locales/ja";
 
 moment.locale("ja");
 
@@ -30,6 +30,7 @@ interface CalendarViewProps {
   currentDate: moment.Moment;
   onDateClick: (clickInfo: DateClickArg) => void;
   isMobile: boolean;
+  isUpdating: boolean; // 追加
 }
 
 const StyledFullCalendar = styled(FullCalendar)<CalendarOptions>(
@@ -68,8 +69,8 @@ const StyledFullCalendar = styled(FullCalendar)<CalendarOptions>(
       alignItems: "center",
       justifyContent: "center",
       cursor: "pointer",
-      opacity: "0.9", // 重複時の透明度を設定
-      zIndex: "auto", // z-indexを自動設定に変更
+      opacity: "0.9",
+      zIndex: "auto",
     },
     "& .fc-timeline-event *": {
       height: "100% !important",
@@ -132,7 +133,6 @@ const StyledFullCalendar = styled(FullCalendar)<CalendarOptions>(
       border: "none",
       cursor: "default",
     },
-    // ドラッグ中のスタイルを追加
     "& .fc-event-dragging": {
       opacity: "0.7",
       cursor: "move",
@@ -169,6 +169,7 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
       currentDate,
       onDateClick,
       isMobile,
+      isUpdating, // 追加
     },
     ref
   ) => {
@@ -239,7 +240,8 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
             : reservation.is_hair_sync
             ? ["hair-reservation"]
             : ["customer-reservation"],
-          editable: !reservation.is_closed_day && !reservation.is_staff_schedule && !reservation.is_hair_sync,
+          editable: !reservation.is_closed_day && !reservation.is_hair_sync,
+          resourceEditable: !reservation.is_closed_day && !reservation.is_hair_sync,
           extendedProps: reservation,
         })),
       ...businessHours
@@ -307,13 +309,14 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
           datesSet={handleDatesSet}
           initialView={initialView}
           initialDate={currentDate.format("YYYY-MM-DD")}
-          editable={true}
-          eventStartEditable={true}
-          eventDurationEditable={true}
+          editable={!isUpdating} // 更新中は編集不可
+          eventStartEditable={!isUpdating}
+          eventDurationEditable={!isUpdating}
           droppable={true}
-          selectable={true}
+          selectable={!isUpdating}
           selectConstraint="businessHours"
           eventConstraint="businessHours"
+          eventResourceEditable={!isUpdating}
           dragRevertDuration={0}
           select={onDateSelect}
           schedulerLicenseKey="GPL-My-Project-Is-Open-Source"
@@ -346,8 +349,8 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
           scrollTimeReset={false}
           viewDidMount={handleViewDidMount}
           eventDisplay="block"
-          eventOverlap={true} 
-          selectOverlap={true} // 選択の重複を許可
+          eventOverlap={true}
+          selectOverlap={true}
           selectMinDistance={10}
           eventDidMount={(info) => {
             const reservation = info.event.extendedProps as Reservation;
