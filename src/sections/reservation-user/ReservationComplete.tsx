@@ -85,7 +85,7 @@ export default function ReservationComplete({
       };
 
       const FASTAPI_ENDPOINT =
-        "//https://f356-34-97-99-223.ngrok-free.app/run-automation";
+        "https://f356-34-97-99-223.ngrok-free.app/run-automation";
 
       const automationResponse = await fetch(FASTAPI_ENDPOINT, {
         method: "POST",

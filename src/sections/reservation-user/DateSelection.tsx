@@ -246,6 +246,12 @@ const MobileTimeSlotButton = styled(Button)(({ theme }) => ({
   },
 }));
 
+interface FetchedReservations {
+  selectedStaffReservations: Record<string, Reservation[]>;
+  allStaffReservations: Record<string, Reservation[]>;
+}
+
+
 // 日時選択コンポーネント
 const DateSelection: React.FC<DateSelectionProps> = ({
   onDateTimeSelect,
@@ -258,9 +264,10 @@ const DateSelection: React.FC<DateSelectionProps> = ({
   const [availableSlots, setAvailableSlots] = useState<
     Record<string, Record<string, string[]>>
   >({}); // 利用可能な時間スロット
-  const [reservedSlots, setReservedSlots] = useState<
-    Record<string, Reservation[]>
-  >({});
+  const [reservedSlots, setReservedSlots] = useState<FetchedReservations>({
+    selectedStaffReservations: {},
+    allStaffReservations: {}
+});
   const [operatingHours, setOperatingHours] = useState<
     Record<
       string,
@@ -422,45 +429,62 @@ const DateSelection: React.FC<DateSelectionProps> = ({
   const fetchReservedSlots = async () => {
     console.group('Fetching Reserved Slots');
     const endDate = moment(startDate).add(displayDays - 1, "days").format("YYYY-MM-DD");
+    
     try {
-      const queryParams = new URLSearchParams({
-        startDate: startDate.format("YYYY-MM-DD"),
-        endDate: endDate,
-        salonId,
-        ...(selectedStaffProp?.id ? { staffId: selectedStaffProp.id } : {})
-    });
+        // 選択されたスタッフの予約を取得
+        let selectedStaffReservations = {};
+        if (selectedStaffProp) {
+            const selectedStaffParams = new URLSearchParams({
+                startDate: startDate.format("YYYY-MM-DD"),
+                endDate,
+                salonId,
+                staffId: selectedStaffProp.id
+            });
 
-        console.log('Reservations Request Parameters:', {
+            const selectedStaffResponse = await fetch(
+                `/api/staff-reservations?${selectedStaffParams.toString()}`,
+                { cache: "no-cache" }
+            );
+
+            if (!selectedStaffResponse.ok) {
+                throw new Error("スタッフの予約情報の取得に失敗しました");
+            }
+
+            selectedStaffReservations = await selectedStaffResponse.json();
+        }
+
+        // 全スタッフの予約を取得
+        const allStaffParams = new URLSearchParams({
             startDate: startDate.format("YYYY-MM-DD"),
             endDate,
-            salonId,
-            selectedStaffId: selectedStaffProp?.id
+            salonId
         });
 
-        const response = await fetch(`/api/staff-reservations?${queryParams.toString()}`, {
-            cache: "no-cache",
-        });
+        const allStaffResponse = await fetch(
+            `/api/staff-reservations?${allStaffParams.toString()}`,
+            { cache: "no-cache" }
+        );
 
-        if (!response.ok) {
-            throw new Error("予約済みの時間帯の取得に失敗しました");
+        if (!allStaffResponse.ok) {
+            throw new Error("全スタッフの予約情報の取得に失敗しました");
         }
-        const data = await response.json();
 
-        // 予約データの詳細を確認
+        const allStaffReservations = await allStaffResponse.json();
+
         console.log('Reservations Response:', {
-            totalDates: Object.keys(data).length,
-            totalReservations: Object.values(data).flat().length,
-            selectedStaffReservations: selectedStaffProp ? Object.values(data)
-            .flat()
-            .filter((res: any) => res.staffId === selectedStaffProp.id)
-            .length : 'No staff selected',
-            sampleDateReservations: data[Object.keys(data)[0]] || []
+            selectedStaff: selectedStaffProp?.name,
+            selectedStaffReservationsCount: Object.values(selectedStaffReservations).flat().length,
+            allStaffReservationsCount: Object.values(allStaffReservations).flat().length,
         });
 
-        setReservedSlots(data);
+        setReservedSlots({
+            selectedStaffReservations,
+            allStaffReservations
+        });
+
     } catch (error) {
-        console.error("予約済みの時間帯の取得中にエラーが発生しました:", error);
-        setError("予約済みの時間帯の取得に失敗しました");
+        console.error("予約情報の取得中にエラーが発生しました:", error);
+        setError("予約情報の取得に失敗しました");
     }
     console.groupEnd();
 };
@@ -583,165 +607,120 @@ const DateSelection: React.FC<DateSelectionProps> = ({
   // 利用可能なスロットを計算し、メモ化
   const slotAvailability = useMemo(() => {
     console.group('Computing Slot Availability');
-    console.log('Computation Input:', {
-        selectedStaff: selectedStaffProp,
-        totalStaffList: staffList.length,
-        availableSlotsData: {
-            totalDates: Object.keys(availableSlots).length,
-            sampleDate: Object.keys(availableSlots)[0],
-            sampleSlots: availableSlots[Object.keys(availableSlots)[0]]
-        },
-        reservedSlotsData: {
-            totalDates: Object.keys(reservedSlots).length,
-            totalReservations: Object.values(reservedSlots).flat().length
-        },
-        operatingHoursData: {
-            totalDates: Object.keys(operatingHours).length,
-            sampleDate: operatingHours[Object.keys(operatingHours)[0]]
-        }
-    });
-
     const availability: Record<string, Record<string, boolean>> = {};
     const duration = selectedMenus[0]?.duration || 60;
 
-    // 予約データを効率的に検索できるようにマッピング
-    const allReservations = Object.values(reservedSlots).flat();
-
-    const reservationMap = new Map<string, boolean>();
+    // 全スタッフの予約から時間スロットごとの予約数を計算
+    const allReservations = Object.values(reservedSlots.allStaffReservations).flat();
+    const reservationCounts: Record<string, number> = {};
+    
     allReservations.forEach((reservation) => {
-      const staffId = reservation.staffId;
-      const start = moment.utc(reservation.startTime).tz("Asia/Tokyo");
-      const end = moment.utc(reservation.endTime).tz("Asia/Tokyo");
-
-      for (
-        let time = moment(start);
-        time.isBefore(end);
-        time.add(slotInterval, "minutes")
-      ) {
-        const key = `${time.format("YYYY-MM-DD HH:mm")}_${staffId}`;
-        reservationMap.set(key, true);
-      }
-    });
-
-    // 重複予約数を時間スロットごとに計算
-    const overlappingCounts: Record<string, number> = {};
-    allReservations.forEach((reservation) => {
-      const start = moment.utc(reservation.startTime).tz("Asia/Tokyo");
-      const end = moment.utc(reservation.endTime).tz("Asia/Tokyo");
-
-      for (
-        let time = moment(start);
-        time.isBefore(end);
-        time.add(slotInterval, "minutes")
-      ) {
-        const timeStr = time.format("YYYY-MM-DD HH:mm");
-        overlappingCounts[timeStr] = (overlappingCounts[timeStr] || 0) + 1;
-      }
-    });
-
-    for (let i = 0; i < displayDays; i++) {
-      const date = moment(startDate).add(i, "days");
-      const dateStr = date.format("YYYY-MM-DD");
-
-      if (isHoliday(date)) {
-        continue;
-      }
-
-      availability[dateStr] = {};
-
-      for (const time of timeSlots) {
-        const startDateTime = moment.tz(
-          `${dateStr} ${time}`,
-          "YYYY-MM-DD HH:mm",
-          "Asia/Tokyo"
-        );
-        const endDateTime = moment(startDateTime).add(duration, "minutes");
-
-        let isAvailable = true;
-
-        // その日の最大予約可能数を取得
-        const maxCapacity = operatingHours[dateStr]?.capacity ?? 1; // デフォルト値として1を設定
-
-        // 時間帯ごとの重複予約数をチェック
-        for (
-          let currentTime = moment(startDateTime);
-          currentTime.isBefore(endDateTime);
-          currentTime.add(slotInterval, "minutes")
-        ) {
-          const timeStr = currentTime.format("YYYY-MM-DD HH:mm");
-          if ((overlappingCounts[timeStr] || 0) >= maxCapacity) {
-            isAvailable = false;
-            break;
-          }
-        }
-
-        if (!isAvailable) {
-          availability[dateStr][time] = false;
-          continue;
-        }
-
-        // スタッフの利用可能性をチェック
-        let availableStaffIds = selectedStaffProp
-          ? [selectedStaffProp.id]
-          : staffList
-              .filter((staff) => staff.name !== "フリー") // フリースタッフを除外
-              .map((staff) => staff.id);
+        const start = moment.utc(reservation.startTime).tz("Asia/Tokyo");
+        const end = moment.utc(reservation.endTime).tz("Asia/Tokyo");
 
         for (
-          let currentTime = moment(startDateTime);
-          currentTime.isBefore(endDateTime);
-          currentTime.add(slotInterval, "minutes")
+            let time = moment(start);
+            time.isBefore(end);
+            time.add(slotInterval, "minutes")
         ) {
-          const currentTimeStr = currentTime.format("HH:mm");
-          const currentDateStr = currentTime.format("YYYY-MM-DD");
-
-          const staffIdsAtTime =
-            availableSlots[currentDateStr]?.[currentTimeStr] || [];
-
-          if (staffIdsAtTime.length === 0) {
-            isAvailable = false;
-            break;
-          }
-
-          // 予約が入っていないスタッフを抽出
-          const staffIdsNotReservedAtTime = staffIdsAtTime.filter((staffId) => {
-            const key = `${currentTime.format("YYYY-MM-DD HH:mm")}_${staffId}`;
-            return !reservationMap.has(key);
-          });
-
-          if (staffIdsNotReservedAtTime.length === 0) {
-            isAvailable = false;
-            break;
-          }
-
-          availableStaffIds = availableStaffIds.filter((staffId) =>
-            staffIdsNotReservedAtTime.includes(staffId)
-          );
-
-          if (availableStaffIds.length === 0) {
-            isAvailable = false;
-            break;
-          }
+            const timeKey = time.format("YYYY-MM-DD HH:mm");
+            reservationCounts[timeKey] = (reservationCounts[timeKey] || 0) + 1;
         }
+    });
 
-        availability[dateStr][time] = isAvailable;
-      }
+    // 選択されたスタッフの予約時間をマッピング
+    const selectedStaffReservations = new Map<string, boolean>();
+    if (selectedStaffProp) {
+        Object.values(reservedSlots.selectedStaffReservations)
+            .flat()
+            .forEach((reservation) => {
+                const start = moment.utc(reservation.startTime).tz("Asia/Tokyo");
+                const end = moment.utc(reservation.endTime).tz("Asia/Tokyo");
+
+                for (
+                    let time = moment(start);
+                    time.isBefore(end);
+                    time.add(slotInterval, "minutes")
+                ) {
+                    const key = time.format("YYYY-MM-DD HH:mm");
+                    selectedStaffReservations.set(key, true);
+                }
+            });
     }
 
-    console.timeEnd("computeSlotAvailability");
+    for (let i = 0; i < displayDays; i++) {
+        const date = moment(startDate).add(i, "days");
+        const dateStr = date.format("YYYY-MM-DD");
+
+        if (isHoliday(date)) {
+            continue;
+        }
+
+        availability[dateStr] = {};
+        const maxCapacity = operatingHours[dateStr]?.capacity ?? 1;
+
+        for (const time of timeSlots) {
+            const startDateTime = moment.tz(
+                `${dateStr} ${time}`,
+                "YYYY-MM-DD HH:mm",
+                "Asia/Tokyo"
+            );
+            const endDateTime = moment(startDateTime).add(duration, "minutes");
+
+            let isAvailable = true;
+
+            // キャパシティと予約チェック
+            for (
+                let currentTime = moment(startDateTime);
+                currentTime.isBefore(endDateTime);
+                currentTime.add(slotInterval, "minutes")
+            ) {
+                const timeKey = currentTime.format("YYYY-MM-DD HH:mm");
+                
+                // サロン全体のキャパシティチェック
+                const currentReservations = reservationCounts[timeKey] || 0;
+                if (currentReservations >= maxCapacity) {
+                    isAvailable = false;
+                    break;
+                }
+
+                // 選択されたスタッフの予約チェック
+                if (selectedStaffProp && selectedStaffReservations.has(timeKey)) {
+                    isAvailable = false;
+                    break;
+                }
+
+                // スタッフの利用可能性チェック
+                const currentTimeStr = currentTime.format("HH:mm");
+                const staffIdsAtTime = availableSlots[dateStr]?.[currentTimeStr];
+                
+                if (!staffIdsAtTime || staffIdsAtTime.length === 0) {
+                    isAvailable = false;
+                    break;
+                }
+
+                if (selectedStaffProp && !staffIdsAtTime.includes(selectedStaffProp.id)) {
+                    isAvailable = false;
+                    break;
+                }
+            }
+
+            availability[dateStr][time] = isAvailable;
+        }
+    }
+
     return availability;
-  }, [
+}, [
     startDate,
     displayDays,
     selectedStaffProp,
     selectedMenus,
-    staffList,
     availableSlots,
     reservedSlots,
     timeSlots,
     isHoliday,
     operatingHours,
-  ]);
+]);
 
   // handleTimeSlotClick を修正
   const handleTimeSlotClick = (date: moment.Moment, time: string): void => {
