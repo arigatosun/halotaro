@@ -159,14 +159,23 @@ const AuthenticatedStaffManagement: React.FC<{ userId: string }> = ({
         const response = await fetch(`/api/salonstaff?id=${id}`, {
           method: "DELETE",
         });
-
+  
         if (!response.ok) {
           const errorData = await response.json();
+          // 外部キー制約違反のエラーコードをチェック
+          if (errorData.code === '23503' && errorData.message.includes('reservations')) {
+            toast({
+              variant: "destructive",
+              title: "削除エラー",
+              description: "関連する予約が残っている為このスタッフを削除できません。",
+            });
+            return;
+          }
           throw new Error(errorData.message || "Failed to delete staff");
         }
-
+  
         setStaffList((prev) => prev.filter((staff) => staff.id !== id));
-
+  
         toast({
           title: "成功",
           description: "スタッフを削除しました",

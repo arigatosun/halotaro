@@ -1,5 +1,3 @@
-// src/app/api/staff-availability/route.ts
-
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import moment from "moment";
@@ -10,14 +8,25 @@ const supabase = createClient(
 );
 
 export async function GET(request: Request) {
+  console.group('Staff Availability API Call');
   const { searchParams } = new URL(request.url);
   const staffId = searchParams.get("staffId");
   const startDate = searchParams.get("startDate");
   const endDate = searchParams.get("endDate");
   const menuId = searchParams.get("menuId");
-  const salonId = searchParams.get("salonId"); // salonIdを取得
+  const salonId = searchParams.get("salonId");
+
+  console.log('Request Parameters:', {
+    staffId,
+    startDate,
+    endDate,
+    menuId,
+    salonId
+  });
 
   if (!startDate || !endDate || !salonId) {
+    console.log('Missing Required Parameters');
+    console.groupEnd();
     return NextResponse.json(
       { error: "Missing required parameters" },
       { status: 400 }
@@ -34,6 +43,11 @@ export async function GET(request: Request) {
           .select("staff_id")
           .eq("menu_item_id", menuId);
 
+      console.log('Unavailable Staff Query Result:', {
+        data: unavailableStaffData,
+        error: unavailableStaffError
+      });
+
       if (unavailableStaffError) {
         throw unavailableStaffError;
       }
@@ -44,8 +58,14 @@ export async function GET(request: Request) {
     // サロンの全スタッフIDを取得
     const { data: staffData, error: staffError } = await supabase
       .from("staff")
-      .select("id")
-      .eq("user_id", salonId); // サロンのスタッフに限定
+      .select("id, name") // nameも取得して確認
+      .eq("user_id", salonId);
+
+    console.log('Salon Staff Query Result:', {
+      data: staffData,
+      error: staffError,
+      salonId
+    });
 
     if (staffError) {
       throw staffError;
@@ -60,18 +80,27 @@ export async function GET(request: Request) {
       );
     }
 
-    // 選択されたスタッフが対応可能かチェック（スタッフを指名している場合）
+    console.log('Staff Availability Check:', {
+      totalStaff: staffData.length,
+      unavailableStaffCount: unavailableStaffIds.length,
+      availableStaffCount: availableStaffIds.length,
+      selectedStaffId: staffId,
+      isSelectedStaffAvailable: staffId ? availableStaffIds.includes(staffId) : 'No staff selected'
+    });
+
+    // 選択されたスタッフが対応可能かチェック
     if (staffId) {
       if (!availableStaffIds.includes(staffId)) {
-        // 対応不可の場合、空の結果を返す
+        console.log('Selected Staff is not available for this menu');
+        console.groupEnd();
         return NextResponse.json({});
       }
-      // 指定されたスタッフのみを対象にする
       availableStaffIds = [staffId];
     }
 
     if (availableStaffIds.length === 0) {
-      // 利用可能なスタッフがいない場合、空の結果を返す
+      console.log('No available staff found');
+      console.groupEnd();
       return NextResponse.json({});
     }
 
@@ -80,6 +109,16 @@ export async function GET(request: Request) {
       start_date: startDate,
       end_date: endDate,
       staff_ids: availableStaffIds,
+    });
+
+    console.log('Stored Procedure Call:', {
+      parameters: {
+        start_date: startDate,
+        end_date: endDate,
+        staff_ids: availableStaffIds
+      },
+      resultCount: data?.length || 0,
+      error: error
     });
 
     if (error) {
@@ -103,9 +142,19 @@ export async function GET(request: Request) {
       }
     );
 
+    // レスポンスデータの確認
+    console.log('Response Data Summary:', {
+      totalDates: Object.keys(availabilityByDate).length,
+      sampleDate: Object.keys(availabilityByDate)[0],
+      totalTimeSlots: Object.keys(availabilityByDate[Object.keys(availabilityByDate)[0]] || {}).length,
+      staffAvailabilityCount: availableStaffIds.length
+    });
+
+    console.groupEnd();
     return NextResponse.json(availabilityByDate);
   } catch (error) {
     console.error("Error fetching staff availability:", error);
+    console.groupEnd();
     return NextResponse.json(
       { error: "Failed to fetch staff availability" },
       { status: 500 }
