@@ -1,5 +1,3 @@
-// src/sections/Dashboard/reservation/calendar/NotificationSnackbar.tsx
-
 import React from 'react';
 import { Snackbar, Alert } from '@mui/material';
 
@@ -12,7 +10,7 @@ const NotificationSnackbar: React.FC<NotificationSnackbarProps> = ({ snackbar, o
   return (
     <Snackbar
       open={!!snackbar}
-      autoHideDuration={6000}
+      autoHideDuration={750} // 6000から1000に変更（1秒）
       onClose={onClose}
       anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
     >

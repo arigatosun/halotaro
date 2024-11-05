@@ -1,6 +1,7 @@
+// useReservationCalendar.ts
 import { useState, useEffect } from 'react';
 import { Reservation, Staff, MenuItem, BusinessHour } from '@/types/reservation';
-import { useAuth } from '@/lib/useAuth';
+import { useAuth } from '@/contexts/authcontext';
 import moment from 'moment';
 
 interface UseReservationCalendarReturn {

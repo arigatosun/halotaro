@@ -1,3 +1,4 @@
+// CalendarView.tsx
 import React, { forwardRef, useRef, useEffect } from "react";
 import FullCalendar from "@fullcalendar/react";
 import resourceTimelinePlugin from "@fullcalendar/resource-timeline";
@@ -14,7 +15,6 @@ import { Reservation, Staff, BusinessHour } from "@/types/reservation";
 import moment from "moment";
 import "moment/locale/ja";
 import { Box } from "@mui/material";
-import jaLocale from "@fullcalendar/core/locales/ja";
 
 moment.locale("ja");
 
@@ -30,6 +30,7 @@ interface CalendarViewProps {
   currentDate: moment.Moment;
   onDateClick: (clickInfo: DateClickArg) => void;
   isMobile: boolean;
+  isUpdating: boolean; // 追加
 }
 
 const StyledFullCalendar = styled(FullCalendar)<CalendarOptions>(
@@ -68,8 +69,8 @@ const StyledFullCalendar = styled(FullCalendar)<CalendarOptions>(
       alignItems: "center",
       justifyContent: "center",
       cursor: "pointer",
-      opacity: "0.9", // 重複時の透明度を設定
-      zIndex: "auto", // z-indexを自動設定に変更
+      opacity: "0.9",
+      zIndex: "auto",
     },
     "& .fc-timeline-event *": {
       height: "100% !important",
@@ -132,7 +133,6 @@ const StyledFullCalendar = styled(FullCalendar)<CalendarOptions>(
       border: "none",
       cursor: "default",
     },
-    // ドラッグ中のスタイルを追加
     "& .fc-event-dragging": {
       opacity: "0.7",
       cursor: "move",
@@ -169,6 +169,7 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
       currentDate,
       onDateClick,
       isMobile,
+      isUpdating, // 追加
     },
     ref
   ) => {
@@ -218,33 +219,31 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
       )
       .format("HH:mm:ss");
 
-      const events = [
-        ...reservations
-          .filter(
-            (reservation) =>
-              hasValidStartAndEnd(reservation) && hasStaffId(reservation)
-          )
-          .map((reservation) => ({
-            id: reservation.id,
-            resourceId: reservation.staff_id.toString(),
-            title: reservation.is_staff_schedule
-              ? reservation.event || ""
-              : `${reservation.customer_name || ""} - ${
-                  reservation.menu_name || ""
-                }`,
-            start: reservation.start_time,
-            end: reservation.end_time,
-            classNames: reservation.is_staff_schedule
-              ? ["staff-schedule"]
-              : reservation.is_hair_sync
-              ? ["hair-reservation"]
-              : ["customer-reservation"],
-            // スタッフスケジュールも編集可能に修正
-            editable: !reservation.is_closed_day && !reservation.is_hair_sync,
-            // リソース（スタッフ）間の移動を許可
-            resourceEditable: !reservation.is_closed_day && !reservation.is_hair_sync,
-            extendedProps: reservation,
-          })),
+    const events = [
+      ...reservations
+        .filter(
+          (reservation) =>
+            hasValidStartAndEnd(reservation) && hasStaffId(reservation)
+        )
+        .map((reservation) => ({
+          id: reservation.id,
+          resourceId: reservation.staff_id.toString(),
+          title: reservation.is_staff_schedule
+            ? reservation.event || ""
+            : `${reservation.customer_name || ""} - ${
+                reservation.menu_name || ""
+              }`,
+          start: reservation.start_time,
+          end: reservation.end_time,
+          classNames: reservation.is_staff_schedule
+            ? ["staff-schedule"]
+            : reservation.is_hair_sync
+            ? ["hair-reservation"]
+            : ["customer-reservation"],
+          editable: !reservation.is_closed_day && !reservation.is_hair_sync,
+          resourceEditable: !reservation.is_closed_day && !reservation.is_hair_sync,
+          extendedProps: reservation,
+        })),
       ...businessHours
         .filter((bh) => bh.is_holiday)
         .map((bh) => ({
@@ -310,14 +309,14 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
           datesSet={handleDatesSet}
           initialView={initialView}
           initialDate={currentDate.format("YYYY-MM-DD")}
-          editable={true}
-          eventStartEditable={true}
-          eventDurationEditable={true}
+          editable={!isUpdating} // 更新中は編集不可
+          eventStartEditable={!isUpdating}
+          eventDurationEditable={!isUpdating}
           droppable={true}
-          selectable={true}
+          selectable={!isUpdating}
           selectConstraint="businessHours"
           eventConstraint="businessHours"
-          eventResourceEditable={true}
+          eventResourceEditable={!isUpdating}
           dragRevertDuration={0}
           select={onDateSelect}
           schedulerLicenseKey="GPL-My-Project-Is-Open-Source"
@@ -350,8 +349,8 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
           scrollTimeReset={false}
           viewDidMount={handleViewDidMount}
           eventDisplay="block"
-          eventOverlap={true} 
-          selectOverlap={true} // 選択の重複を許可
+          eventOverlap={true}
+          selectOverlap={true}
           selectMinDistance={10}
           eventDidMount={(info) => {
             const reservation = info.event.extendedProps as Reservation;
