@@ -59,6 +59,8 @@ interface ReservationContextType {
   setPaymentInfo: React.Dispatch<React.SetStateAction<PaymentInfo | null>>;
   reservationCustomerId: string | null;
   setReservationCustomerId: React.Dispatch<React.SetStateAction<string | null>>;
+  isNoAppointment: boolean;  // 指名なしフラグを追加
+  setIsNoAppointment: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
 // 予約コンテキストの作成
@@ -93,6 +95,8 @@ export const ReservationProvider: React.FC<{ children: React.ReactNode }> = ({ c
     return menus.reduce((total, menu) => total + menu.price, 0);
   };
 
+  const [isNoAppointment, setIsNoAppointment] = useState<boolean>(false);
+
   // コンテキスト値の提供
   return (
     <ReservationContext.Provider
@@ -110,6 +114,8 @@ export const ReservationProvider: React.FC<{ children: React.ReactNode }> = ({ c
         calculateTotalAmount,
         reservationCustomerId,
         setReservationCustomerId,
+        isNoAppointment,
+        setIsNoAppointment,
       }}
     >
       {children}

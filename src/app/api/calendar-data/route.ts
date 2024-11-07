@@ -500,16 +500,8 @@ export async function PUT(request: Request) {
       );
     }
 
-    // 顧客IDの取得（スタッフスケジュールの場合はnullの可能性あり）
-    const customerId = existingReservation.reservation_customers?.id || null;
-
-    if (!customerId && !existingReservation.is_staff_schedule) {
-      console.error("Customer ID not found for reservation:", id);
-      return NextResponse.json(
-        { error: "Customer information not found" },
-        { status: 500 }
-      );
-    }
+    // 顧客IDの取得（存在しない場合もあり）
+    const customerId = existingReservation.reservation_customers?.id;
 
     // スタッフスケジュールの場合、end_time が必須
     if (existingReservation.is_staff_schedule && !updateFields.end_time) {
@@ -521,7 +513,6 @@ export async function PUT(request: Request) {
 
     // スタッフスケジュールの場合、顧客関連フィールドは除外
     if (existingReservation.is_staff_schedule) {
-      // updateFields から顧客関連フィールドを除外
       delete updateFields.customer_name;
       delete updateFields.customer_email;
       delete updateFields.customer_phone;
@@ -565,16 +556,8 @@ export async function PUT(request: Request) {
       }
     }
 
-    // 予約のステータスを更新する際の追加ロジック
-    if (updateFields.status) {
-      // ステータスがキャンセル系の場合、特別な処理を追加することも可能
-    }
-
     // スタッフスケジュールの場合、ステータスを 'staff' に強制設定
-    if (
-      existingReservation.is_staff_schedule &&
-      updatedData.status !== "staff"
-    ) {
+    if (existingReservation.is_staff_schedule && updatedData.status !== "staff") {
       updatedData.status = "staff";
     }
 
@@ -624,18 +607,13 @@ export async function PUT(request: Request) {
         .eq("id", customerId);
 
       if (customerUpdateError) {
-        console.error("Error updating customer:", customerUpdateError);
-        return NextResponse.json(
-          { error: customerUpdateError.message },
-          { status: 500 }
-        );
+        console.warn("Warning: Could not update customer information:", customerUpdateError);
+        // 顧客情報の更新に失敗しても、予約の更新自体は成功とする
       }
     }
 
     // フォーマット処理
     const formattedReservation = formatReservation(updatedReservation);
-
-    // 更新後の追加処理は不要
 
     console.log("Reservation updated:", formattedReservation);
     return NextResponse.json(formattedReservation);

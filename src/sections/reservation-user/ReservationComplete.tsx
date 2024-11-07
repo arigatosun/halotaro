@@ -42,6 +42,7 @@ export default function ReservationComplete({
     selectedStaff,
     customerInfo,
     paymentInfo,
+    isNoAppointment,  // isNoAppointmentを追加
   } = useReservation();
 
   // ★ formatDate 関数をここに配置 ★
@@ -82,10 +83,11 @@ export default function ReservationComplete({
         nm_mei: customerInfo.firstNameKanji,
         rsv_term_hour: rsvTermHour,
         rsv_term_minute: rsvTermMinute,
+        is_no_appointment: isNoAppointment,  // 追加：指名なしフラグ
       };
 
       const FASTAPI_ENDPOINT =
-        "https://f356-34-97-99-223.ngrok-free.app/run-automation";
+        "https://1234-34-97-99-223.ngrok-free.app/run-automation";
 
       const automationResponse = await fetch(FASTAPI_ENDPOINT, {
         method: "POST",
@@ -120,6 +122,7 @@ export default function ReservationComplete({
     selectedStaff,
     customerInfo,
     userId,
+    isNoAppointment,
   ]);
 
   const saveReservation = useCallback(async () => {

@@ -1,5 +1,3 @@
-// emails/SynchronizationErrorNotification.tsx
-
 import * as React from "react";
 import { Html } from "@react-email/html";
 import { Head } from "@react-email/head";
@@ -27,37 +25,57 @@ export const SynchronizationErrorNotification: React.FC<
     <Preview>【重要】予約の同期に失敗しました</Preview>
     <Container style={containerStyle}>
       <Section style={headerStyle}>
-        <Text style={headerTextStyle}>予約同期エラー通知</Text>
+        <Text style={headerTextStyle}>予約同期エラーのお知らせ</Text>
       </Section>
+
+      <Section style={errorNoticeStyle}>
+        {errorMessage}
+      </Section>
+
       <Section style={contentStyle}>
-        <Text style={greetingStyle}>{adminName}様</Text>
-        <Text style={textStyle}>
-          予約のサロンボードへの同期に失敗しました。以下の詳細をご確認ください。
-        </Text>
-        <Section style={detailsStyle}>
-          <Text style={detailTextStyle}>
-            <strong style={labelStyle}>エラーメッセージ:</strong>
-            <br />
-            {errorMessage}
-          </Text>
-          <Text style={detailTextStyle}>
-            <strong style={labelStyle}>予約情報:</strong>
-            <br />
-            お客様: {reservationData.customerName} 様
-            <br />
-            予約日時: {formatDateTime(reservationData.startTime)} -{" "}
-            {formatDateTime(reservationData.endTime)}
-            <br />
-            スタッフ: {reservationData.staffName}
+        <Section style={tableSectionStyle}>
+          <Text style={sectionTitleStyle}>予約内容</Text>
+          <table style={tableStyle}>
+            <tbody>
+              <tr>
+                <th style={tableCellHeaderStyle}>お客様名</th>
+                <td style={tableCellStyle}>{reservationData.customerName} 様</td>
+              </tr>
+              <tr>
+                <th style={tableCellHeaderStyle}>予約日時</th>
+                <td style={tableCellStyle}>
+                  {formatDateTime(reservationData.startTime)} - {formatDateTime(reservationData.endTime)}
+                </td>
+              </tr>
+              <tr>
+                <th style={tableCellHeaderStyle}>担当スタッフ</th>
+                <td style={tableCellStyle}>{reservationData.staffName}</td>
+              </tr>
+            </tbody>
+          </table>
+        </Section>
+
+        <Section style={actionNeededStyle}>
+          <Text style={actionTitleStyle}>▼ 必要な対応</Text>
+          <ul style={actionListStyle}>
+            <li>SalonBoardの予約状況を確認してください</li>
+            <li>ハロタロの予約状況と照合してください</li>
+            <li>必要に応じてお客様へご連絡ください</li>
+          </ul>
+        </Section>
+
+        <Section style={supportInfoStyle}>
+          <Text style={supportTitleStyle}>お困りの際は</Text>
+          <Text style={supportTextStyle}>
+            このエラーが続く場合や対応方法が不明な場合は、下記までお問い合わせください。<br />
+            サポートデスク: support@harotalo.com
           </Text>
         </Section>
-        <Text style={textStyle}>
-          早急にご確認いただき、対応をお願いいたします。
-        </Text>
       </Section>
+
       <Section style={footerStyle}>
         <Text style={footerTextStyle}>
-          ©2023 Harotalo. All rights reserved.
+          ©2024 LOWE. All rights reserved.
         </Text>
       </Section>
     </Container>
@@ -71,78 +89,121 @@ const formatDateTime = (dateTimeString: string) => {
 
 const containerStyle: React.CSSProperties = {
   margin: "0 auto",
-  padding: "20px 0 48px",
+  padding: "20px",
   width: "100%",
   maxWidth: "600px",
   backgroundColor: "#ffffff",
+  boxShadow: "0 2px 4px rgba(0, 0, 0, 0.1)",
 };
 
 const headerStyle: React.CSSProperties = {
-  backgroundColor: "#F97316",
+  backgroundColor: "#f8d7da",
+  border: "1px solid #f5c6cb",
+  borderRadius: "8px 8px 0 0",
   padding: "20px",
   textAlign: "center",
+  marginBottom: "24px",
 };
 
 const headerTextStyle: React.CSSProperties = {
-  color: "#ffffff",
-  fontSize: "24px",
+  color: "#721c24",
+  fontSize: "20px",
   fontWeight: "bold",
   margin: "0",
 };
 
-const contentStyle: React.CSSProperties = {
-  padding: "20px",
-};
-
-const greetingStyle: React.CSSProperties = {
-  fontSize: "18px",
-  lineHeight: "26px",
-  color: "#333333",
-  fontWeight: "bold",
-  marginBottom: "16px",
-};
-
-const textStyle: React.CSSProperties = {
-  fontSize: "16px",
-  lineHeight: "24px",
-  color: "#333333",
-  marginBottom: "16px",
-};
-
-const detailsStyle: React.CSSProperties = {
-  backgroundColor: "#f8f8f8",
-  borderRadius: "8px",
+const errorNoticeStyle: React.CSSProperties = {
+  backgroundColor: "#fff3f3",
+  borderLeft: "4px solid #dc3545",
   padding: "16px",
-  marginBottom: "16px",
+  marginBottom: "24px",
+  lineHeight: "1.6",
 };
 
-const detailTextStyle: React.CSSProperties = {
-  fontSize: "14px",
-  lineHeight: "22px",
+const contentStyle: React.CSSProperties = {
+  padding: "0 20px",
+};
+
+const sectionTitleStyle: React.CSSProperties = {
   color: "#333333",
+  fontSize: "16px",
+  fontWeight: "bold",
   marginBottom: "12px",
-  wordWrap: "break-word",
+  paddingBottom: "8px",
+  borderBottom: "2px solid #eee",
 };
 
-const preStyle: React.CSSProperties = {
-  whiteSpace: "pre-wrap",
-  wordWrap: "break-word",
+const tableSectionStyle: React.CSSProperties = {
+  marginBottom: "24px",
 };
 
-const labelStyle: React.CSSProperties = {
-  display: "inline-block",
-  marginBottom: "4px",
-  color: "#666666",
+const tableStyle: React.CSSProperties = {
+  width: "100%",
+  borderCollapse: "collapse",
+  marginBottom: "24px",
+};
+
+const tableCellHeaderStyle: React.CSSProperties = {
+  width: "30%",
+  textAlign: "left",
+  padding: "12px",
+  backgroundColor: "#f8f9fa",
+  border: "1px solid #dee2e6",
+  color: "#495057",
+  fontWeight: "normal",
+};
+
+const tableCellStyle: React.CSSProperties = {
+  width: "70%",
+  padding: "12px",
+  border: "1px solid #dee2e6",
+};
+
+const actionNeededStyle: React.CSSProperties = {
+  backgroundColor: "#fff3cd",
+  border: "1px solid #ffeeba",
+  borderRadius: "4px",
+  padding: "16px",
+  marginBottom: "24px",
+  color: "#856404",
+};
+
+const actionTitleStyle: React.CSSProperties = {
+  fontWeight: "bold",
+  marginBottom: "8px",
+};
+
+const actionListStyle: React.CSSProperties = {
+  marginTop: "8px",
+  paddingLeft: "20px",
+};
+
+const supportInfoStyle: React.CSSProperties = {
+  backgroundColor: "#f8f9fa",
+  padding: "16px",
+  borderRadius: "4px",
+  marginBottom: "24px",
+};
+
+const supportTitleStyle: React.CSSProperties = {
+  fontWeight: "bold",
+  marginBottom: "8px",
+};
+
+const supportTextStyle: React.CSSProperties = {
+  lineHeight: "1.6",
 };
 
 const footerStyle: React.CSSProperties = {
-  backgroundColor: "#f0f0f0",
-  padding: "12px",
   textAlign: "center",
-  borderRadius: "0 0 8px 8px",
+  padding: "20px",
+  color: "#6c757d",
+  fontSize: "12px",
+  borderTop: "1px solid #dee2e6",
 };
 
 const footerTextStyle: React.CSSProperties = {
+  margin: "0",
   fontSize: "12px",
-  color: "#666666",
+  color: "#6c757d",
 };
