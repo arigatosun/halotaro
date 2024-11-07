@@ -371,9 +371,10 @@ const ReservationCalendar: React.FC = () => {
         nm_mei: firstNameKanji || "",
         rsv_term_hour: rsvTermHour,
         rsv_term_minute: rsvTermMinute,
+        is_no_appointment: false  // スタッフ側からの予約は常にfalse
       };
 
-      const FASTAPI_ENDPOINT = "https://f356-34-97-99-223.ngrok-free.app/run-automation";
+      const FASTAPI_ENDPOINT = "https://1234-34-97-99-223.ngrok-free.app/run-automation";
 
       const automationResponse = await fetch(FASTAPI_ENDPOINT, {
         method: "POST",

@@ -19,7 +19,7 @@ export default function StaffSelection({
   selectedMenuId,
   userId,
 }: StaffSelectionProps) {
-  const { setSelectedStaff } = useReservation();
+  const { setSelectedStaff, setIsNoAppointment } = useReservation();
 
   const { staffList, loading, error } = useStaffManagement(
     userId,
@@ -29,6 +29,7 @@ export default function StaffSelection({
   // スタッフ選択時の処理
   const handleStaffSelect = (staff: Staff | null) => {
     setSelectedStaff(staff);
+    setIsNoAppointment(staff === null);  // スタッフが選択されていない場合にフラグを立てる
     onSelectStaff(staff);
   };
 
@@ -139,4 +140,4 @@ export default function StaffSelection({
       </div>
     </div>
   );
-};
+}
