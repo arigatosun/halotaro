@@ -343,24 +343,24 @@ const ReservationCalendar: React.FC = () => {
       if (!reservation.start_time || !reservation.end_time) {
         throw new Error("予約の開始時間または終了時間が不明です");
       }
-
+  
       const startTime = new Date(reservation.start_time);
       const endTime = new Date(reservation.end_time);
-
+  
       const duration = (endTime.getTime() - startTime.getTime()) / 1000 / 60; // 分単位
-
+  
       const rsvTermHour = Math.floor(duration / 60).toString();
       const rsvTermMinute = (duration % 60).toString();
-
+  
       const [lastNameKanji, firstNameKanji] = reservation.customer_name
         ? reservation.customer_name.split(" ")
         : ["", ""];
       const [lastNameKana, firstNameKana] = reservation.customer_name_kana
         ? reservation.customer_name_kana.split(" ")
         : ["", ""];
-
+  
       const automationData = {
-        user_id: user?.id ?? '',  // nullチェックを追加
+        user_id: user?.id ?? '',
         date: formatDate(startTime),
         rsv_hour: startTime.getHours().toString(),
         rsv_minute: String(startTime.getMinutes()).padStart(2, "0"),
@@ -371,11 +371,11 @@ const ReservationCalendar: React.FC = () => {
         nm_mei: firstNameKanji || "",
         rsv_term_hour: rsvTermHour,
         rsv_term_minute: rsvTermMinute,
-        is_no_appointment: false  // スタッフ側からの予約は常にfalse
+        is_no_appointment: false
       };
-
+  
       const FASTAPI_ENDPOINT = "https://1234-34-97-99-223.ngrok-free.app/run-automation";
-
+  
       const automationResponse = await fetch(FASTAPI_ENDPOINT, {
         method: "POST",
         headers: {
@@ -383,22 +383,52 @@ const ReservationCalendar: React.FC = () => {
         },
         body: JSON.stringify(automationData),
       });
-
-      const automationResponseData = await automationResponse.json();
-
+  
       if (!automationResponse.ok) {
-        const errorMessage =
-          automationResponseData.detail ||
-          automationResponseData.error ||
-          "Automation failed";
-        console.error("Automation sync failed:", errorMessage);
-        // 必要に応じてエラーハンドリングやユーザーへの通知を行います
-      } else {
-        console.log("Automation sync successful:", automationResponseData);
+        let errorMessage;
+        try {
+          const errorData = await automationResponse.json();
+          // Form submission failed with errors: の部分を削除
+          errorMessage = errorData.detail || errorData.message || '';
+          if (errorMessage.startsWith('Form submission failed with errors:')) {
+            errorMessage = errorMessage.replace('Form submission failed with errors:', '').trim();
+          }
+          if (!errorMessage) {
+            errorMessage = '予約の同期中に不明なエラーが発生しました';
+          }
+        } catch (e) {
+          errorMessage = '予約の同期処理に失敗しました';
+        }
+        throw new Error(errorMessage);
       }
+  
     } catch (error) {
       console.error("Error in sendReservationToAutomation:", error);
-      // 必要に応じてエラーハンドリングやユーザーへの通知を行います
+      
+      try {
+        // エラーメッセージを整形
+        const errorMessage = error instanceof Error 
+          ? error.message.replace('Form submission failed with errors:', '').trim()
+          : '予約同期中に不明なエラーが発生しました';
+  
+        const response = await fetch('/api/send-sync-error', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            userId: user?.id,
+            reservation,
+            errorMessage: errorMessage
+          }),
+        });
+  
+        if (!response.ok) {
+          console.error('エラー通知メールの送信に失敗しました:', await response.text());
+        }
+      } catch (emailError) {
+        console.error('エラー通知メールの送信に失敗しました:', emailError);
+      }
     }
   };
 
