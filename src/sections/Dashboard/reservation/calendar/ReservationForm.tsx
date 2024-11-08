@@ -57,7 +57,6 @@ interface ReservationFormProps {
   staffList: Staff[];
   menuList: MenuItemType[];
   reservations: Reservation[];
-  hideReservationType?: boolean;
   isCreatingFromButton?: boolean;
   businessHours: BusinessHour[];
 }
@@ -72,11 +71,9 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
   menuList,
   reservations,
   businessHours,
-  hideReservationType = false,
   isCreatingFromButton = false,
 }) => {
   const { session } = useAuth(); // useAuthからsessionを取得
-  const [formType, setFormType] = useState<"reservation" | "staffSchedule">("reservation");
   const [formData, setFormData] = useState<FormDataType>({});
   const [computedEndTime, setComputedEndTime] = useState<string>("");
   const [isOverlap, setIsOverlap] = useState<boolean>(false);
@@ -176,6 +173,8 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
     setSelectedCustomer(null);
     setIsCustomerSelected(false);
     setSearchValue('');
+    setSelectedTimeSlot(null); // 選択された時間帯もクリア
+    setAvailableTimes([]);
   };
 
   // フォームデータの初期化
@@ -237,6 +236,11 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
       ...prev,
       [name]: name === "menu_id" ? (value ? Number(value) : undefined) : value,
     }));
+
+    // 担当スタッフが変更された場合、selectedTimeSlotをリセット
+    if (name === "staff_id") {
+      setSelectedTimeSlot(null);
+    }
   };
 
   useEffect(() => {
@@ -259,8 +263,7 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
     if (
       selectedDate &&
       formData.staff_id &&
-      formData.menu_id &&
-      formType === "reservation"
+      formData.menu_id
     ) {
       const selectedMenu = menuList.find((menu) => menu.id === formData.menu_id);
       if (selectedMenu) {
@@ -342,15 +345,13 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
     reservations,
     menuList,
     businessHours,
-    formType,
   ]);
 
   useEffect(() => {
     if (
       selectedTimeSlot &&
       selectedDate &&
-      formData.menu_id &&
-      formType === "reservation"
+      formData.menu_id
     ) {
       const selectedMenu = menuList.find(
         (menu) => menu.id === formData.menu_id
@@ -370,7 +371,7 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
         setComputedEndTime(end.format("YYYY-MM-DDTHH:mm"));
       }
     }
-  }, [selectedTimeSlot, selectedDate, formData.menu_id, menuList, formType]);
+  }, [selectedTimeSlot, selectedDate, formData.menu_id, menuList]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -385,8 +386,13 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
     }
   
     // 既存の重複チェック
-    if (formType === "reservation" && isOverlap) {
-      setSnackbar({ message: overlapMessage, severity: "error" });
+    if (
+      isOverlap || 
+      !selectedTimeSlot || 
+      !formData.customer_last_name_kana || 
+      !formData.customer_first_name_kana
+    ) {
+      setSnackbar({ message: overlapMessage || "予約情報に問題があります", severity: "error" });
       return;
     }
 
@@ -405,16 +411,11 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
       start_time: formData.start_time
         ? moment(formData.start_time).utc().format()
         : undefined,
-      end_time:
-        formType === "reservation"
-          ? computedEndTime
-            ? moment(computedEndTime).utc().format()
-            : undefined
-          : formData.end_time
-          ? moment(formData.end_time).utc().format()
-          : undefined,
-      total_price: formType === "reservation" ? selectedMenuPrice : 0,
-      is_staff_schedule: formType === "staffSchedule",
+      end_time: formData.end_time
+        ? moment(formData.end_time).utc().format()
+        : undefined,
+      total_price: selectedMenuPrice,
+      is_staff_schedule: false, // スタッフスケジュールではないため false に設定
     };
 
     onSubmit(updatedReservation, isNew);
@@ -459,427 +460,331 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
   return (
     <>
       <Dialog open={true} onOpenChange={onClose}>
-        <DialogContent className="sm:max-w-[900px]">
+        <DialogContent className="sm:max-w-[700px]"> {/* ダイアログの幅を適切に設定 */}
           <DialogHeader>
-            <DialogTitle>{isNew ? "新規予約" : "予約の編集"}</DialogTitle>
+            <DialogTitle className="text-lg">
+              {isNew ? "新規予約" : "予約の編集"}
+            </DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              {!hideReservationType && (
-                <div className="space-y-2 col-span-2">
-                  <Label htmlFor="form-type">予約タイプ</Label>
-                  <select
-                    id="form-type"
-                    value={formType}
-                    onChange={(e) =>
-                      setFormType(
-                        e.target.value as "reservation" | "staffSchedule"
-                      )
-                    }
-                    className="w-full border rounded-md p-2"
-                  >
-                    <option value="reservation">通常の予約</option>
-                    <option value="staffSchedule">スタッフスケジュール</option>
-                  </select>
+            <div className="grid grid-cols-2 gap-4"> {/* グリッドを2列に設定 */}
+              {/* 顧客検索UI */}
+              <div className="space-y-1 col-span-2" ref={searchRef}>
+                <Label className="text-sm">顧客検索</Label>
+                <div className="relative">
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="顧客名を入力..."
+                      value={searchValue}
+                      onChange={(e) => {
+                        setSearchValue(e.target.value);
+                        searchCustomers(e.target.value);
+                        setIsSearchOpen(true);
+                      }}
+                      className={`w-full border rounded-md p-1 pl-8 text-sm ${selectedCustomer ? 'border-green-500' : 'border-gray-300'}`}
+                    />
+                    <MagnifyingGlassIcon className="absolute left-2 top-1.5 h-4 w-4 text-gray-400" />
+                    {selectedCustomer && (
+                      <CheckCircleIcon className="absolute right-2 top-1.5 h-4 w-4 text-green-500" />
+                    )}
+                  </div>
+                  {isSearchOpen && searchResults.length > 0 && (
+                    <ul className="absolute z-10 w-full bg-white border rounded-md max-h-48 overflow-auto mt-1 text-sm">
+                      {searchResults.map((customer) => (
+                        <li
+                          key={customer.id}
+                          onClick={() => handleCustomerSelect(customer)}
+                          className="p-1 hover:bg-gray-100 cursor-pointer"
+                        >
+                          <div className="font-medium">{customer.name}</div>
+                          <div className="text-xs text-gray-500">{customer.name_kana}</div>
+                          <div className="text-xs text-gray-500">{customer.email}</div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+
+              {/* フォームをクリアするボタン */}
+              {isCustomerSelected && (
+                <div className="col-span-2 flex justify-end">
+                  <Button variant="outline" onClick={handleClearForm} className="text-xs px-2 py-1">
+                    フォームをクリア
+                  </Button>
                 </div>
               )}
-              {formType === "reservation" ? (
-                // 予約フォーム
-                <>
-                  {/* 顧客検索UI */}
-                  <div className="space-y-2 col-span-2" ref={searchRef}>
-                    <Label>顧客検索</Label>
-                    <div className="relative">
-                      <div className="relative">
-                        <input
-                          type="text"
-                          placeholder="顧客名を入力..."
-                          value={searchValue}
-                          onChange={(e) => {
-                            setSearchValue(e.target.value);
-                            searchCustomers(e.target.value);
-                            setIsSearchOpen(true);
-                          }}
-                          className={`w-full border rounded-md p-2 pl-10 ${selectedCustomer ? 'border-green-500' : 'border-gray-300'}`}
+
+              {/* 顧客情報フォームフィールド */}
+              <div className="space-y-1">
+                <Label htmlFor="customer_last_name" className="text-sm">顧客名（姓）</Label>
+                <input
+                  id="customer_last_name"
+                  className="w-full border rounded-md p-1 text-sm"
+                  value={formData.customer_last_name || ""}
+                  onChange={(e) =>
+                    handleChange("customer_last_name", e.target.value)
+                  }
+                  disabled={isCustomerSelected} // 編集不可
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label htmlFor="customer_first_name" className="text-sm">顧客名（名）</Label>
+                <input
+                  id="customer_first_name"
+                  className="w-full border rounded-md p-1 text-sm"
+                  value={formData.customer_first_name || ""}
+                  onChange={(e) =>
+                    handleChange("customer_first_name", e.target.value)
+                  }
+                  disabled={isCustomerSelected} // 編集不可
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label htmlFor="customer_last_name_kana" className="text-sm">
+                  顧客名（カナ・姓）* {/* アスタリスクを追加 */}
+                </Label>
+                <input
+                  id="customer_last_name_kana"
+                  className="w-full border rounded-md p-1 text-sm"
+                  value={formData.customer_last_name_kana || ""}
+                  onChange={(e) =>
+                    handleChange("customer_last_name_kana", e.target.value)
+                  }
+                  required
+                  disabled={isCustomerSelected} // 編集不可
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label htmlFor="customer_first_name_kana" className="text-sm">
+                  顧客名（カナ・名）* {/* アスタリスクを追加 */}
+                </Label>
+                <input
+                  id="customer_first_name_kana"
+                  className="w-full border rounded-md p-1 text-sm"
+                  value={formData.customer_first_name_kana || ""}
+                  onChange={(e) =>
+                    handleChange("customer_first_name_kana", e.target.value)
+                  }
+                  required
+                  disabled={isCustomerSelected} // 編集不可
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label htmlFor="customer_email" className="text-sm">メールアドレス</Label>
+                <input
+                  id="customer_email"
+                  type="email"
+                  className="w-full border rounded-md p-1 text-sm"
+                  value={formData.customer_email || ""}
+                  onChange={(e) =>
+                    handleChange("customer_email", e.target.value)
+                  }
+                  disabled={isCustomerSelected} // 編集不可
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label htmlFor="customer_phone" className="text-sm">電話番号</Label>
+                <input
+                  id="customer_phone"
+                  type="tel"
+                  className="w-full border rounded-md p-1 text-sm"
+                  value={formData.customer_phone || ""}
+                  onChange={(e) =>
+                    handleChange("customer_phone", e.target.value)
+                  }
+                  disabled={isCustomerSelected} // 編集不可
+                />
+              </div>
+
+              {/* 担当スタッフ */}
+              <div className="space-y-1">
+                <Label htmlFor="staff_id" className="text-sm">担当スタッフ</Label>
+                <select
+                  id="staff_id"
+                  value={formData.staff_id || ""}
+                  onChange={(e) => handleChange("staff_id", e.target.value)}
+                  required
+                  className="w-full border rounded-md p-1 text-sm"
+                >
+                  <option value="">スタッフを選択</option>
+                  {staffList.map((staff) => (
+                    <option key={staff.id} value={staff.id}>
+                      {staff.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* メニューの選択 */}
+              <div className="space-y-1">
+                <Label htmlFor="menu_id" className="text-sm">メニュー</Label>
+                <Listbox
+                  value={selectedMenu}
+                  onChange={(menu) => {
+                    handleChange("menu_id", menu?.id?.toString() || "");
+                    setSelectedMenu(menu);
+                  }}
+                >
+                  <div className="relative">
+                    <Listbox.Button className="relative w-full cursor-default rounded-md border border-gray-300 bg-white py-1 pl-2 pr-8 text-left text-sm focus:outline-none">
+                      <span className="block truncate">
+                        {selectedMenu
+                          ? `${selectedMenu.name} (${selectedMenu.duration}分)`
+                          : "メニューを選択"}
+                      </span>
+                      <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">
+                        <ChevronUpDownIcon
+                          className="h-4 w-4 text-gray-400"
+                          aria-hidden="true"
                         />
-                        <MagnifyingGlassIcon className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
-                        {selectedCustomer && (
-                          <CheckCircleIcon className="absolute right-3 top-2.5 h-5 w-5 text-green-500" />
-                        )}
-                      </div>
-                      {isSearchOpen && searchResults.length > 0 && (
-                        <ul className="absolute z-10 w-full bg-white border rounded-md max-h-60 overflow-auto mt-1">
-                          {searchResults.map((customer) => (
-                            <li
-                              key={customer.id}
-                              onClick={() => handleCustomerSelect(customer)}
-                              className="p-2 hover:bg-gray-100 cursor-pointer"
-                            >
-                              <div className="font-medium">{customer.name}</div>
-                              <div className="text-sm text-gray-500">{customer.name_kana}</div>
-                              <div className="text-sm text-gray-500">{customer.email}</div>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </div>
+                      </span>
+                    </Listbox.Button>
+                    <Listbox.Options className="absolute z-10 mt-1 max-h-48 w-full overflow-auto rounded-md bg-white py-1 text-base shadow-lg text-sm">
+                      {menuList.map((menu) => (
+                        <Listbox.Option
+                          key={menu.id}
+                          value={menu}
+                          className={({ active }) =>
+                            `relative cursor-default select-none py-1 pl-8 pr-2 ${
+                              active
+                                ? "bg-blue-100 text-blue-900"
+                                : "text-gray-900"
+                            }`
+                          }
+                        >
+                          {({ selected }) => (
+                            <>
+                              <span
+                                className={`block truncate ${
+                                  selected ? "font-medium" : "font-normal"
+                                }`}
+                              >
+                                {menu.name} ({menu.duration}分)
+                              </span>
+                              {selected ? (
+                                <span className="absolute inset-y-0 left-0 flex items-center pl-1 text-blue-600">
+                                  <CheckIcon
+                                    className="h-3 w-3"
+                                    aria-hidden="true"
+                                  />
+                                </span>
+                              ) : null}
+                            </>
+                          )}
+                        </Listbox.Option>
+                      ))}
+                    </Listbox.Options>
                   </div>
+                </Listbox>
+              </div>
 
-                  {/* フォームをクリアするボタン */}
-                  {isCustomerSelected && (
-                    <div className="col-span-2">
-                      <Button variant="outline" onClick={handleClearForm}>
-                        フォームをクリア
+              {/* メニューの価格表示 */}
+              {selectedMenuPrice > 0 && (
+                <div className="space-y-1">
+                  <Label className="text-sm">メニューの価格</Label>
+                  <p className="text-sm">{selectedMenuPrice.toLocaleString()}円</p>
+                </div>
+              )}
+
+              {/* 予約日 */}
+              <div className="space-y-1">
+                <Label className="text-sm">予約日</Label>
+                <input
+                  type="date"
+                  className="w-full border rounded-md p-1 text-sm"
+                  value={
+                    selectedDate
+                      ? moment(selectedDate).format("YYYY-MM-DD")
+                      : ""
+                  }
+                  onChange={(e) =>
+                    setSelectedDate(moment(e.target.value).toDate())
+                  }
+                  required
+                />
+              </div>
+
+              {/* 予約可能な時間帯 */}
+              <div className="space-y-1">
+                <Label className="text-sm">予約可能な時間帯</Label>
+                {availableTimes.length > 0 ? (
+                  <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto">
+                    {availableTimes.map((time) => (
+                      <Button
+                        type="button"
+                        key={time}
+                        variant={
+                          selectedTimeSlot === time ? "default" : "outline"
+                        }
+                        onClick={() => setSelectedTimeSlot(time)}
+                        className="text-xs px-2 py-0.5"
+                      >
+                        {time}
                       </Button>
-                    </div>
-                  )}
-
-                  {/* 顧客情報フォームフィールド */}
-                  <div className="space-y-2">
-                    <Label htmlFor="customer_last_name">顧客名（姓）</Label>
-                    <input
-                      id="customer_last_name"
-                      className="w-full border rounded-md p-2"
-                      value={formData.customer_last_name || ""}
-                      onChange={(e) =>
-                        handleChange("customer_last_name", e.target.value)
-                      }
-                      disabled={isCustomerSelected} // 編集不可
-                    />
+                    ))}
                   </div>
+                ) : selectedDate && formData.staff_id && formData.menu_id ? (
+                  <p className="text-sm">この日に予約可能な時間帯はありません。</p>
+                ) : null}
+              </div>
 
-                  {/* 顧客名（名） */}
-                  <div className="space-y-2">
-                    <Label htmlFor="customer_first_name">顧客名（名）</Label>
-                    <input
-                      id="customer_first_name"
-                      className="w-full border rounded-md p-2"
-                      value={formData.customer_first_name || ""}
-                      onChange={(e) =>
-                        handleChange("customer_first_name", e.target.value)
-                      }
-                      
-                      disabled={isCustomerSelected} // 編集不可
-                    />
-                  </div>
+              {/* 選択した時間帯の表示 */}
+              {selectedTimeSlot && (
+                <div className="space-y-1">
+                  <Label className="text-sm">選択した時間帯</Label>
+                  <p className="text-sm">
+                    {selectedTimeSlot} ~{" "}
+                    {moment(
+                      `${
+                        selectedDate?.toISOString().split("T")[0]
+                      }T${selectedTimeSlot}`,
+                      "YYYY-MM-DDTHH:mm"
+                    )
+                      .add(
+                        menuList.find(
+                          (menu) => menu.id === formData.menu_id
+                        )?.duration || 0,
+                        "minutes"
+                      )
+                      .format("HH:mm")}
+                  </p>
+                </div>
+              )}
 
-                  {/* 顧客名（カナ・姓） */}
-                  <div className="space-y-2">
-                  <Label htmlFor="customer_last_name_kana">
-  顧客名（カナ・姓）* {/* アスタリスクを追加 */}
-</Label>
-                    <input
-                      id="customer_last_name_kana"
-                      className="w-full border rounded-md p-2"
-                      value={formData.customer_last_name_kana || ""}
-                      onChange={(e) =>
-                        handleChange("customer_last_name_kana", e.target.value)
-                      }
-                      required
-                      disabled={isCustomerSelected} // 編集不可
-                    />
-                  </div>
-
-                  {/* 顧客名（カナ・名） */}
-                  <div className="space-y-2">
-                  <Label htmlFor="customer_first_name_kana">
-  顧客名（カナ・名）* {/* アスタリスクを追加 */}
-</Label>
-                    <input
-                      id="customer_first_name_kana"
-                      className="w-full border rounded-md p-2"
-                      value={formData.customer_first_name_kana || ""}
-                      onChange={(e) =>
-                        handleChange("customer_first_name_kana", e.target.value)
-                      }
-                      required
-                      disabled={isCustomerSelected} // 編集不可
-                    />
-                  </div>
-
-                  {/* メールアドレス */}
-                  <div className="space-y-2">
-                    <Label htmlFor="customer_email">メールアドレス</Label>
-                    <input
-                      id="customer_email"
-                      type="email"
-                      className="w-full border rounded-md p-2"
-                      value={formData.customer_email || ""}
-                      onChange={(e) =>
-                        handleChange("customer_email", e.target.value)
-                      }
-                      
-                      disabled={isCustomerSelected} // 編集不可
-                    />
-                  </div>
-
-                  {/* 電話番号 */}
-                  <div className="space-y-2">
-                    <Label htmlFor="customer_phone">電話番号</Label>
-                    <input
-                      id="customer_phone"
-                      type="tel"
-                      className="w-full border rounded-md p-2"
-                      value={formData.customer_phone || ""}
-                      onChange={(e) =>
-                        handleChange("customer_phone", e.target.value)
-                      }
-                      disabled={isCustomerSelected} // 編集不可
-                    />
-                  </div>
-
-                  {/* 担当スタッフ */}
-                  <div className="space-y-2">
-                    <Label htmlFor="staff_id">担当スタッフ</Label>
-                    <select
-                      id="staff_id"
-                      value={formData.staff_id || ""}
-                      onChange={(e) => handleChange("staff_id", e.target.value)}
-                      required
-                      className="w-full border rounded-md p-2"
-                    >
-                      <option value="">スタッフを選択</option>
-                      {staffList.map((staff) => (
-                        <option key={staff.id} value={staff.id}>
-                          {staff.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* メニューの選択 */}
-                  <div className="space-y-2 col-span-2">
-                    <Label htmlFor="menu_id">メニュー</Label>
-                    <Listbox
-                      value={selectedMenu}
-                      onChange={(menu) => {
-                        handleChange("menu_id", menu?.id?.toString() || "");
-                        setSelectedMenu(menu);
-                      }}
-                    >
-                      <div className="relative">
-                        <Listbox.Button className="relative w-full cursor-default rounded-md border border-gray-300 bg-white py-2 pl-3 pr-10 text-left focus:outline-none">
-                          <span className="block truncate">
-                            {selectedMenu
-                              ? `${selectedMenu.name} (${selectedMenu.duration}分)`
-                              : "メニューを選択"}
-                          </span>
-                          <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">
-                            <ChevronUpDownIcon
-                              className="h-5 w-5 text-gray-400"
-                              aria-hidden="true"
-                            />
-                          </span>
-                        </Listbox.Button>
-                        <Listbox.Options className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-md bg-white py-1 text-base shadow-lg">
-                          {menuList.map((menu) => (
-                            <Listbox.Option
-                              key={menu.id}
-                              value={menu}
-                              className={({ active }) =>
-                                `relative cursor-default select-none py-2 pl-10 pr-4 ${
-                                  active
-                                    ? "bg-blue-100 text-blue-900"
-                                    : "text-gray-900"
-                                }`
-                              }
-                            >
-                              {({ selected }) => (
-                                <>
-                                  <span
-                                    className={`block truncate ${
-                                      selected ? "font-medium" : "font-normal"
-                                    }`}
-                                  >
-                                    {menu.name} ({menu.duration}分)
-                                  </span>
-                                  {selected ? (
-                                    <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-blue-600">
-                                      <CheckIcon
-                                        className="h-5 w-5"
-                                        aria-hidden="true"
-                                      />
-                                    </span>
-                                  ) : null}
-                                </>
-                              )}
-                            </Listbox.Option>
-                          ))}
-                        </Listbox.Options>
-                      </div>
-                    </Listbox>
-                  </div>
-
-                  {/* メニューの価格表示 */}
-                  {selectedMenuPrice > 0 && (
-                    <div className="space-y-2">
-                      <Label>メニューの価格</Label>
-                      <p>{selectedMenuPrice.toLocaleString()}円</p>
-                    </div>
-                  )}
-
-                  {/* 予約日 */}
-                  <div className="space-y-2">
-                    <Label>予約日</Label>
-                    <input
-                      type="date"
-                      className="w-full border rounded-md p-2"
-                      value={
-                        selectedDate
-                          ? moment(selectedDate).format("YYYY-MM-DD")
-                          : ""
-                      }
-                      onChange={(e) =>
-                        setSelectedDate(moment(e.target.value).toDate())
-                      }
-                      required
-                    />
-                  </div>
-
-                  {/* 予約可能な時間帯 */}
-                  {availableTimes.length > 0 ? (
-                    <div className="space-y-2 col-span-2">
-                      <Label>予約可能な時間帯</Label>
-                      <div className="grid grid-cols-6 gap-2 max-h-24 overflow-y-auto">
-                        {availableTimes.map((time) => (
-                          <Button
-                            type="button"
-                            key={time}
-                            variant={
-                              selectedTimeSlot === time ? "default" : "outline"
-                            }
-                            onClick={() => setSelectedTimeSlot(time)}
-                          >
-                            {time}
-                          </Button>
-                        ))}
-                      </div>
-                    </div>
-                  ) : selectedDate && formData.staff_id && formData.menu_id ? (
-                    <p>この日に予約可能な時間帯はありません。</p>
-                  ) : null}
-
-                  {/* 選択した時間帯の表示 */}
-                  {selectedTimeSlot && (
-                    <div className="space-y-2">
-                      <Label>選択した時間帯</Label>
-                      <p>
-                        {selectedTimeSlot} ~{" "}
-                        {moment(
-                          `${
-                            selectedDate?.toISOString().split("T")[0]
-                          }T${selectedTimeSlot}`,
-                          "YYYY-MM-DDTHH:mm"
-                        )
-                          .add(
-                            menuList.find(
-                              (menu) => menu.id === formData.menu_id
-                            )?.duration || 0,
-                            "minutes"
-                          )
-                          .format("HH:mm")}
-                      </p>
-                    </div>
-                  )}
-
-                  {isOverlap && (
-                    <Alert severity="error">{overlapMessage}</Alert>
-                  )}
-                </>
-              ) : (
-                // スタッフスケジュールフォーム
-                <>
-                  {/* 担当スタッフ */}
-                  <div className="space-y-2">
-                    <Label htmlFor="staff_id">担当スタッフ</Label>
-                    <select
-                      id="staff_id"
-                      value={formData.staff_id || ""}
-                      onChange={(e) => handleChange("staff_id", e.target.value)}
-                      required
-                      className="w-full border rounded-md p-2"
-                    >
-                      <option value="">スタッフを選択</option>
-                      {staffList.map((staff) => (
-                        <option key={staff.id} value={staff.id}>
-                          {staff.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* イベントの選択 */}
-                  <div className="space-y-2">
-                    <Label htmlFor="event">イベント</Label>
-                    <select
-                      id="event"
-                      value={formData.event || ""}
-                      onChange={(e) => handleChange("event", e.target.value)}
-                      required
-                      className="w-full border rounded-md p-2"
-                    >
-                      <option value="">イベントを選択</option>
-                      <option value="休憩">休憩</option>
-                      <option value="会議">会議</option>
-                      <option value="その他">その他</option>
-                    </select>
-                  </div>
-
-                  {/* 開始時間 */}
-                  <div className="space-y-2">
-                    <Label htmlFor="start_time">開始時間</Label>
-                    <input
-                      id="start_time"
-                      type="datetime-local"
-                      className="w-full border rounded-md p-2"
-                      value={formData.start_time || ""}
-                      onChange={(e) =>
-                        handleChange("start_time", e.target.value)
-                      }
-                      required
-                    />
-                  </div>
-
-                  {/* 終了時間 */}
-                  <div className="space-y-2">
-                    <Label htmlFor="end_time">終了時間</Label>
-                    <input
-                      id="end_time"
-                      type="datetime-local"
-                      className="w-full border rounded-md p-2"
-                      value={formData.end_time || ""}
-                      onChange={(e) => handleChange("end_time", e.target.value)}
-                      required
-                    />
-                  </div>
-                </>
+              {isOverlap && (
+                <Alert severity="error" className="text-xs">
+                  {overlapMessage}
+                </Alert>
               )}
             </div>
-            <div className="flex justify-between mt-6">
+            <div className="flex justify-between mt-4">
               <Button
                 type="submit"
                 disabled={
-                  formType === "reservation" && (
-                    isOverlap || 
-                    !selectedTimeSlot || 
-                    !formData.customer_last_name_kana || 
-                    !formData.customer_first_name_kana
-                  )
+                  isOverlap || 
+                  !selectedTimeSlot || 
+                  !formData.customer_last_name_kana || 
+                  !formData.customer_first_name_kana
                 }
+                className="text-sm px-3 py-1"
               >
                 {isNew
-                  ? formType === "reservation"
-                    ? "予約を作成"
-                    : "スタッフスケジュールを作成"
-                  : formType === "reservation"
-                  ? "予約を更新"
-                  : "スタッフスケジュールを更新"}
+                  ? "予約を作成"
+                  : "予約を更新"}
               </Button>
               {!isNew && formData.id && (
                 <Button
                   type="button"
                   variant="destructive"
                   onClick={handleDelete}
+                  className="text-sm px-3 py-1"
                 >
                   予約を削除
                 </Button>
@@ -903,6 +808,7 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
             borderRadius: "8px",
             boxShadow: 3,
           }}
+          className="text-sm"
         >
           {snackbar?.message}
         </Alert>
