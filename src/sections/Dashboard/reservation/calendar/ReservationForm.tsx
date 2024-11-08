@@ -1,5 +1,20 @@
 // ReservationForm.tsx
-// ReservationForm.tsx
+'use client'
+
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { ChevronsUpDown } from "lucide-react";
+import { cn } from "@/lib/utils";
 import React, { useState, useEffect } from "react";
 import {
   Dialog,
@@ -20,6 +35,17 @@ import moment from "moment";
 import { Alert, Snackbar } from "@mui/material";
 import { Listbox } from "@headlessui/react";
 import { ChevronUpDownIcon, CheckIcon } from "@heroicons/react/20/solid";
+import debounce from 'lodash/debounce';
+import { useAuth } from "@/contexts/authcontext";
+
+// 型定義
+interface Customer {
+  id: string;
+  name: string;
+  name_kana: string;
+  email: string;
+  phone: string;
+}
 
 interface FormDataType {
   customer_first_name?: string;
@@ -28,12 +54,13 @@ interface FormDataType {
   customer_last_name_kana?: string;
   customer_email?: string;
   customer_phone?: string;
-  menu_id?: number; // 型を number に変更
+  menu_id?: number;
   staff_id?: string;
   start_time?: string;
   end_time?: string;
   event?: string;
   id?: string;
+  customer_id?: string;
 }
 
 interface ReservationFormProps {
@@ -41,7 +68,6 @@ interface ReservationFormProps {
   isNew: boolean;
   onClose: () => void;
   onSubmit: (data: Partial<Reservation>, isNew: boolean) => void;
-  // onDeleteの型を更新
   onDelete: (id: string, cancellationType: string) => void;
   staffList: Staff[];
   menuList: MenuItemType[];
@@ -63,27 +89,120 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
   businessHours,
   hideReservationType = false,
   isCreatingFromButton = false,
-  // setDateRange を削除しました
 }) => {
-  const [formType, setFormType] = useState<"reservation" | "staffSchedule">(
-    "reservation"
-  );
+  const { session } = useAuth(); // useAuthからsessionを取得
+  const [formType, setFormType] = useState<"reservation" | "staffSchedule">("reservation");
   const [formData, setFormData] = useState<FormDataType>({});
   const [computedEndTime, setComputedEndTime] = useState<string>("");
   const [isOverlap, setIsOverlap] = useState<boolean>(false);
   const [overlapMessage, setOverlapMessage] = useState<string>("");
-  const [snackbar, setSnackbar] = useState<{
-    message: string;
-    severity: "success" | "error";
-  } | null>(null);
-
+  const [snackbar, setSnackbar] = useState<{ message: string; severity: "success" | "error"; } | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [availableTimes, setAvailableTimes] = useState<string[]>([]);
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<string | null>(null);
   const [selectedMenuPrice, setSelectedMenuPrice] = useState<number>(0);
-
-  // 選択されたメニューを保持するステート
   const [selectedMenu, setSelectedMenu] = useState<MenuItemType | null>(null);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [searchValue, setSearchValue] = useState("");
+  const [searchResults, setSearchResults] = useState<Customer[]>([]);
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // 顧客検索の処理
+  const searchCustomers = debounce(async (query: string) => {
+    if (!query.trim() || !session?.access_token) {
+      console.log("Search skipped:", { 
+        reason: !query.trim() ? "Empty query" : "No access token",
+        query,
+        hasToken: !!session?.access_token 
+      });
+      setSearchResults([]);
+      return;
+    }
+  
+    setIsLoading(true);
+    try {
+      console.log("Sending search request:", { 
+        query, 
+        token: `${session.access_token.substring(0, 10)}...` 
+      });
+  
+      const response = await fetch("/api/search-customers", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({ query })
+      });
+  
+      console.log("Search response status:", response.status);
+  
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error("Search error response:", errorData);
+        throw new Error(errorData.error || "顧客検索に失敗しました");
+      }
+  
+      const customers = await response.json();
+      console.log("Received search results:", customers);
+  
+      if (Array.isArray(customers)) {
+        setSearchResults(customers);
+        if (customers.length > 0) {
+          console.log("Search results set:", customers.length, "customers found");
+        } else {
+          console.log("No customers found");
+        }
+      } else {
+        console.error("Invalid response format:", customers);
+        setSearchResults([]);
+      }
+  
+    } catch (error) {
+      console.error("Customer search error:", error);
+      setSnackbar({
+        message: error instanceof Error ? error.message : "顧客検索に失敗しました",
+        severity: "error"
+      });
+      setSearchResults([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, 300);
+
+  // クリーンアップ
+  useEffect(() => {
+    return () => {
+      searchCustomers.cancel();
+    };
+  }, []);
+
+  // 顧客選択ハンドラ
+  const handleCustomerSelect = (customer: Customer) => {
+    console.log("Handling customer selection:", customer);
+    setSelectedCustomer(customer);
+    setIsSearchOpen(false);
+
+    setFormData((prevFormData) => {
+      const nameParts = customer.name.split(" ");
+      const nameKanaParts = customer.name_kana.split(" ");
+
+      const updatedFormData = {
+        ...prevFormData,
+        customer_id: customer.id,
+        customer_last_name: nameParts[0] || "",
+        customer_first_name: nameParts[1] || "",
+        customer_last_name_kana: nameKanaParts[0] || "",
+        customer_first_name_kana: nameKanaParts[1] || "",
+        customer_email: customer.email,
+        customer_phone: customer.phone,
+      };
+
+      console.log("Updating form data:", updatedFormData);
+      return updatedFormData;
+    });
+  };
 
   useEffect(() => {
     if (reservation && !isCreatingFromButton) {
@@ -161,8 +280,6 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
     }
   }, [formData.menu_id, menuList]);
 
-  // setDateRange の更新は削除
-
   useEffect(() => {
     if (
       selectedDate &&
@@ -175,7 +292,7 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
         const menuDuration = selectedMenu.duration;
         const staffId = formData.staff_id;
         const dateStr = moment(selectedDate).format("YYYY-MM-DD");
-  
+
         // 営業時間の取得
         let businessHourForDate = businessHours.find((bh) => bh.date === dateStr);
         if (!businessHourForDate) {
@@ -187,16 +304,16 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
             is_holiday: false,
           };
         }
-  
+
         if (businessHourForDate.is_holiday) {
           setAvailableTimes([]);
           return;
         }
-  
+
         // 営業時間の設定
         const openingTime = moment(`${dateStr} ${businessHourForDate.open_time}`, "YYYY-MM-DD HH:mm:ss");
         const closingTime = moment(`${dateStr} ${businessHourForDate.close_time}`, "YYYY-MM-DD HH:mm:ss");
-  
+
         // 30分単位のタイムスロット生成
         const timeSlots = [];
         let currentTime = openingTime.clone();
@@ -204,15 +321,15 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
           timeSlots.push(currentTime.format("HH:mm"));
           currentTime.add(30, "minutes");
         }
-  
+
         // 予約可能な時間帯を特定
         const available = timeSlots.filter(time => {
           const start = moment(`${dateStr} ${time}`, "YYYY-MM-DD HH:mm");
           const end = start.clone().add(menuDuration, "minutes");
-  
+
           // 営業時間外の場合は除外
           if (end.isAfter(closingTime)) return false;
-  
+
           // 既存予約との重複チェック
           return !reservations.some(res => {
             // 異なるスタッフの予約は無視
@@ -222,13 +339,13 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
             if (res.status && ['cancelled', 'salon_cancelled', 'same_day_cancelled', 'no_show'].includes(res.status)) {
               return false;
             }
-  
+
             const resStart = moment.utc(res.start_time).local();
             const resEnd = moment.utc(res.end_time).local();
             
             // 同じ日付の予約のみチェック
             if (resStart.format('YYYY-MM-DD') !== dateStr) return false;
-  
+
             // 時間の重複チェック
             return (
               (start.isSameOrAfter(resStart) && start.isBefore(resEnd)) ||
@@ -237,7 +354,7 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
             );
           });
         });
-  
+
         setAvailableTimes(available);
       }
     } else {
@@ -247,7 +364,7 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
     selectedDate,
     formData.staff_id,
     formData.menu_id,
-    reservations,  // reservationsの変更を監視
+    reservations,
     menuList,
     businessHours,
     formType,
@@ -374,7 +491,79 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
               {formType === "reservation" ? (
                 // 予約フォーム
                 <>
-                  {/* 顧客名（姓） */}
+                  {/* 顧客検索UI */}
+                  <div className="space-y-2 col-span-2">
+                    <Label>顧客検索</Label>
+                    <Popover
+                      open={isSearchOpen}
+                      onOpenChange={(open) => setIsSearchOpen(open)}
+                    >
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          aria-expanded={isSearchOpen}
+                          className="w-full justify-between"
+                        >
+                          {selectedCustomer ? (
+                            <div className="flex flex-col items-start">
+                              <span>{selectedCustomer.name}</span>
+                              <span className="text-sm text-gray-500">
+                                {selectedCustomer.name_kana}
+                              </span>
+                            </div>
+                          ) : (
+                            "顧客を検索..."
+                          )}
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-full p-0">
+                      <Command shouldFilter={false}>
+                          <CommandInput
+                            placeholder="顧客名を入力..."
+                            value={searchValue}
+                            onValueChange={(value) => {
+                              console.log("Input value changed:", value);
+                              setSearchValue(value);
+                              searchCustomers(value);
+                            }}
+                          />
+                          <CommandEmpty>該当する顧客が見つかりません</CommandEmpty>
+                          <CommandGroup className="max-h-60 overflow-auto">
+                            {searchResults.map((customer) => {
+                              console.log("Rendering customer:", customer);
+                              return (
+                                <CommandItem
+                                  key={customer.id}
+                                  onSelect={() => {
+                                    console.log("Selected customer:", customer);
+                                    handleCustomerSelect(customer);
+                                  }}
+                                  className="flex items-center justify-between p-2"
+                                >
+                                  <div>
+                                    <div className="font-medium">{customer.name}</div>
+                                    <div className="text-sm text-gray-500">
+                                      {customer.name_kana}
+                                    </div>
+                                    <div className="text-sm text-gray-500">
+                                      {customer.email}
+                                    </div>
+                                  </div>
+                                  {selectedCustomer?.id === customer.id && (
+                                    <CheckIcon className="h-4 w-4" />
+                                  )}
+                                </CommandItem>
+                              );
+                            })}
+                          </CommandGroup>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+
+                  {/* 顧客情報フォームフィールド */}
                   <div className="space-y-2">
                     <Label htmlFor="customer_last_name">顧客名（姓）</Label>
                     <Input
