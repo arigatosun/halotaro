@@ -872,7 +872,7 @@ const ReservationCalendar: React.FC = () => {
           staffList={sortedStaffList}
           menuList={menuList}
           reservations={reservations}
-          hideReservationType={isCreatingFromButton}
+          
           isCreatingFromButton={isCreatingFromButton}
           businessHours={businessHours}
         />
