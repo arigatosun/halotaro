@@ -20,6 +20,7 @@ export interface Reservation {
   is_closed_day?: boolean; // 追加（休業日用）
   editable?: boolean; // この行を追加
   is_hair_sync?: boolean; // この行を追加
+  customer_id?: string; // ここを追加
   // その他のフィールドがある場合はここに追加
 }
 

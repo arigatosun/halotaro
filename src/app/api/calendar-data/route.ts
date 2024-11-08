@@ -344,12 +344,14 @@ return NextResponse.json(
   { status: 500 }
 );
       }
-    } else {
-      // 通常の予約作成時に create_reservation を使用
+    }  else {
+      // スタッフダッシュボードからの予約作成
       try {
-        // create_reservation 関数を呼び出すためのパラメータを準備
+        // create_staff_reservation 関数を呼び出すためのパラメータを準備
         const rpcParams = {
           p_user_id: authResult.user.id,
+          p_staff_id: staff_id,
+          p_menu_id: menu_id ? parseInt(menu_id, 10) : null,
           p_start_time: start_time
             ? moment.utc(start_time).format("YYYY-MM-DD HH:mm:ss")
             : null,
@@ -357,25 +359,21 @@ return NextResponse.json(
             ? moment.utc(end_time).format("YYYY-MM-DD HH:mm:ss")
             : null,
           p_total_price: total_price || 0,
-          p_customer_name: customer_name,
-          p_customer_name_kana: customer_name_kana,
-          p_customer_email: customer_email,
-          p_customer_phone: customer_phone,
-          p_menu_id: menu_id ? parseInt(menu_id, 10) : null,
-          p_coupon_id: null, // 必要に応じて設定
-          p_staff_id: staff_id || null,
-          p_payment_method: payment_method || null,
-          p_payment_status: payment_status || null,
-          p_payment_amount: payment_amount || null,
-          p_stripe_payment_intent_id: stripe_payment_intent_id || null,
+          p_customer_last_name_kana: customer_last_name_kana,
+          p_customer_first_name_kana: customer_first_name_kana,
+          p_customer_last_name: customer_last_name || null,
+          p_customer_first_name: customer_first_name || null,
+          p_customer_email: customer_email || null,
+          p_customer_phone: customer_phone || null,
+          p_customer_id: data.customer_id || null
         };
 
-        // create_reservation 関数を呼び出す
+        // create_staff_reservation 関数を呼び出す
         const { data: reservationData, error: reservationError } =
-          await supabaseService.rpc("create_reservation", rpcParams);
+          await supabaseService.rpc("create_staff_reservation", rpcParams);
 
         if (reservationError) {
-          console.error("Error creating reservation:", reservationError);
+          console.error("Error creating staff reservation:", reservationError);
           return NextResponse.json(
             { error: reservationError.message },
             { status: 500 }
@@ -397,8 +395,7 @@ return NextResponse.json(
         }
 
         const reservationId = reservationData[0].reservation_id;
-        const reservationCustomerId =
-          reservationData[0].reservation_customer_id;
+        const reservationCustomerId = reservationData[0].reservation_customer_id;
 
         console.log("Created reservation ID:", reservationId);
         console.log("Created reservation customer ID:", reservationCustomerId);
@@ -430,12 +427,10 @@ return NextResponse.json(
         // フォーマット処理
         const formattedReservation = formatReservation(newReservation);
 
-        // 予約作成後の追加処理は不要
-
         // レスポンスを返す
         return NextResponse.json(formattedReservation);
       } catch (error: any) {
-        console.error("Error saving reservation:", error);
+        console.error("Error saving staff reservation:", error);
         return NextResponse.json({ error: error.message }, { status: 400 });
       }
     }
