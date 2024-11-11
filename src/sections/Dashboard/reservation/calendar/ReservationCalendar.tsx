@@ -50,6 +50,8 @@ const ReservationCalendar: React.FC = () => {
 
   const isMobile = useMediaQuery({ maxWidth: 767 });
 
+  
+
   // 日付変更ハンドラを追加
   const handleDateChange = (date: moment.Moment | null) => {
     if (date) {
@@ -337,6 +339,8 @@ const ReservationCalendar: React.FC = () => {
     }
   };
 
+  
+
   // ★ sendReservationToAutomation 関数の追加
   const sendReservationToAutomation = async (reservation: Reservation) => {
     try {
@@ -604,6 +608,88 @@ const ReservationCalendar: React.FC = () => {
     setIsStaffScheduleFormOpen(true);
   };
 
+  const sendStaffScheduleToAutomation = async (staffSchedule: Reservation) => {
+    try {
+      if (!staffSchedule.start_time || !staffSchedule.end_time) {
+        throw new Error("スタッフスケジュールの開始時間または終了時間が不明です");
+      }
+
+      const startTime = new Date(staffSchedule.start_time);
+      const endTime = new Date(staffSchedule.end_time);
+
+      const duration = (endTime.getTime() - startTime.getTime()) / 1000 / 60; // 分単位
+
+      const rsvTermHour = Math.floor(duration / 60).toString();
+      const rsvTermMinute = (duration % 60).toString();
+
+      const automationData = {
+        user_id: user?.id ?? '',
+        date: formatDate(startTime),
+        rsv_hour: startTime.getHours().toString(),
+        rsv_minute: String(startTime.getMinutes()).padStart(2, "0"),
+        staff_name: staffSchedule.staff_name || "",
+        rsv_term_hour: rsvTermHour,
+        rsv_term_minute: rsvTermMinute,
+        is_no_appointment: true,
+        event: staffSchedule.event || "予定あり"
+      };
+
+      const FASTAPI_ENDPOINT = "https://1234-34-97-99-223.ngrok-free.app/staff-run-automation";
+
+      const automationResponse = await fetch(FASTAPI_ENDPOINT, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(automationData),
+      });
+
+      if (!automationResponse.ok) {
+        let errorMessage;
+        try {
+          const errorData = await automationResponse.json();
+          errorMessage = errorData.detail || errorData.message || '';
+          if (errorMessage.startsWith('Form submission failed with errors:')) {
+            errorMessage = errorMessage.replace('Form submission failed with errors:', '').trim();
+          }
+          if (!errorMessage) {
+            errorMessage = 'スタッフスケジュールの同期中に不明なエラーが発生しました';
+          }
+        } catch (e) {
+          errorMessage = 'スタッフスケジュールの同期処理に失敗しました';
+        }
+        throw new Error(errorMessage);
+      }
+
+    } catch (error) {
+      console.error("sendStaffScheduleToAutomationでエラーが発生しました:", error);
+      
+      try {
+        const errorMessage = error instanceof Error 
+          ? error.message.replace('Form submission failed with errors:', '').trim()
+          : 'スタッフスケジュール同期中に不明なエラーが発生しました';
+
+        const response = await fetch('/api/send-sync-error', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            userId: user?.id,
+            staffSchedule,
+            errorMessage: errorMessage
+          }),
+        });
+
+        if (!response.ok) {
+          console.error('エラー通知メールの送信に失敗しました:', await response.text());
+        }
+      } catch (emailError) {
+        console.error('エラー通知メールの送信に失敗しました:', emailError);
+      }
+    }
+  };
+
   // スタッフスケジュールフォーム送信ハンドラ
   const handleStaffScheduleFormSubmit = async (
     data: Partial<Reservation>,
@@ -625,7 +711,7 @@ const ReservationCalendar: React.FC = () => {
         is_staff_schedule: true,
         total_price: 0,
       };
-      console.log("Sending staff schedule data:", scheduleData);
+      console.log("スタッフスケジュールデータを送信中:", scheduleData);
 
       const response = await fetch("/api/calendar-data", {
         method: method,
@@ -638,9 +724,9 @@ const ReservationCalendar: React.FC = () => {
 
       if (!response.ok) {
         const errorData = await response.json();
-        console.error("API error:", errorData);
+        console.error("APIエラー:", errorData);
         throw new Error(
-          `Failed to ${isNew ? "create" : "update"} staff schedule`
+          `スタッフスケジュールの${isNew ? "作成" : "更新"}に失敗しました`
         );
       }
 
@@ -662,8 +748,14 @@ const ReservationCalendar: React.FC = () => {
         message: `スタッフスケジュールが${isNew ? "作成" : "更新"}されました`,
         severity: "success",
       });
+
+      // スタッフスケジュールの同期処理を呼び出し（新規作成時のみ）
+      if (isNew) {
+        await sendStaffScheduleToAutomation(newSchedule);
+      }
+
     } catch (error) {
-      console.error("Error in handleStaffScheduleFormSubmit:", error);
+      console.error("handleStaffScheduleFormSubmitでエラーが発生しました:", error);
       setSnackbar({
         message: `スタッフスケジュールの${
           isNew ? "作成" : "更新"

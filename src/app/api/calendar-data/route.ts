@@ -48,13 +48,13 @@ function formatReservation(reservation: any) {
     customer_name:
       reservation.scraped_customer ||
       reservation.reservation_customers?.name ||
-      "Unknown",
-    customer_email: reservation.reservation_customers?.email || "Unknown",
-    customer_phone: reservation.reservation_customers?.phone || "Unknown",
+      "",
+    customer_email: reservation.reservation_customers?.email || "",
+    customer_phone: reservation.reservation_customers?.phone || "",
     customer_name_kana:
-      reservation.reservation_customers?.name_kana || "Unknown",
-    menu_name: reservation.menu_items?.name || "Unknown",
-    staff_name: reservation.staff?.name || "Unknown",
+      reservation.reservation_customers?.name_kana || "",
+    menu_name: reservation.scraped_menu || reservation.menu_items?.name || "", // scraped_menuを優先
+    staff_name: reservation.staff?.name || "",
     start_time: moment.utc(reservation.start_time).toISOString(),
     end_time: moment.utc(reservation.end_time).toISOString(),
     is_staff_schedule: reservation.is_staff_schedule || false,
@@ -62,6 +62,7 @@ function formatReservation(reservation: any) {
     is_hair_sync: reservation.is_hair_sync || false,
   };
 }
+
 
 export async function GET(request: Request) {
   try {
@@ -106,17 +107,16 @@ export async function GET(request: Request) {
     // 予約データの取得
     const { data: reservations, error: reservationError } = await supabase
       .from("reservations")
-      .select(
-        `
+      .select(`
         *,
+        scraped_menu,
         is_hair_sync,
         reservation_customers!fk_customer (
           id, name, email, phone, name_kana
         ),
         menu_items (id, name, duration, price),
-        staff (id, name, schedule_order) // schedule_order を含める
-      `
-      )
+        staff (id, name, schedule_order)
+      `)
       .eq("user_id", userId)
       .gte("start_time", startDate)
       .lte("end_time", endDate)
