@@ -48,13 +48,13 @@ function formatReservation(reservation: any) {
     customer_name:
       reservation.scraped_customer ||
       reservation.reservation_customers?.name ||
-      "Unknown",
-    customer_email: reservation.reservation_customers?.email || "Unknown",
-    customer_phone: reservation.reservation_customers?.phone || "Unknown",
+      "",
+    customer_email: reservation.reservation_customers?.email || "",
+    customer_phone: reservation.reservation_customers?.phone || "",
     customer_name_kana:
-      reservation.reservation_customers?.name_kana || "Unknown",
-    menu_name: reservation.menu_items?.name || "Unknown",
-    staff_name: reservation.staff?.name || "Unknown",
+      reservation.reservation_customers?.name_kana || "", // "Unknown" を "" に変更
+    menu_name: reservation.menu_items?.name || "",
+    staff_name: reservation.staff?.name || "",
     start_time: moment.utc(reservation.start_time).toISOString(),
     end_time: moment.utc(reservation.end_time).toISOString(),
     is_staff_schedule: reservation.is_staff_schedule || false,

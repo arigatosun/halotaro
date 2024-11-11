@@ -383,6 +383,7 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
                     staff.id.toString() === reservation.staff_id?.toString()
                 )?.name || ""
               : "";
+            
             if (reservation.is_staff_schedule) {
               if (isMobile) {
                 return {
@@ -401,23 +402,28 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
                 };
               }
             }
-            if (isMobile) {
-              return {
-                html: `
-                  <div class="fc-event-title">
-                    <strong>${staffName}</strong><br>
-                    ${reservation.customer_name || ""}<br>
-                    ${reservation.menu_name || ""}
-                  </div>
-                `,
-              };
-            } else {
-              return {
-                html: `
-                  <div class="fc-event-title">
-                    ${reservation.customer_name || ""}<br>
-                    ${reservation.menu_name || ""}
-                  </div>
+            
+            // 顧客名の表示ロジックを修正
+            // 顧客名の表示ロジックを修正
+  const customerName = reservation.customer_name || reservation.customer_name_kana || "Unknown";
+  
+  if (isMobile) {
+    return {
+      html: `
+        <div class="fc-event-title">
+          <strong>${staffName}</strong><br>
+          ${customerName}<br>
+          ${reservation.menu_name || ""}
+        </div>
+      `,
+    };
+  } else {
+    return {
+      html: `
+        <div class="fc-event-title">
+          ${customerName}<br>
+          ${reservation.menu_name || ""}
+        </div>
                 `,
               };
             }
