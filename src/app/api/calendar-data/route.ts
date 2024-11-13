@@ -51,8 +51,7 @@ function formatReservation(reservation: any) {
       "",
     customer_email: reservation.reservation_customers?.email || "",
     customer_phone: reservation.reservation_customers?.phone || "",
-    customer_name_kana:
-      reservation.reservation_customers?.name_kana || "",
+    customer_name_kana: reservation.reservation_customers?.name_kana || "",
     menu_name: reservation.scraped_menu || reservation.menu_items?.name || "", // scraped_menuを優先
     staff_name: reservation.staff?.name || "",
     start_time: moment.utc(reservation.start_time).toISOString(),
@@ -62,7 +61,6 @@ function formatReservation(reservation: any) {
     is_hair_sync: reservation.is_hair_sync || false,
   };
 }
-
 
 export async function GET(request: Request) {
   try {
@@ -99,15 +97,14 @@ export async function GET(request: Request) {
       .utc()
       .format("YYYY-MM-DD HH:mm:ss");
 
-   
-
     // 表示対象のステータスリスト
     const includedStatuses = ["confirmed", "paid", "staff"];
 
     // 予約データの取得
     const { data: reservations, error: reservationError } = await supabase
       .from("reservations")
-      .select(`
+      .select(
+        `
         *,
         scraped_menu,
         is_hair_sync,
@@ -116,7 +113,8 @@ export async function GET(request: Request) {
         ),
         menu_items (id, name, duration, price),
         staff (id, name, schedule_order)
-      `)
+      `
+      )
       .eq("user_id", userId)
       .gte("start_time", startDate)
       .lte("end_time", endDate)
@@ -157,14 +155,12 @@ export async function GET(request: Request) {
       });
     }
 
-    const salonId = salonData.id;
-
     // 指定された期間内の営業時間データの取得
     const { data: businessHoursData, error: businessHoursError } =
       await supabase
         .from("salon_business_hours")
         .select("*")
-        .eq("salon_id", salonId)
+        .eq("salon_id", userId)
         .gte("date", startDateStr)
         .lte("date", endDateStr);
 
@@ -295,28 +291,28 @@ export async function POST(request: Request) {
           );
         }
 
-// 重要: クライアントから受け取った時間をJSTとして解釈し、UTCに変換
-const utcStartTime = moment.tz(start_time, "Asia/Tokyo").utc().format();
-const utcEndTime = moment.tz(end_time, "Asia/Tokyo").utc().format();
+        // 重要: クライアントから受け取った時間をJSTとして解釈し、UTCに変換
+        const utcStartTime = moment.tz(start_time, "Asia/Tokyo").utc().format();
+        const utcEndTime = moment.tz(end_time, "Asia/Tokyo").utc().format();
 
-const insertData: Partial<Reservation> = {
-  user_id: authResult.user.id,
-  staff_id: staff_id || undefined,
-  start_time: utcStartTime,
-  end_time: utcEndTime,
-  status: "staff",
-  total_price: 0,
-  is_staff_schedule: true,
-  event: event || "予定あり",
-};
+        const insertData: Partial<Reservation> = {
+          user_id: authResult.user.id,
+          staff_id: staff_id || undefined,
+          start_time: utcStartTime,
+          end_time: utcEndTime,
+          status: "staff",
+          total_price: 0,
+          is_staff_schedule: true,
+          event: event || "予定あり",
+        };
 
-console.log("Inserting staff schedule:", insertData);
+        console.log("Inserting staff schedule:", insertData);
 
-const { data: newSchedule, error: scheduleError } = await supabase
-  .from("reservations")
-  .insert(insertData)
-  .select(
-    `
+        const { data: newSchedule, error: scheduleError } = await supabase
+          .from("reservations")
+          .insert(insertData)
+          .select(
+            `
     *,
     reservation_customers!fk_customer (
       id, name, email, phone, name_kana
@@ -324,27 +320,30 @@ const { data: newSchedule, error: scheduleError } = await supabase
     menu_items (id, name, duration, price),
     staff (id, name)
   `
-  )
-  .single();
+          )
+          .single();
 
-if (scheduleError) {
-  console.error("Error creating staff schedule:", scheduleError);
-  return NextResponse.json(
-    { error: scheduleError.message },
-    { status: 500 }
-  );
-}
+        if (scheduleError) {
+          console.error("Error creating staff schedule:", scheduleError);
+          return NextResponse.json(
+            { error: scheduleError.message },
+            { status: 500 }
+          );
+        }
 
-const formattedSchedule = formatReservation(newSchedule);
-return NextResponse.json(formattedSchedule);
-} catch (error: any) {
-console.error("Unexpected error during staff schedule creation:", error);
-return NextResponse.json(
-  { error: "An unexpected error occurred" },
-  { status: 500 }
-);
+        const formattedSchedule = formatReservation(newSchedule);
+        return NextResponse.json(formattedSchedule);
+      } catch (error: any) {
+        console.error(
+          "Unexpected error during staff schedule creation:",
+          error
+        );
+        return NextResponse.json(
+          { error: "An unexpected error occurred" },
+          { status: 500 }
+        );
       }
-    }  else {
+    } else {
       // スタッフダッシュボードからの予約作成
       try {
         // create_staff_reservation 関数を呼び出すためのパラメータを準備
@@ -365,7 +364,7 @@ return NextResponse.json(
           p_customer_first_name: customer_first_name || null,
           p_customer_email: customer_email || null,
           p_customer_phone: customer_phone || null,
-          p_customer_id: data.customer_id || null
+          p_customer_id: data.customer_id || null,
         };
 
         // create_staff_reservation 関数を呼び出す
@@ -395,7 +394,8 @@ return NextResponse.json(
         }
 
         const reservationId = reservationData[0].reservation_id;
-        const reservationCustomerId = reservationData[0].reservation_customer_id;
+        const reservationCustomerId =
+          reservationData[0].reservation_customer_id;
 
         console.log("Created reservation ID:", reservationId);
         console.log("Created reservation customer ID:", reservationCustomerId);
@@ -552,7 +552,10 @@ export async function PUT(request: Request) {
     }
 
     // スタッフスケジュールの場合、ステータスを 'staff' に強制設定
-    if (existingReservation.is_staff_schedule && updatedData.status !== "staff") {
+    if (
+      existingReservation.is_staff_schedule &&
+      updatedData.status !== "staff"
+    ) {
       updatedData.status = "staff";
     }
 
@@ -602,7 +605,10 @@ export async function PUT(request: Request) {
         .eq("id", customerId);
 
       if (customerUpdateError) {
-        console.warn("Warning: Could not update customer information:", customerUpdateError);
+        console.warn(
+          "Warning: Could not update customer information:",
+          customerUpdateError
+        );
         // 顧客情報の更新に失敗しても、予約の更新自体は成功とする
       }
     }

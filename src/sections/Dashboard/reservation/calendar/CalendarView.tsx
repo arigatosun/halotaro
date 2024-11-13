@@ -1,10 +1,11 @@
 // CalendarView.tsx
+"use client";
+
 import React, { forwardRef, useRef, useEffect } from "react";
 import FullCalendar from "@fullcalendar/react";
 import resourceTimelinePlugin from "@fullcalendar/resource-timeline";
 import interactionPlugin, { DateClickArg } from "@fullcalendar/interaction";
 import listPlugin from "@fullcalendar/list";
-import { styled } from "@mui/system";
 import {
   EventClickArg,
   EventDropArg,
@@ -12,7 +13,7 @@ import {
   CalendarOptions,
 } from "@fullcalendar/core";
 import { Reservation, Staff, BusinessHour } from "@/types/reservation";
-import moment from "moment";
+import moment from "moment-timezone";
 import "moment/locale/ja";
 import { Box } from "@mui/material";
 
@@ -30,115 +31,8 @@ interface CalendarViewProps {
   currentDate: moment.Moment;
   onDateClick: (clickInfo: DateClickArg) => void;
   isMobile: boolean;
-  isUpdating: boolean; // 追加
+  isUpdating: boolean;
 }
-
-const StyledFullCalendar = styled(FullCalendar)<CalendarOptions>(
-  ({ theme }) => ({
-    "& .fc-timeline-event-harness.staff-schedule": {
-      backgroundColor: "#B0B0B0 !important",
-      borderColor: "#B0B0B0 !important",
-      color: "white !important",
-    },
-    "& .fc-timeline-event-harness.hair-reservation": {
-      backgroundColor: "#FFA500 !important",
-      borderColor: "#FFA500 !important",
-      color: "black !important",
-    },
-    "& .fc-timeline-event.customer-reservation": {
-      backgroundColor: "#F2CA52 !important",
-      borderColor: "#F2CA52 !important",
-      color: "black !important",
-    },
-    "& .fc-timeline-slot-cushion": {
-      fontSize: "0.8rem",
-      color: theme.palette.text.primary,
-    },
-    "& .fc-timeline-event": {
-      borderRadius: "4px",
-      padding: "0 !important",
-      fontSize: "0.8rem",
-      boxSizing: "border-box",
-      width: "100% !important",
-      maxWidth: "100% !important",
-      left: "0 !important",
-      right: "0 !important",
-      margin: "0 !important",
-      height: "100% !important",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      cursor: "pointer",
-      opacity: "0.9",
-      zIndex: "auto",
-    },
-    "& .fc-timeline-event *": {
-      height: "100% !important",
-      margin: "0 !important",
-      padding: "0 !important",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    "& .fc-timeline-header": {
-      backgroundColor: theme.palette.background.paper,
-      borderBottom: `1px solid ${theme.palette.divider}`,
-    },
-    "& .fc-timeline-slot": {
-      minWidth: "50px !important",
-    },
-    "& .fc-timeline-header-row-chrono th": {
-      textAlign: "center",
-    },
-    "& .fc-resource-timeline-divider": {
-      display: "none",
-    },
-    "& .fc-toolbar": {
-      display: "none",
-    },
-    "& .fc-timeline-header-row:first-child": {
-      display: "none",
-    },
-    "& .fc-resource-area": {
-      maxHeight: "calc(80vh - 50px)",
-      overflowY: "auto !important",
-    },
-    "& .fc-resource-area table": {
-      height: "100%",
-    },
-    "& .fc-resource-area tbody": {
-      display: "flex",
-      flexDirection: "column",
-      height: "100%",
-    },
-    "& .fc-resource-area tr": {
-      flex: 1,
-      display: "flex",
-    },
-    "& .fc-resource-area td": {
-      flex: 1,
-      display: "flex",
-      alignItems: "center",
-      padding: "10px",
-      boxSizing: "border-box",
-      minHeight: "60px",
-      height: "100px",
-    },
-    "& .fc-timeline-body": {
-      maxHeight: "calc(80vh - 50px)",
-      overflowY: "auto !important",
-    },
-    "& .fc-event.closed-day": {
-      backgroundColor: "#ff9f89",
-      border: "none",
-      cursor: "default",
-    },
-    "& .fc-event-dragging": {
-      opacity: "0.7",
-      cursor: "move",
-    },
-  })
-);
 
 function hasStaffId(
   reservation: Reservation
@@ -169,7 +63,7 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
       currentDate,
       onDateClick,
       isMobile,
-      isUpdating, // 追加
+      isUpdating,
     },
     ref
   ) => {
@@ -204,19 +98,17 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
       return <div>営業時間を読み込んでいます...</div>;
     }
 
+    const currentDateStr = currentDate.tz("Asia/Tokyo").format("YYYY-MM-DD");
+    const currentBusinessHours = businessHours.filter(
+      (bh) => bh.date === currentDateStr && !bh.is_holiday
+    );
+
     const earliestOpenTime = moment
-      .min(
-        businessHours
-          .filter((bh) => !bh.is_holiday)
-          .map((bh) => moment(bh.open_time, "HH:mm:ss"))
-      )
+      .min(currentBusinessHours.map((bh) => moment(bh.open_time, "HH:mm:ss")))
       .format("HH:mm:ss");
+
     const latestCloseTime = moment
-      .max(
-        businessHours
-          .filter((bh) => !bh.is_holiday)
-          .map((bh) => moment(bh.close_time, "HH:mm:ss"))
-      )
+      .max(currentBusinessHours.map((bh) => moment(bh.close_time, "HH:mm:ss")))
       .format("HH:mm:ss");
 
     const events = [
@@ -241,7 +133,8 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
             ? ["hair-reservation"]
             : ["customer-reservation"],
           editable: !reservation.is_closed_day && !reservation.is_hair_sync,
-          resourceEditable: !reservation.is_closed_day && !reservation.is_hair_sync,
+          resourceEditable:
+            !reservation.is_closed_day && !reservation.is_hair_sync,
           extendedProps: reservation,
         })),
       ...businessHours
@@ -282,13 +175,11 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
 
     const initialView = isMobile ? "listDay" : "resourceTimelineDay";
 
-    const businessHoursConfig = businessHours
-      .filter((bh) => !bh.is_holiday)
-      .map((bh) => ({
-        daysOfWeek: [moment(bh.date).day()],
-        startTime: bh.open_time || "00:00",
-        endTime: bh.close_time || "24:00",
-      }));
+    const businessHoursConfig = currentBusinessHours.map((bh) => ({
+      daysOfWeek: [moment(bh.date).day()],
+      startTime: bh.open_time || "00:00",
+      endTime: bh.close_time || "24:00",
+    }));
 
     return (
       <Box
@@ -297,19 +188,19 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
           borderRadius: "12px",
           overflow: "hidden",
           boxShadow: 3,
-          height: "80vh",
+          height: "100%",
           display: "flex",
           flexDirection: "column",
         }}
       >
-        <StyledFullCalendar
+        <FullCalendar
           expandRows={true}
           ref={ref}
           plugins={plugins}
           datesSet={handleDatesSet}
           initialView={initialView}
           initialDate={currentDate.format("YYYY-MM-DD")}
-          editable={!isUpdating} // 更新中は編集不可
+          editable={!isUpdating}
           eventStartEditable={!isUpdating}
           eventDurationEditable={!isUpdating}
           droppable={true}
@@ -330,7 +221,7 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
           slotMinTime={earliestOpenTime}
           slotMaxTime={latestCloseTime}
           timeZone="local"
-          height="100%"
+          height="400px"
           headerToolbar={false}
           dayHeaderFormat={{
             weekday: "long",
@@ -354,7 +245,6 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
           selectMinDistance={10}
           eventDidMount={(info) => {
             const reservation = info.event.extendedProps as Reservation;
-            console.log("Event mounted:", info.event.toPlainObject());
 
             if (reservation.is_staff_schedule) {
               info.el.parentElement?.classList.add("staff-schedule");
@@ -383,7 +273,7 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
                     staff.id.toString() === reservation.staff_id?.toString()
                 )?.name || ""
               : "";
-            
+
             if (reservation.is_staff_schedule) {
               if (isMobile) {
                 return {
@@ -402,28 +292,29 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
                 };
               }
             }
-            
-            // 顧客名の表示ロジックを修正
-            // 顧客名の表示ロジックを修正
-  const customerName = reservation.customer_name || reservation.customer_name_kana || "Unknown";
-  
-  if (isMobile) {
-    return {
-      html: `
-        <div class="fc-event-title">
-          <strong>${staffName}</strong><br>
-          ${customerName}<br>
-          ${reservation.menu_name || ""}
-        </div>
-      `,
-    };
-  } else {
-    return {
-      html: `
-        <div class="fc-event-title">
-          ${customerName}<br>
-          ${reservation.menu_name || ""}
-        </div>
+
+            const customerName =
+              reservation.customer_name ||
+              reservation.customer_name_kana ||
+              "Unknown";
+
+            if (isMobile) {
+              return {
+                html: `
+                  <div class="fc-event-title">
+                    <strong>${staffName}</strong><br>
+                    ${customerName}<br>
+                    ${reservation.menu_name || ""}
+                  </div>
+                `,
+              };
+            } else {
+              return {
+                html: `
+                  <div class="fc-event-title">
+                    ${customerName}<br>
+                    ${reservation.menu_name || ""}
+                  </div>
                 `,
               };
             }

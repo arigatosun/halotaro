@@ -2,7 +2,13 @@
 // ReservationCalendar.tsx
 "use client";
 
-import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import React, {
+  useState,
+  useRef,
+  useEffect,
+  useCallback,
+  useMemo,
+} from "react";
 import {
   Box,
   Select,
@@ -29,18 +35,20 @@ import { Reservation, Staff } from "@/types/reservation";
 import { useAuth } from "@/contexts/authcontext";
 import FullCalendar from "@fullcalendar/react";
 import { useMediaQuery } from "react-responsive";
-import { AdapterMoment } from '@mui/x-date-pickers/AdapterMoment'; // 追加
-import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'; // 追加
+import { AdapterMoment } from "@mui/x-date-pickers/AdapterMoment"; // 追加
+import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider"; // 追加
 
 moment.locale("ja");
 
 const ReservationCalendar: React.FC = () => {
   const [isNewStaffSchedule, setIsNewStaffSchedule] = useState(false);
-  const [selectedReservation, setSelectedReservation] = useState<Reservation | null>(null);
+  const [selectedReservation, setSelectedReservation] =
+    useState<Reservation | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isNewReservation, setIsNewReservation] = useState(false);
   const [isStaffScheduleFormOpen, setIsStaffScheduleFormOpen] = useState(false);
-  const [selectedStaffSchedule, setSelectedStaffSchedule] = useState<Reservation | null>(null);
+  const [selectedStaffSchedule, setSelectedStaffSchedule] =
+    useState<Reservation | null>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [isEditFormOpen, setIsEditFormOpen] = useState(false);
   const [currentDate, setCurrentDate] = useState(moment());
@@ -49,8 +57,6 @@ const ReservationCalendar: React.FC = () => {
   const [isUpdating, setIsUpdating] = useState(false); // 更新中かどうかの状態を追加
 
   const isMobile = useMediaQuery({ maxWidth: 767 });
-
-  
 
   // 日付変更ハンドラを追加
   const handleDateChange = (date: moment.Moment | null) => {
@@ -62,8 +68,6 @@ const ReservationCalendar: React.FC = () => {
       }
     }
   };
-
-  
 
   const {
     reservations,
@@ -191,12 +195,12 @@ const ReservationCalendar: React.FC = () => {
   // 新規予約クリックハンドラ
   const handleAddReservation = () => {
     // 現在表示中の予約情報をフィルタリングして渡す
-    const currentDateStr = currentDate.format('YYYY-MM-DD');
-    const relevantReservations = reservations.filter(res => {
-      const resDate = moment(res.start_time).format('YYYY-MM-DD');
+    const currentDateStr = currentDate.format("YYYY-MM-DD");
+    const relevantReservations = reservations.filter((res) => {
+      const resDate = moment(res.start_time).format("YYYY-MM-DD");
       return resDate === currentDateStr;
     });
-  
+
     setSelectedReservation(null);
     setIsNewReservation(true);
     setIsFormOpen(true);
@@ -212,7 +216,8 @@ const ReservationCalendar: React.FC = () => {
     const eventData = dropInfo.event.extendedProps as Reservation;
     const newStart = dropInfo.event.start;
     const newEnd = dropInfo.event.end;
-    const staffId = dropInfo.newResource?.id || dropInfo.event.getResources()[0]?.id;
+    const staffId =
+      dropInfo.newResource?.id || dropInfo.event.getResources()[0]?.id;
 
     try {
       // 更新データの準備
@@ -244,7 +249,9 @@ const ReservationCalendar: React.FC = () => {
 
       // ローカルの予約データを更新
       setReservations((prevReservations) => {
-        const index = prevReservations.findIndex((res) => res.id === updatedData.id);
+        const index = prevReservations.findIndex(
+          (res) => res.id === updatedData.id
+        );
         if (index !== -1) {
           const newReservations = [...prevReservations];
           newReservations[index] = updatedData;
@@ -304,9 +311,7 @@ const ReservationCalendar: React.FC = () => {
       if (!response.ok) {
         const errorData = await response.json();
         console.error("API error:", errorData);
-        throw new Error(
-          `Failed to ${isNew ? "create" : "update"} reservation`
-        );
+        throw new Error(`Failed to ${isNew ? "create" : "update"} reservation`);
       }
 
       const newReservation = await response.json();
@@ -339,32 +344,30 @@ const ReservationCalendar: React.FC = () => {
     }
   };
 
-  
-
   // ★ sendReservationToAutomation 関数の追加
   const sendReservationToAutomation = async (reservation: Reservation) => {
     try {
       if (!reservation.start_time || !reservation.end_time) {
         throw new Error("予約の開始時間または終了時間が不明です");
       }
-  
+
       const startTime = new Date(reservation.start_time);
       const endTime = new Date(reservation.end_time);
-  
+
       const duration = (endTime.getTime() - startTime.getTime()) / 1000 / 60; // 分単位
-  
+
       const rsvTermHour = Math.floor(duration / 60).toString();
       const rsvTermMinute = (duration % 60).toString();
-  
+
       const [lastNameKanji, firstNameKanji] = reservation.customer_name
         ? reservation.customer_name.split(" ")
         : ["", ""];
       const [lastNameKana, firstNameKana] = reservation.customer_name_kana
         ? reservation.customer_name_kana.split(" ")
         : ["", ""];
-  
+
       const automationData = {
-        user_id: user?.id ?? '',
+        user_id: user?.id ?? "",
         date: formatDate(startTime),
         rsv_hour: startTime.getHours().toString(),
         rsv_minute: String(startTime.getMinutes()).padStart(2, "0"),
@@ -375,11 +378,12 @@ const ReservationCalendar: React.FC = () => {
         nm_mei: firstNameKanji || "",
         rsv_term_hour: rsvTermHour,
         rsv_term_minute: rsvTermMinute,
-        is_no_appointment: false
+        is_no_appointment: false,
       };
-  
-      const FASTAPI_ENDPOINT = "https://1234-34-97-99-223.ngrok-free.app/run-automation";
-  
+
+      const FASTAPI_ENDPOINT =
+        "https://1234-34-97-99-223.ngrok-free.app/run-automation";
+
       const automationResponse = await fetch(FASTAPI_ENDPOINT, {
         method: "POST",
         headers: {
@@ -387,51 +391,58 @@ const ReservationCalendar: React.FC = () => {
         },
         body: JSON.stringify(automationData),
       });
-  
+
       if (!automationResponse.ok) {
         let errorMessage;
         try {
           const errorData = await automationResponse.json();
           // Form submission failed with errors: の部分を削除
-          errorMessage = errorData.detail || errorData.message || '';
-          if (errorMessage.startsWith('Form submission failed with errors:')) {
-            errorMessage = errorMessage.replace('Form submission failed with errors:', '').trim();
+          errorMessage = errorData.detail || errorData.message || "";
+          if (errorMessage.startsWith("Form submission failed with errors:")) {
+            errorMessage = errorMessage
+              .replace("Form submission failed with errors:", "")
+              .trim();
           }
           if (!errorMessage) {
-            errorMessage = '予約の同期中に不明なエラーが発生しました';
+            errorMessage = "予約の同期中に不明なエラーが発生しました";
           }
         } catch (e) {
-          errorMessage = '予約の同期処理に失敗しました';
+          errorMessage = "予約の同期処理に失敗しました";
         }
         throw new Error(errorMessage);
       }
-  
     } catch (error) {
       console.error("Error in sendReservationToAutomation:", error);
-      
+
       try {
         // エラーメッセージを整形
-        const errorMessage = error instanceof Error 
-          ? error.message.replace('Form submission failed with errors:', '').trim()
-          : '予約同期中に不明なエラーが発生しました';
-  
-        const response = await fetch('/api/send-sync-error', {
-          method: 'POST',
+        const errorMessage =
+          error instanceof Error
+            ? error.message
+                .replace("Form submission failed with errors:", "")
+                .trim()
+            : "予約同期中に不明なエラーが発生しました";
+
+        const response = await fetch("/api/send-sync-error", {
+          method: "POST",
           headers: {
-            'Content-Type': 'application/json',
+            "Content-Type": "application/json",
           },
           body: JSON.stringify({
             userId: user?.id,
             reservation,
-            errorMessage: errorMessage
+            errorMessage: errorMessage,
           }),
         });
-  
+
         if (!response.ok) {
-          console.error('エラー通知メールの送信に失敗しました:', await response.text());
+          console.error(
+            "エラー通知メールの送信に失敗しました:",
+            await response.text()
+          );
         }
       } catch (emailError) {
-        console.error('エラー通知メールの送信に失敗しました:', emailError);
+        console.error("エラー通知メールの送信に失敗しました:", emailError);
       }
     }
   };
@@ -444,8 +455,8 @@ const ReservationCalendar: React.FC = () => {
     return `${year}${month}${day}`;
   };
 
-   // 予約編集ハンドラ
-   const handleEditFormSubmit = async (
+  // 予約編集ハンドラ
+  const handleEditFormSubmit = async (
     updatedReservation: Partial<Reservation>
   ) => {
     console.log("Calendar: Edit form submit received", updatedReservation);
@@ -552,7 +563,10 @@ const ReservationCalendar: React.FC = () => {
   };
 
   // 予約削除ハンドラ（キャンセル処理）
-  const handleDeleteReservation = async (id: string, cancellationType: string) => {
+  const handleDeleteReservation = async (
+    id: string,
+    cancellationType: string
+  ) => {
     if (!session || !user) {
       setSnackbar({
         message: "セッションが無効です。再度ログインしてください。",
@@ -611,7 +625,9 @@ const ReservationCalendar: React.FC = () => {
   const sendStaffScheduleToAutomation = async (staffSchedule: Reservation) => {
     try {
       if (!staffSchedule.start_time || !staffSchedule.end_time) {
-        throw new Error("スタッフスケジュールの開始時間または終了時間が不明です");
+        throw new Error(
+          "スタッフスケジュールの開始時間または終了時間が不明です"
+        );
       }
 
       const startTime = new Date(staffSchedule.start_time);
@@ -623,7 +639,7 @@ const ReservationCalendar: React.FC = () => {
       const rsvTermMinute = (duration % 60).toString();
 
       const automationData = {
-        user_id: user?.id ?? '',
+        user_id: user?.id ?? "",
         date: formatDate(startTime),
         rsv_hour: startTime.getHours().toString(),
         rsv_minute: String(startTime.getMinutes()).padStart(2, "0"),
@@ -631,10 +647,11 @@ const ReservationCalendar: React.FC = () => {
         rsv_term_hour: rsvTermHour,
         rsv_term_minute: rsvTermMinute,
         is_no_appointment: true,
-        event: staffSchedule.event || "予定あり"
+        event: staffSchedule.event || "予定あり",
       };
 
-      const FASTAPI_ENDPOINT = "https://1234-34-97-99-223.ngrok-free.app/staff-run-automation";
+      const FASTAPI_ENDPOINT =
+        "https://1234-34-97-99-223.ngrok-free.app/staff-run-automation";
 
       const automationResponse = await fetch(FASTAPI_ENDPOINT, {
         method: "POST",
@@ -648,44 +665,55 @@ const ReservationCalendar: React.FC = () => {
         let errorMessage;
         try {
           const errorData = await automationResponse.json();
-          errorMessage = errorData.detail || errorData.message || '';
-          if (errorMessage.startsWith('Form submission failed with errors:')) {
-            errorMessage = errorMessage.replace('Form submission failed with errors:', '').trim();
+          errorMessage = errorData.detail || errorData.message || "";
+          if (errorMessage.startsWith("Form submission failed with errors:")) {
+            errorMessage = errorMessage
+              .replace("Form submission failed with errors:", "")
+              .trim();
           }
           if (!errorMessage) {
-            errorMessage = 'スタッフスケジュールの同期中に不明なエラーが発生しました';
+            errorMessage =
+              "スタッフスケジュールの同期中に不明なエラーが発生しました";
           }
         } catch (e) {
-          errorMessage = 'スタッフスケジュールの同期処理に失敗しました';
+          errorMessage = "スタッフスケジュールの同期処理に失敗しました";
         }
         throw new Error(errorMessage);
       }
-
     } catch (error) {
-      console.error("sendStaffScheduleToAutomationでエラーが発生しました:", error);
-      
-      try {
-        const errorMessage = error instanceof Error 
-          ? error.message.replace('Form submission failed with errors:', '').trim()
-          : 'スタッフスケジュール同期中に不明なエラーが発生しました';
+      console.error(
+        "sendStaffScheduleToAutomationでエラーが発生しました:",
+        error
+      );
 
-        const response = await fetch('/api/send-sync-error', {
-          method: 'POST',
+      try {
+        const errorMessage =
+          error instanceof Error
+            ? error.message
+                .replace("Form submission failed with errors:", "")
+                .trim()
+            : "スタッフスケジュール同期中に不明なエラーが発生しました";
+
+        const response = await fetch("/api/send-sync-error", {
+          method: "POST",
           headers: {
-            'Content-Type': 'application/json',
+            "Content-Type": "application/json",
           },
           body: JSON.stringify({
             userId: user?.id,
             staffSchedule,
-            errorMessage: errorMessage
+            errorMessage: errorMessage,
           }),
         });
 
         if (!response.ok) {
-          console.error('エラー通知メールの送信に失敗しました:', await response.text());
+          console.error(
+            "エラー通知メールの送信に失敗しました:",
+            await response.text()
+          );
         }
       } catch (emailError) {
-        console.error('エラー通知メールの送信に失敗しました:', emailError);
+        console.error("エラー通知メールの送信に失敗しました:", emailError);
       }
     }
   };
@@ -753,9 +781,11 @@ const ReservationCalendar: React.FC = () => {
       if (isNew) {
         await sendStaffScheduleToAutomation(newSchedule);
       }
-
     } catch (error) {
-      console.error("handleStaffScheduleFormSubmitでエラーが発生しました:", error);
+      console.error(
+        "handleStaffScheduleFormSubmitでエラーが発生しました:",
+        error
+      );
       setSnackbar({
         message: `スタッフスケジュールの${
           isNew ? "作成" : "更新"
@@ -849,9 +879,7 @@ const ReservationCalendar: React.FC = () => {
     (arg: any) => {
       // 表示範囲の開始日と終了日を取得
       const startDate = moment(arg.start).format("YYYY-MM-DD");
-      const endDate = moment(arg.end)
-        .subtract(1, "days")
-        .format("YYYY-MM-DD");
+      const endDate = moment(arg.end).subtract(1, "days").format("YYYY-MM-DD");
 
       // dateRange を更新 (値が変わった場合のみ)
       if (
@@ -874,7 +902,14 @@ const ReservationCalendar: React.FC = () => {
   // ローディング状態に応じて表示を切り替え
   if (isLoading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}>
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          height: "80vh",
+        }}
+      >
         <CircularProgress />
       </Box>
     );
@@ -889,15 +924,15 @@ const ReservationCalendar: React.FC = () => {
       {isUpdating && (
         <Box
           sx={{
-            position: 'fixed',
+            position: "fixed",
             top: 0,
             left: 0,
-            width: '100%',
-            height: '100%',
-            backgroundColor: 'rgba(255, 255, 255, 0.7)',
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
+            width: "100%",
+            height: "100%",
+            backgroundColor: "rgba(255, 255, 255, 0.7)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
             zIndex: 9999,
           }}
         >
@@ -924,7 +959,6 @@ const ReservationCalendar: React.FC = () => {
           </FormControl>
         </Box>
       )}
-      
 
       <NavigationControls
         currentDate={currentDate}
@@ -937,7 +971,6 @@ const ReservationCalendar: React.FC = () => {
       />
 
       <CalendarView
-        key={`${currentDate.format("YYYY-MM-DD")}-${selectedStaffId}`}
         reservations={filteredReservations}
         staffList={filteredStaffList}
         closedDays={closedDays}
@@ -964,7 +997,6 @@ const ReservationCalendar: React.FC = () => {
           staffList={sortedStaffList}
           menuList={menuList}
           reservations={reservations}
-          
           isCreatingFromButton={isCreatingFromButton}
           businessHours={businessHours}
         />
