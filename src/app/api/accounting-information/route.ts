@@ -34,18 +34,19 @@ export async function GET(req: NextRequest) {
       .from("accounting_information")
       .select(
         `
-        id,
-        reservation_id,
-        customer_name,
-        staff_name,
-        cashier_name,
-        payment_methods,
-        items,
-        total_price,
-        created_at,
-        updated_at,
-        is_temporary,
-        is_closed
+       id,
+  reservation_id,
+  customer_name,
+  staff_name,
+  cashier_name,
+  payment_methods,
+  items,
+  total_price,
+  created_at,
+  updated_at,
+  is_temporary,
+  is_closed,
+  reservations!inner(start_time)  // reservationsテーブルとの結合を追加
       `
       )
       .eq("is_temporary", false)

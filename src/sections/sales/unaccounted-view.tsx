@@ -46,6 +46,9 @@ interface AccountingInformation {
   updated_at: string;
   is_temporary: boolean;
   is_closed: boolean;
+  reservations: {
+    start_time: string;
+  };
 }
 
 interface Reservation {
@@ -575,7 +578,7 @@ const CompactRegisterClosingUI: React.FC = () => {
                   <TableRow key={item.id}>
                     {/* 来店日時を日時含む形式で表示 */}
                     <TableCell>
-                      {dayjs(item.created_at).tz("Asia/Tokyo").format("YYYY-MM-DD HH:mm:ss")}
+                      {dayjs(item.reservations.start_time).tz("Asia/Tokyo").format("YYYY-MM-DD HH:mm:ss")}
                     </TableCell>
                     <TableCell>{item.customer_name}</TableCell>
                     <TableCell>{item.staff_name}</TableCell>

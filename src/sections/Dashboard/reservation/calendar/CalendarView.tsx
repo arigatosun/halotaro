@@ -92,7 +92,112 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
           timelineBody.removeEventListener("scroll", syncScroll);
         };
       }
-    }, []);
+
+      const style = document.createElement('style');
+style.textContent = `
+  .fc .fc-timeline-lane-frame {
+    padding: 0;
+    margin: 0;
+  }
+  .fc .fc-timeline-body {
+    min-height: auto;
+  }
+  .fc .fc-timeline-lane {
+    min-height: 40px;
+    margin: 0;
+  }
+  .fc-resource-timeline .fc-datagrid-cell-frame {
+    padding: 4px 8px;
+    margin: 0;
+  }
+  .fc-timeline-slot {
+    height: auto;
+    margin: 0;
+  }
+  .fc-resource-timeline table {
+    border-spacing: 0;
+    margin: 0;
+  }
+  .fc-timeline-slots td {
+    height: auto;
+    margin: 0;
+  }
+  .fc-scroller {
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  .fc-scroller-liquid-absolute {
+    position: static !important;
+    margin: 0 !important;
+  }
+  .fc .fc-daygrid-body {
+    position: relative !important;
+    margin: 0 !important;
+  }
+  .fc .fc-timeline-body {
+    position: relative !important;
+    margin: 0 !important;
+  }
+  .fc-view-harness {
+    margin: 0 !important;
+    padding: 0 !important;
+    height: auto !important;
+    min-height: 0 !important;
+  }
+  .fc .fc-view {
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  .fc-timeline-body .fc-scrollgrid {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  .fc .fc-scrollgrid {
+    border-bottom: none !important;
+  }
+  .fc .fc-scrollgrid-section-body > td {
+    border-bottom: none !important;
+  }
+  .fc-timeline-event {
+    margin: 0 !important;
+    padding: 2px 4px !important;
+  }
+  .fc .fc-timeline-slot-cushion {
+    padding: 4px !important;
+  }
+  .fc-timeline-body .fc-timeline-slots {
+    padding: 0 !important;
+  }
+  .fc-timeline-body .fc-timeline-slots table {
+    margin-bottom: 0 !important;
+  }
+  .fc .fc-scrollgrid-liquid {
+    height: auto !important;
+  }
+  .fc-scrollgrid-sync-table {
+    height: auto !important;
+  }
+  .fc-timeline-slots table {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  .fc .fc-timeline-slots td {
+    border-bottom: none !important;
+  }
+  .fc-scrollgrid-section {
+    height: auto !important;
+  }
+  .fc-scroller-harness {
+    height: auto !important;
+  }
+  `;
+  document.head.appendChild(style);
+
+  return () => {
+    document.head.removeChild(style);
+  };
+}, []);
 
     if (businessHours.length === 0) {
       return <div>営業時間を読み込んでいます...</div>;
@@ -183,18 +288,104 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
 
     return (
       <Box
-        sx={{
-          backgroundColor: "background.paper",
-          borderRadius: "12px",
-          overflow: "hidden",
-          boxShadow: 3,
-          height: "100%",
-          display: "flex",
-          flexDirection: "column",
-        }}
+      sx={{
+        backgroundColor: "background.paper",
+        borderRadius: "12px",
+        overflow: "hidden",
+        boxShadow: 3,
+        height: "auto",
+        minHeight: "100px",
+        display: "flex",
+        flexDirection: "column",
+        padding: 0,
+        margin: 0,
+        "& .fc": {
+          height: "auto !important",
+          minHeight: "100px",
+          margin: "0 !important",
+          padding: "0 !important",
+        },
+        "& .fc-timeline-lane-frame": {
+          padding: 0,
+          margin: 0,
+        },
+        "& .fc-event": {
+          margin: 0,
+          padding: "2px 4px",
+        },
+        "& .fc-timeline-slot": {
+          height: "auto",
+          margin: 0,
+        },
+        "& .fc-timeline-slots td": {
+          height: "auto",
+          margin: 0,
+          borderBottom: "none",
+        },
+        "& .fc-resource-timeline table": {
+          borderSpacing: 0,
+          margin: 0,
+        },
+        "& .fc-scroller": {
+          height: "auto !important",
+          maxHeight: "none !important",
+          overflow: "visible !important",
+          margin: "0 !important",
+          padding: "0 !important",
+        },
+        "& .fc-scroller-liquid-absolute": {
+          position: "static !important",
+          top: "auto !important",
+          right: "auto !important",
+          bottom: "auto !important",
+          left: "auto !important",
+          margin: "0 !important",
+        },
+        "& .fc-timeline-body": {
+          position: "relative !important",
+          margin: "0 !important",
+        },
+        "& .fc-view-harness": {
+          margin: 0,
+          padding: 0,
+          height: "auto !important",
+          minHeight: "0 !important",
+        },
+        "& .fc-scrollgrid": {
+          margin: 0,
+          padding: 0,
+          borderBottom: "none",
+        },
+        "& .fc-scrollgrid-section-body > td": {
+          borderBottom: "none",
+        },
+        "& .fc-resource-timeline .fc-resource-group": {
+          margin: 0,
+          padding: 0,
+        },
+        "& .fc-timeline-header": {
+          margin: 0,
+          padding: 0,
+        },
+        "& .fc-timeline-slot-cushion": {
+          padding: "4px !important",
+        },
+        "& .fc-scrollgrid-liquid": {
+          height: "auto !important",
+        },
+        "& .fc-scrollgrid-sync-table": {
+          height: "auto !important",
+        },
+        "& .fc-scroller-harness": {
+          height: "auto !important",
+        },
+        "& .fc-scrollgrid-section": {
+          height: "auto !important",
+        }
+      }}
       >
         <FullCalendar
-          expandRows={true}
+          expandRows={false}
           ref={ref}
           plugins={plugins}
           datesSet={handleDatesSet}
@@ -221,7 +412,10 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
           slotMinTime={earliestOpenTime}
           slotMaxTime={latestCloseTime}
           timeZone="local"
-          height="400px"
+          height="auto"  // 固定の400pxから自動に変更
+          contentHeight="auto"
+          stickyHeaderDates={false}
+          handleWindowResize={true}
           headerToolbar={false}
           dayHeaderFormat={{
             weekday: "long",
@@ -243,6 +437,9 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
           eventOverlap={true}
           selectOverlap={true}
           selectMinDistance={10}
+          resourceLabelDidMount={(info) => {
+            info.el.style.height = 'auto';
+          }}
           eventDidMount={(info) => {
             const reservation = info.event.extendedProps as Reservation;
 
