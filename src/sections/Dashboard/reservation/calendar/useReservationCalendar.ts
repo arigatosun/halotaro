@@ -1,5 +1,5 @@
 // useReservationCalendar.ts
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Reservation, Staff, MenuItem, BusinessHour } from '@/types/reservation';
 import { useAuth } from '@/contexts/authcontext';
 import moment from 'moment';
@@ -17,17 +17,61 @@ interface UseReservationCalendarReturn {
   dateRange: { start: string; end: string };
   setDateRange: React.Dispatch<React.SetStateAction<{ start: string; end: string }>>;
   snackbar: { message: string; severity: 'success' | 'error' } | null;
-  setSnackbar: React.Dispatch<React.SetStateAction<{ message: string; severity: 'success' | 'error' } | null>>;
+  setSnackbar: React.Dispatch<
+    React.SetStateAction<{ message: string; severity: 'success' | 'error' } | null>
+  >;
   isLoading: boolean; // ローディング状態を追加
 }
 
 const useReservationCalendar = (): UseReservationCalendarReturn => {
-  const [reservations, setReservations] = useState<Reservation[]>([]);
+  // reservations の状態を useRef で管理
+  const reservationsRef = useRef<Reservation[]>([]);
+  const [reservations, setReservationsState] = useState<Reservation[]>([]);
+  const setReservations: React.Dispatch<React.SetStateAction<Reservation[]>> = (value) => {
+    if (typeof value === 'function') {
+      const newValue = value(reservationsRef.current);
+      reservationsRef.current = newValue;
+      setReservationsState(newValue);
+    } else {
+      reservationsRef.current = value;
+      setReservationsState(value);
+    }
+  };
+
+  // closedDays の状態を useRef で管理
+  const closedDaysRef = useRef<string[]>([]);
+  const [closedDays, setClosedDaysState] = useState<string[]>([]);
+  const setClosedDays: React.Dispatch<React.SetStateAction<string[]>> = (value) => {
+    if (typeof value === 'function') {
+      const newValue = value(closedDaysRef.current);
+      closedDaysRef.current = newValue;
+      setClosedDaysState(newValue);
+    } else {
+      closedDaysRef.current = value;
+      setClosedDaysState(value);
+    }
+  };
+
+  // businessHours の状態を useRef で管理
+  const businessHoursRef = useRef<BusinessHour[]>([]);
+  const [businessHours, setBusinessHoursState] = useState<BusinessHour[]>([]);
+  const setBusinessHours: React.Dispatch<React.SetStateAction<BusinessHour[]>> = (value) => {
+    if (typeof value === 'function') {
+      const newValue = value(businessHoursRef.current);
+      businessHoursRef.current = newValue;
+      setBusinessHoursState(newValue);
+    } else {
+      businessHoursRef.current = value;
+      setBusinessHoursState(value);
+    }
+  };
+
+  // その他の状態と関数はそのまま
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const [menuList, setMenuList] = useState<MenuItem[]>([]);
-  const [closedDays, setClosedDays] = useState<string[]>([]);
-  const [businessHours, setBusinessHours] = useState<BusinessHour[]>([]);
-  const [snackbar, setSnackbar] = useState<{ message: string; severity: 'success' | 'error' } | null>(null);
+  const [snackbar, setSnackbar] = useState<{ message: string; severity: 'success' | 'error' } | null>(
+    null
+  );
   const [isLoading, setIsLoading] = useState<boolean>(false); // ローディング状態を追加
 
   const [dateRange, setDateRange] = useState<{ start: string; end: string }>(() => {
@@ -40,13 +84,13 @@ const useReservationCalendar = (): UseReservationCalendarReturn => {
 
   // 初回マウント時にスタッフリストとメニューリストを取得
   useEffect(() => {
-    if (!session || !user) return;
+    if (!session || !user || staffList.length > 0) return;
 
     const loadInitialData = async () => {
       try {
         const response = await fetch(`/api/initial-data?userId=${user.id}`, {
           headers: {
-            'Authorization': `Bearer ${session.access_token}`,
+            Authorization: `Bearer ${session.access_token}`,
           },
           cache: 'no-store',
         });
@@ -62,9 +106,9 @@ const useReservationCalendar = (): UseReservationCalendarReturn => {
         setMenuList(data.menuList);
       } catch (error) {
         console.error('Error in loadInitialData:', error);
-        setSnackbar({ 
-          message: '初期データの取得に失敗しました', 
-          severity: 'error' 
+        setSnackbar({
+          message: '初期データの取得に失敗しました',
+          severity: 'error',
         });
       }
     };
@@ -72,55 +116,50 @@ const useReservationCalendar = (): UseReservationCalendarReturn => {
     loadInitialData();
   }, [user, session]);
 
-  // 日付範囲が変更されたときに予約データを取得
-  const loadData = async () => {
-    if (!session || !user || !dateRange) return;
+  // 初回マウント時に予約データを取得
+  useEffect(() => {
+    if (!session || !user || reservationsRef.current.length > 0) return;
 
-    setIsLoading(true); // ローディング開始
+    const loadData = async () => {
+      setIsLoading(true); // ローディング開始
 
-    try {
-      const queryParams = new URLSearchParams({
-        startDate: dateRange.start,
-        endDate: dateRange.end,
-        userId: user.id
-      });
+      try {
+        const queryParams = new URLSearchParams({
+          startDate: dateRange.start,
+          endDate: dateRange.end,
+          userId: user.id,
+        });
 
-      const response = await fetch(
-        `/api/calendar-data?${queryParams.toString()}`,
-        {
+        const response = await fetch(`/api/calendar-data?${queryParams.toString()}`, {
           headers: {
-            'Authorization': `Bearer ${session.access_token}`,
+            Authorization: `Bearer ${session.access_token}`,
           },
           cache: 'no-store',
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          console.error('Error fetching data:', errorData);
+          throw new Error('Failed to fetch data');
         }
-      );
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error('Error fetching data:', errorData);
-        throw new Error('Failed to fetch data');
+        const data = await response.json();
+
+        setReservations(data.reservations);
+        setClosedDays(data.closedDays || []);
+        setBusinessHours(data.businessHours || []);
+      } catch (error) {
+        console.error('Error in loadData:', error);
+        setSnackbar({
+          message: 'データの取得に失敗しました',
+          severity: 'error',
+        });
+      } finally {
+        setIsLoading(false); // ローディング終了
       }
+    };
 
-      const data = await response.json();
-
-      setReservations(data.reservations);
-      setClosedDays(data.closedDays || []);
-      setBusinessHours(data.businessHours || []);
-    } catch (error) {
-      console.error('Error in loadData:', error);
-      setSnackbar({ 
-        message: 'データの取得に失敗しました', 
-        severity: 'error' 
-      });
-    } finally {
-      setIsLoading(false); // ローディング終了
-    }
-  };
-
-  useEffect(() => {
-    if (user && session && dateRange) {
-      loadData();
-    }
+    loadData();
   }, [user, session, dateRange]);
 
   return {
@@ -129,7 +168,7 @@ const useReservationCalendar = (): UseReservationCalendarReturn => {
     menuList,
     closedDays,
     businessHours,
-    loadData,
+    loadData: async () => {}, // データが既にロードされているため空の関数を返す
     setReservations,
     setClosedDays,
     setBusinessHours,
