@@ -66,7 +66,7 @@ const useReservationCalendar = (): UseReservationCalendarReturn => {
     }
   };
 
-  // その他の状態と関数はそのまま
+  // その他の状態と関数
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const [menuList, setMenuList] = useState<MenuItem[]>([]);
   const [snackbar, setSnackbar] = useState<{ message: string; severity: 'success' | 'error' } | null>(
@@ -81,6 +81,9 @@ const useReservationCalendar = (): UseReservationCalendarReturn => {
   });
 
   const { user, session } = useAuth();
+
+  // 過去の dateRange を保持するための useRef
+  const prevDateRangeRef = useRef<{ start: string; end: string } | null>(null);
 
   // 初回マウント時にスタッフリストとメニューリストを取得
   useEffect(() => {
@@ -116,9 +119,22 @@ const useReservationCalendar = (): UseReservationCalendarReturn => {
     loadInitialData();
   }, [user, session]);
 
-  // 初回マウント時に予約データを取得
+  // 日付範囲が変更されたときに予約データを取得
   useEffect(() => {
-    if (!session || !user || reservationsRef.current.length > 0) return;
+    if (!session || !user) return;
+
+    // dateRange が変更された場合のみデータ取得を行う
+    if (
+      prevDateRangeRef.current &&
+      prevDateRangeRef.current.start === dateRange.start &&
+      prevDateRangeRef.current.end === dateRange.end
+    ) {
+      // dateRange が変更されていない場合はデータ取得をスキップ
+      return;
+    }
+
+    // prevDateRangeRef を更新
+    prevDateRangeRef.current = dateRange;
 
     const loadData = async () => {
       setIsLoading(true); // ローディング開始

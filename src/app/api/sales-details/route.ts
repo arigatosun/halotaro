@@ -136,21 +136,18 @@ export async function GET(req: NextRequest) {
           continue; // このアイテムをスキップ
         }
 
-        // 時間の調整（9時間前）
-        const adjustedStartTime = start_time ? dayjs(start_time).subtract(9, 'hour').format('YYYY/MM/DD HH:mm') : null;
-        const adjustedClosingDate = closing_date ? dayjs(closing_date).subtract(9, 'hour').format('YYYY/MM/DD HH:mm') : null;
-
-        resultData.push({
-          customer_name,
-          start_time: adjustedStartTime,
-          closing_date: adjustedClosingDate,
-          category,
-          name,
-          staff: itemStaff,
-          price,
-          quantity,
-          amount,
-        });
+       // 時差調整を省いてそのまま格納
+resultData.push({
+  customer_name,
+  start_time: start_time ? dayjs(start_time).format('YYYY/MM/DD HH:mm') : null,
+  closing_date: closing_date ? dayjs(closing_date).format('YYYY/MM/DD HH:mm') : null,
+  category,
+  name,
+  staff: itemStaff,
+  price,
+  quantity,
+  amount,
+});
       }
     }
 
