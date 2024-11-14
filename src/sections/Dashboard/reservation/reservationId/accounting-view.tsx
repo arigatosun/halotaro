@@ -91,7 +91,6 @@ interface ReservationCustomer {
   cancellation_count: number;
 }
 
-// Reservation interface
 interface Reservation {
   id: string;
   user_id: string;
@@ -103,8 +102,8 @@ interface Reservation {
   updated_at: string;
   start_time: string;
   end_time: string;
-  scraped_customer: string | null;
-  scraped_menu: string | null;
+  scraped_customer?: string | null;
+  scraped_menu?: string | null;
   coupon_id: string | null;
   is_staff_schedule: boolean | null;
   event: string | null;
@@ -192,15 +191,18 @@ export const AccountingPage: React.FC<AccountingPageProps> = ({
           await response.json();
         setReservation(data.reservation);
 
-        if (data.reservation.reservation_customers) {
-          setCustomerName(data.reservation.reservation_customers.name);
-        } else {
-          setCustomerName("不明");
-        }
+        const customerName =
+          data.reservation.reservation_customers?.name ||
+          data.reservation.reservation_customers?.name_kana ||
+          data.reservation.scraped_customer ||
+          "不明";
+        setCustomerName(customerName);
+
+        let newItem: Item | null = null;
 
         if (data.reservation.menu_items) {
           const menuItem: MenuItem = data.reservation.menu_items;
-          const newItem: Item = {
+          newItem = {
             id: menuItem.id.toString(),
             category: "施術",
             name: menuItem.name,
@@ -208,6 +210,18 @@ export const AccountingPage: React.FC<AccountingPageProps> = ({
             price: menuItem.price,
             quantity: 1,
           };
+        } else if (data.reservation.scraped_menu) {
+          newItem = {
+            id: Date.now().toString(),
+            category: "施術",
+            name: data.reservation.scraped_menu,
+            staff: data.reservation.staff?.name || selectedStaff,
+            price: data.reservation.total_price || 0, // 価格が不明な場合は0を設定
+            quantity: 1,
+          };
+        }
+
+        if (newItem) {
           setItems([newItem]);
         }
 

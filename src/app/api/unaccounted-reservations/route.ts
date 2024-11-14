@@ -56,12 +56,14 @@ export async function GET(request: Request) {
         updated_at,
         start_time,
         end_time,
+        scraped_customer,
+        scraped_menu,
         menu_item:menu_items!menu_id(id, name),
         staff (
           id,
           name
         ),
-        customer:reservation_customers!customer_id(id, name)
+        customer:reservation_customers!customer_id(id, name, name_kana)
       `)
       .lt('start_time', dayjs().toISOString())
       .eq('status', 'confirmed')

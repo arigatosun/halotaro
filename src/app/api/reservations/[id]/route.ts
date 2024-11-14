@@ -49,7 +49,21 @@ export async function GET(
     const { data: reservation, error } = await supabase
       .from("reservations")
       .select(`
-        *,
+        id,
+        user_id,
+        menu_id,
+        staff_id,
+        status,
+        total_price,
+        created_at,
+        updated_at,
+        start_time,
+        end_time,
+        scraped_customer,
+        scraped_menu,
+        coupon_id,
+        is_staff_schedule,
+        event,
         menu_items (
           *
         ),
@@ -57,7 +71,9 @@ export async function GET(
           *
         ),
         reservation_customers!fk_customer (
-          *
+          id,
+          name,
+          name_kana
         )
       `)
       .eq("id", reservationId)

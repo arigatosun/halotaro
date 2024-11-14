@@ -59,9 +59,11 @@ interface Reservation {
   updated_at: string;
   start_time: string;
   end_time: string;
+  scraped_customer?: string;
+  scraped_menu?: string;
   menu_item?: { id: string; name: string };
   staff?: { id: string; name: string };
-  customer?: { id: string; name: string };
+  customer?: { id: string; name: string; name_kana?: string };
 }
 
 const CompactRegisterClosingUI: React.FC = () => {
@@ -524,8 +526,8 @@ const CompactRegisterClosingUI: React.FC = () => {
                       {dayjs(reservation.start_time).tz("Asia/Tokyo").format("YYYY-MM-DD HH:mm")}
                     </TableCell>
                     <TableCell>{statusMapping[reservation.status] || reservation.status}</TableCell>
-                    <TableCell>{reservation.customer?.name || "不明"}</TableCell>
-                    <TableCell>{reservation.menu_item?.name || "不明"}</TableCell>
+                    <TableCell>{reservation.customer?.name || reservation.customer?.name_kana || reservation.scraped_customer || "不明"}</TableCell>
+                    <TableCell>{reservation.menu_item?.name || reservation.scraped_menu || "不明"}</TableCell>
                     <TableCell>{reservation.staff?.name || "未割当"}</TableCell>
                     <TableCell>{reservation.total_price?.toLocaleString()} 円</TableCell>
                     <TableCell>

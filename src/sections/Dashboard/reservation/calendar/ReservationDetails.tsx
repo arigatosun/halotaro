@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Reservation } from '@/types/reservation';
 import moment from 'moment-timezone';
+import { useRouter } from 'next/navigation';
 
 interface ReservationDetailsProps {
   reservation: Reservation;
@@ -22,6 +23,8 @@ const statusLabels: { [key: string]: string } = {
 
 const ReservationDetails: React.FC<ReservationDetailsProps> = ({ reservation, onClose, onEdit, onCancel }) => {
   const [buttonText, setButtonText] = useState('予約キャンセル');
+  const [showAccountingButton, setShowAccountingButton] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
     const now = moment();
@@ -29,13 +32,14 @@ const ReservationDetails: React.FC<ReservationDetailsProps> = ({ reservation, on
 
     if (now.isAfter(startTime)) {
       setButtonText('無断キャンセル');
+      setShowAccountingButton(true);
     } else {
       setButtonText('予約キャンセル');
+      setShowAccountingButton(false);
     }
   }, [reservation.start_time]);
 
   const handleCancelReservation = () => {
-    // キャンセル種別を修正（API側のステータスと合わせる）
     const cancellationType = buttonText === '無断キャンセル' ? 'no_show' : 'salon_cancelled';
     onCancel(reservation.id!, cancellationType);
   };
@@ -56,6 +60,11 @@ const ReservationDetails: React.FC<ReservationDetailsProps> = ({ reservation, on
         </div>
         <div className="mt-4 flex justify-end space-x-2">
           <Button onClick={onEdit}>編集</Button>
+          {showAccountingButton && (
+            <Button onClick={() => router.push(`/dashboard/reservations/${reservation.id}/accounting`)}>
+              会計
+            </Button>
+          )}
           <Button variant="destructive" onClick={handleCancelReservation}>{buttonText}</Button>
         </div>
       </DialogContent>
