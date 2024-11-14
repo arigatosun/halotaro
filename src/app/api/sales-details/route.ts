@@ -87,14 +87,14 @@ export async function GET(req: NextRequest) {
         query = query.gte("reservations.start_time", startDate);
       }
       if (endDate) {
-        query = query.lte("reservations.start_time", endDate);
+        query = query.lt("reservations.start_time", endDate);
       }
     } else if (searchTarget === "registrationDate") {
       if (startDate) {
         query = query.gte("register_closings.closing_date", startDate);
       }
       if (endDate) {
-        query = query.lte("register_closings.closing_date", endDate);
+        query = query.lt("register_closings.closing_date", endDate);
       }
     }
 

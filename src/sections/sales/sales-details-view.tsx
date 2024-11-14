@@ -116,10 +116,17 @@ const SalesDetailView: React.FC = () => {
       };
 
       if (dateRange?.from) {
-        params.startDate = dayjs(dateRange.from).tz("Asia/Tokyo").startOf("day").toISOString();
+        params.startDate = dayjs(dateRange.from)
+          .tz("Asia/Tokyo")
+          .startOf("day")
+          .toISOString();
       }
       if (dateRange?.to) {
-        params.endDate = dayjs(dateRange.to).tz("Asia/Tokyo").endOf("day").toISOString();
+        params.endDate = dayjs(dateRange.to)
+          .add(1, "day")
+          .tz("Asia/Tokyo")
+          .startOf("day")
+          .toISOString();
       }
       if (staff && staff !== "all") {
         params.staff = staff;
