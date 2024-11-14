@@ -1,4 +1,3 @@
-// CalendarView.tsx
 "use client";
 
 import React, { forwardRef, useRef, useEffect } from "react";
@@ -10,7 +9,6 @@ import {
   EventClickArg,
   EventDropArg,
   DateSelectArg,
-  CalendarOptions,
 } from "@fullcalendar/core";
 import { Reservation, Staff, BusinessHour } from "@/types/reservation";
 import moment from "moment-timezone";
@@ -92,129 +90,38 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
           timelineBody.removeEventListener("scroll", syncScroll);
         };
       }
-
-      const style = document.createElement('style');
-style.textContent = `
-  .fc .fc-timeline-lane-frame {
-    padding: 0;
-    margin: 0;
-  }
-  .fc .fc-timeline-body {
-    min-height: auto;
-  }
-  .fc .fc-timeline-lane {
-    min-height: 40px;
-    margin: 0;
-  }
-  .fc-resource-timeline .fc-datagrid-cell-frame {
-    padding: 4px 8px;
-    margin: 0;
-  }
-  .fc-timeline-slot {
-    height: auto;
-    margin: 0;
-  }
-  .fc-resource-timeline table {
-    border-spacing: 0;
-    margin: 0;
-  }
-  .fc-timeline-slots td {
-    height: auto;
-    margin: 0;
-  }
-  .fc-scroller {
-    height: auto !important;
-    margin: 0 !important;
-    padding: 0 !important;
-  }
-  .fc-scroller-liquid-absolute {
-    position: static !important;
-    margin: 0 !important;
-  }
-  .fc .fc-daygrid-body {
-    position: relative !important;
-    margin: 0 !important;
-  }
-  .fc .fc-timeline-body {
-    position: relative !important;
-    margin: 0 !important;
-  }
-  .fc-view-harness {
-    margin: 0 !important;
-    padding: 0 !important;
-    height: auto !important;
-    min-height: 0 !important;
-  }
-  .fc .fc-view {
-    padding: 0 !important;
-    margin: 0 !important;
-  }
-  .fc-timeline-body .fc-scrollgrid {
-    margin: 0 !important;
-    padding: 0 !important;
-  }
-  .fc .fc-scrollgrid {
-    border-bottom: none !important;
-  }
-  .fc .fc-scrollgrid-section-body > td {
-    border-bottom: none !important;
-  }
-  .fc-timeline-event {
-    margin: 0 !important;
-    padding: 2px 4px !important;
-  }
-  .fc .fc-timeline-slot-cushion {
-    padding: 4px !important;
-  }
-  .fc-timeline-body .fc-timeline-slots {
-    padding: 0 !important;
-  }
-  .fc-timeline-body .fc-timeline-slots table {
-    margin-bottom: 0 !important;
-  }
-  .fc .fc-scrollgrid-liquid {
-    height: auto !important;
-  }
-  .fc-scrollgrid-sync-table {
-    height: auto !important;
-  }
-  .fc-timeline-slots table {
-    margin: 0 !important;
-    padding: 0 !important;
-  }
-  .fc .fc-timeline-slots td {
-    border-bottom: none !important;
-  }
-  .fc-scrollgrid-section {
-    height: auto !important;
-  }
-  .fc-scroller-harness {
-    height: auto !important;
-  }
-  `;
-  document.head.appendChild(style);
-
-  return () => {
-    document.head.removeChild(style);
-  };
-}, []);
+    }, []);
 
     if (businessHours.length === 0) {
       return <div>営業時間を読み込んでいます...</div>;
     }
 
+    // 営業時間の計算を元に戻す
     const currentDateStr = currentDate.tz("Asia/Tokyo").format("YYYY-MM-DD");
     const currentBusinessHours = businessHours.filter(
       (bh) => bh.date === currentDateStr && !bh.is_holiday
     );
 
-    const earliestOpenTime = moment
-      .min(currentBusinessHours.map((bh) => moment(bh.open_time, "HH:mm:ss")))
-      .format("HH:mm:ss");
+    // 営業時間がない場合のデフォルト値を設定
+    const defaultOpenTime = "09:00:00";
+    const defaultCloseTime = "18:00:00";
 
-    const latestCloseTime = moment
-      .max(currentBusinessHours.map((bh) => moment(bh.close_time, "HH:mm:ss")))
-      .format("HH:mm:ss");
+    const earliestOpenTime = currentBusinessHours.length
+      ? moment
+          .min(currentBusinessHours.map((bh) => moment(bh.open_time, "HH:mm:ss")))
+          .format("HH:mm:ss")
+      : defaultOpenTime;
+
+    const latestCloseTime = currentBusinessHours.length
+      ? moment
+          .max(currentBusinessHours.map((bh) => moment(bh.close_time, "HH:mm:ss")))
+          .format("HH:mm:ss")
+      : defaultCloseTime;
+
+    const resources = staffList.map((staff) => ({
+      id: staff.id.toString(),
+      title: staff.name,
+    }));
 
     const events = [
       ...reservations
@@ -242,34 +149,22 @@ style.textContent = `
             !reservation.is_closed_day && !reservation.is_hair_sync,
           extendedProps: reservation,
         })),
+      // 休業日イベントを追加
       ...businessHours
         .filter((bh) => bh.is_holiday)
         .map((bh) => ({
           id: `holiday-${bh.date}`,
-          start: bh.date,
-          end: moment(bh.date).add(1, "day").format("YYYY-MM-DD"),
-          display: "background",
+          title: "サロン休業日",
+          start: `${bh.date}T00:00:00`,
+          end: `${bh.date}T23:59:59`,
           classNames: ["closed-day"],
-          allDay: true,
           editable: false,
+          resourceIds: resources.map((resource) => resource.id),
+          extendedProps: {
+            is_closed_day: true,
+          },
         })),
-      ...closedDays.map((dateStr) => ({
-        id: `closed-${dateStr}`,
-        title: "休業日",
-        start: dateStr,
-        end: moment(dateStr).add(1, "day").format("YYYY-MM-DD"),
-        allDay: true,
-        display: "background",
-        classNames: ["closed-day"],
-        overlap: false,
-        editable: false,
-      })),
     ];
-
-    const resources = staffList.map((staff) => ({
-      id: staff.id.toString(),
-      title: staff.name,
-    }));
 
     const handleViewDidMount = (arg: { el: HTMLElement; view: any }) => {
       resourceAreaRef.current = arg.el.querySelector(".fc-resource-area");
@@ -277,114 +172,142 @@ style.textContent = `
     };
 
     const plugins = [resourceTimelinePlugin, interactionPlugin, listPlugin];
-
     const initialView = isMobile ? "listDay" : "resourceTimelineDay";
 
-    const businessHoursConfig = currentBusinessHours.map((bh) => ({
-      daysOfWeek: [moment(bh.date).day()],
-      startTime: bh.open_time || "00:00",
-      endTime: bh.close_time || "24:00",
-    }));
+    // businessHoursConfigを元に戻す
+    const businessHoursConfig = currentBusinessHours.length
+      ? currentBusinessHours.map((bh) => ({
+          daysOfWeek: [moment(bh.date).day()],
+          startTime: bh.open_time || "00:00",
+          endTime: bh.close_time || "24:00",
+        }))
+      : [
+          {
+            daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
+            startTime: defaultOpenTime,
+            endTime: defaultCloseTime,
+          },
+        ];
+
+    // 選択やイベントの移動を制限するための関数
+    const isDateAllowed = (date: Date) => {
+      const dateStr = moment(date).format("YYYY-MM-DD");
+      const isHoliday = businessHours.some(
+        (bh) => bh.date === dateStr && bh.is_holiday
+      );
+      return !isHoliday;
+    };
 
     return (
       <Box
-      sx={{
-        backgroundColor: "background.paper",
-        borderRadius: "12px",
-        overflow: "hidden",
-        boxShadow: 3,
-        height: "auto",
-        minHeight: "100px",
-        display: "flex",
-        flexDirection: "column",
-        padding: 0,
-        margin: 0,
-        "& .fc": {
-          height: "auto !important",
+        sx={{
+          backgroundColor: "background.paper",
+          borderRadius: "12px",
+          overflow: "hidden",
+          boxShadow: 3,
+          height: "auto",
           minHeight: "100px",
-          margin: "0 !important",
-          padding: "0 !important",
-        },
-        "& .fc-timeline-lane-frame": {
+          display: "flex",
+          flexDirection: "column",
           padding: 0,
           margin: 0,
-        },
-        "& .fc-event": {
-          margin: 0,
-          padding: "2px 4px",
-        },
-        "& .fc-timeline-slot": {
-          height: "auto",
-          margin: 0,
-        },
-        "& .fc-timeline-slots td": {
-          height: "auto",
-          margin: 0,
-          borderBottom: "none",
-        },
-        "& .fc-resource-timeline table": {
-          borderSpacing: 0,
-          margin: 0,
-        },
-        "& .fc-scroller": {
-          height: "auto !important",
-          maxHeight: "none !important",
-          overflow: "visible !important",
-          margin: "0 !important",
-          padding: "0 !important",
-        },
-        "& .fc-scroller-liquid-absolute": {
-          position: "static !important",
-          top: "auto !important",
-          right: "auto !important",
-          bottom: "auto !important",
-          left: "auto !important",
-          margin: "0 !important",
-        },
-        "& .fc-timeline-body": {
-          position: "relative !important",
-          margin: "0 !important",
-        },
-        "& .fc-view-harness": {
-          margin: 0,
-          padding: 0,
-          height: "auto !important",
-          minHeight: "0 !important",
-        },
-        "& .fc-scrollgrid": {
-          margin: 0,
-          padding: 0,
-          borderBottom: "none",
-        },
-        "& .fc-scrollgrid-section-body > td": {
-          borderBottom: "none",
-        },
-        "& .fc-resource-timeline .fc-resource-group": {
-          margin: 0,
-          padding: 0,
-        },
-        "& .fc-timeline-header": {
-          margin: 0,
-          padding: 0,
-        },
-        "& .fc-timeline-slot-cushion": {
-          padding: "4px !important",
-        },
-        "& .fc-scrollgrid-liquid": {
-          height: "auto !important",
-        },
-        "& .fc-scrollgrid-sync-table": {
-          height: "auto !important",
-        },
-        "& .fc-scroller-harness": {
-          height: "auto !important",
-        },
-        "& .fc-scrollgrid-section": {
-          height: "auto !important",
-        }
-      }}
+          "& .fc": {
+            height: "auto !important",
+            minHeight: "100px",
+            margin: "0 !important",
+            padding: "0 !important",
+          },
+          "& .closed-day": {
+            backgroundColor: "rgba(244, 67, 54, 0.1) !important",
+            borderLeft: "4px solid #f44336",
+            "& .fc-event-title": {
+              color: "#f44336",
+              fontWeight: "bold",
+              textAlign: "center",
+              padding: "8px",
+              fontSize: "1rem",
+            },
+          },
+          "& .fc-timeline-lane-frame": {
+            padding: 0,
+            margin: 0,
+          },
+          "& .fc-event": {
+            margin: 0,
+            padding: "2px 4px",
+          },
+          "& .fc-timeline-slot": {
+            height: "auto",
+            margin: 0,
+          },
+          "& .fc-timeline-slots td": {
+            height: "auto",
+            margin: 0,
+            borderBottom: "none",
+          },
+          "& .fc-resource-timeline table": {
+            borderSpacing: 0,
+            margin: 0,
+          },
+          "& .fc-scroller": {
+            height: "auto !important",
+            maxHeight: "none !important",
+            overflow: "visible !important",
+            margin: "0 !important",
+            padding: "0 !important",
+          },
+          "& .fc-scroller-liquid-absolute": {
+            position: "static !important",
+            top: "auto !important",
+            right: "auto !important",
+            bottom: "auto !important",
+            left: "auto !important",
+            margin: "0 !important",
+          },
+          "& .fc-timeline-body": {
+            position: "relative !important",
+            margin: "0 !important",
+          },
+          "& .fc-view-harness": {
+            margin: 0,
+            padding: 0,
+            height: "auto !important",
+            minHeight: "0 !important",
+          },
+          "& .fc-scrollgrid": {
+            margin: 0,
+            padding: 0,
+            borderBottom: "none",
+          },
+          "& .fc-scrollgrid-section-body > td": {
+            borderBottom: "none",
+          },
+          "& .fc-resource-timeline .fc-resource-group": {
+            margin: 0,
+            padding: 0,
+          },
+          "& .fc-timeline-header": {
+            margin: 0,
+            padding: 0,
+          },
+          "& .fc-timeline-slot-cushion": {
+            padding: "4px !important",
+          },
+          "& .fc-scrollgrid-liquid": {
+            height: "auto !important",
+          },
+          "& .fc-scrollgrid-sync-table": {
+            height: "auto !important",
+          },
+          "& .fc-scroller-harness": {
+            height: "auto !important",
+          },
+          "& .fc-scrollgrid-section": {
+            height: "auto !important",
+          },
+        }}
       >
-        <FullCalendar
+         <FullCalendar
           expandRows={false}
           ref={ref}
           plugins={plugins}
@@ -412,7 +335,7 @@ style.textContent = `
           slotMinTime={earliestOpenTime}
           slotMaxTime={latestCloseTime}
           timeZone="local"
-          height="auto"  // 固定の400pxから自動に変更
+          height="auto"
           contentHeight="auto"
           stickyHeaderDates={false}
           handleWindowResize={true}
@@ -434,16 +357,33 @@ style.textContent = `
           scrollTimeReset={false}
           viewDidMount={handleViewDidMount}
           eventDisplay="block"
-          eventOverlap={true}
-          selectOverlap={true}
-          selectMinDistance={10}
+          eventOverlap={(stillEvent, movingEvent) => {
+            if (!movingEvent) return false;
+            if (
+              stillEvent.extendedProps.is_closed_day ||
+              movingEvent.extendedProps.is_closed_day
+            ) {
+              return false;
+            }
+            return true;
+          }}
+          selectOverlap={false}
+          selectAllow={(selectInfo) => {
+            // 選択範囲が休業日にかかっていないか確認
+            return isDateAllowed(selectInfo.start);
+          }}
+          eventAllow={(dropInfo) => {
+            // イベントの移動先が休業日にかかっていないか確認
+            return isDateAllowed(dropInfo.start);
+          }}
           resourceLabelDidMount={(info) => {
-            info.el.style.height = 'auto';
+            info.el.style.height = "auto";
           }}
           eventDidMount={(info) => {
             const reservation = info.event.extendedProps as Reservation;
-
-            if (reservation.is_staff_schedule) {
+            if (reservation.is_closed_day) {
+              info.el.classList.add("closed-day");
+            } else if (reservation.is_staff_schedule) {
               info.el.parentElement?.classList.add("staff-schedule");
             } else if (reservation.is_hair_sync) {
               info.el.parentElement?.classList.add("hair-reservation");
@@ -464,6 +404,12 @@ style.textContent = `
           }
           eventContent={(eventInfo) => {
             const reservation = eventInfo.event.extendedProps as Reservation;
+            if (reservation.is_closed_day) {
+              return {
+                html: `<div class="fc-event-title">サロン休業日</div>`,
+              };
+            }
+
             const staffName = reservation.staff_id
               ? staffList.find(
                   (staff) =>
