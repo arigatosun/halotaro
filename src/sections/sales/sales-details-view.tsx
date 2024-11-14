@@ -1,5 +1,3 @@
-// sales-details-view.tsx
-
 "use client";
 
 import React, { useEffect, useState } from "react";
@@ -34,8 +32,15 @@ import {
 import { DateRange } from "react-day-picker";
 import axios from "axios";
 import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
+import timezone from "dayjs/plugin/timezone";
 import { useAuth } from "@/contexts/authcontext";
 import { supabase } from "@/lib/supabaseClient";
+
+// dayjsプラグインの設定
+dayjs.extend(utc);
+dayjs.extend(timezone);
+dayjs.tz.setDefault("Asia/Tokyo");  // デフォルトタイムゾーンを日本時間に設定
 
 const SalesDetailView: React.FC = () => {
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
@@ -52,7 +57,7 @@ const SalesDetailView: React.FC = () => {
 
   const { session, user } = useAuth();
 
-  // スタッフとメニューの状態変数を追加
+  // スタッフとメニューの状態変数
   const [staffList, setStaffList] = useState<any[]>([]);
   const [menuList, setMenuList] = useState<any[]>([]);
 
@@ -111,10 +116,10 @@ const SalesDetailView: React.FC = () => {
       };
 
       if (dateRange?.from) {
-        params.startDate = dayjs(dateRange.from).startOf("day").toISOString();
+        params.startDate = dayjs(dateRange.from).tz("Asia/Tokyo").startOf("day").toISOString();
       }
       if (dateRange?.to) {
-        params.endDate = dayjs(dateRange.to).endOf("day").toISOString();
+        params.endDate = dayjs(dateRange.to).tz("Asia/Tokyo").endOf("day").toISOString();
       }
       if (staff && staff !== "all") {
         params.staff = staff;
@@ -129,7 +134,7 @@ const SalesDetailView: React.FC = () => {
       const queryString = new URLSearchParams(params).toString();
       const response = await axios.get(`/api/sales-details?${queryString}`, {
         headers: {
-          Authorization: `Bearer ${session.access_token}`, // トークンをヘッダーに追加
+          Authorization: `Bearer ${session.access_token}`,
         },
       });
       const { data, totalItems } = response.data;
@@ -172,7 +177,6 @@ const SalesDetailView: React.FC = () => {
     <div className="p-8 max-w-7xl mx-auto">
       <h2 className="text-2xl font-bold mb-6">売上明細</h2>
 
-      {/* エラーメッセージの表示 */}
       {error && <p className="text-red-500 mb-4">{error}</p>}
 
       <Card className="mb-6">
@@ -254,10 +258,10 @@ const SalesDetailView: React.FC = () => {
         <p>
           期間：
           {dateRange?.from
-            ? dayjs(dateRange.from).format("YYYY年MM月DD日")
+            ? dayjs(dateRange.from).tz("Asia/Tokyo").format("YYYY年MM月DD日")
             : ""}
           {dateRange?.to
-            ? ` 〜 ${dayjs(dateRange.to).format("YYYY年MM月DD日")}`
+            ? ` 〜 ${dayjs(dateRange.to).tz("Asia/Tokyo").format("YYYY年MM月DD日")}`
             : ""}{" "}
           ({searchTarget === "visitDate" ? "来店日" : "レジ締め日"})
         </p>
@@ -305,10 +309,10 @@ const SalesDetailView: React.FC = () => {
                       <br />
                       {searchTarget === "visitDate"
                         ? item.start_time
-                          ? dayjs(item.start_time).format("YYYY/MM/DD HH:mm")
+                          ? dayjs(item.start_time).tz("Asia/Tokyo").format("YYYY/MM/DD HH:mm")
                           : ""
                         : item.closing_date
-                        ? dayjs(item.closing_date).format("YYYY/MM/DD HH:mm")
+                        ? dayjs(item.closing_date).tz("Asia/Tokyo").format("YYYY/MM/DD HH:mm")
                         : ""}
                     </TableCell>
                     <TableCell>{item.category}</TableCell>
