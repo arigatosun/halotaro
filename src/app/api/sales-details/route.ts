@@ -8,6 +8,7 @@ export const dynamic = 'force-dynamic';
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
+dayjs.tz.setDefault("Asia/Tokyo");
 
 // Supabaseクライアントの作成
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -17,7 +18,7 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 interface AccountingInformation {
   customer_name: string;
   updated_at: string;
-  items: any[]; // itemsの正確な型を後で定義することをお勧めします
+  items: any[];
   reservations: {
     user_id: string;
     start_time: string;
@@ -45,15 +46,13 @@ export async function GET(req: NextRequest) {
     const itemsPerPage = parseInt(searchParams.get("itemsPerPage") || "10");
     const sortOrder = searchParams.get("sortOrder") || "desc";
 
-    // AuthorizationヘッダーからBearerトークンを取得
+    // Authorization check
     const authHeader = req.headers.get("Authorization");
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const token = authHeader.split("Bearer ")[1];
-
-    // トークンからユーザー情報を取得
     const { data: userData, error: authError } = await supabase.auth.getUser(token);
 
     if (authError || !userData.user) {
@@ -62,7 +61,7 @@ export async function GET(req: NextRequest) {
 
     const userId = userData.user.id;
 
-    // クエリの構築
+    // Base query construction
     let query = supabase
       .from("accounting_information")
       .select(`
@@ -77,24 +76,26 @@ export async function GET(req: NextRequest) {
         register_closings!fk_register_closing_id (
           closing_date
         )
-      `)
+      `, { count: 'exact' })
       .eq("is_temporary", false)
       .eq("reservations.user_id", userId);
 
-    // 検索対象に応じてフィルタリング
-    if (searchTarget === "visitDate") {
-      if (startDate) {
-        query = query.gte("reservations.start_time", startDate);
-      }
-      if (endDate) {
-        query = query.lt("reservations.start_time", endDate);
-      }
-    } else if (searchTarget === "registrationDate") {
-      if (startDate) {
-        query = query.gte("register_closings.closing_date", startDate);
-      }
-      if (endDate) {
-        query = query.lt("register_closings.closing_date", endDate);
+    // 日付フィルタリングの適用
+    if (startDate || endDate) {
+      if (searchTarget === "visitDate") {
+        if (startDate) {
+          query = query.gte('reservations.start_time', startDate);
+        }
+        if (endDate) {
+          query = query.lte('reservations.start_time', endDate);
+        }
+      } else {
+        if (startDate) {
+          query = query.gte('register_closings.closing_date', startDate);
+        }
+        if (endDate) {
+          query = query.lte('register_closings.closing_date', endDate);
+        }
       }
     }
 
@@ -104,7 +105,7 @@ export async function GET(req: NextRequest) {
     }
 
     // データの取得
-    const { data: accountingData, error: accountingError } = await query as { data: AccountingInformation[], error: any };
+    const { data: accountingData, error: accountingError, count } = await query;
 
     if (accountingError) {
       console.error("Accounting data fetch error:", accountingError);
@@ -113,58 +114,57 @@ export async function GET(req: NextRequest) {
 
     let resultData: any[] = [];
 
-    // データの整形とフラット化
-    for (const row of accountingData) {
-      const { customer_name, updated_at, items, reservations, register_closings } = row;
+    // データの整形とフィルタリング
+    for (const row of accountingData || []) {
+      const { customer_name, items, reservations, register_closings } = row;
 
       const reservation = Array.isArray(reservations) ? reservations[0] : reservations;
-      const start_time = reservation?.start_time;
+      const register_closing = Array.isArray(register_closings) ? register_closings[0] : register_closings;
 
-      const closing_date = register_closings && (Array.isArray(register_closings) ? register_closings[0]?.closing_date : register_closings.closing_date) || null;
+      // 日付の処理を改善
+      const start_time = reservation?.start_time 
+        ? dayjs(reservation.start_time).tz("Asia/Tokyo")
+        : null;
+      const closing_date = register_closing?.closing_date 
+        ? dayjs(register_closing.closing_date).tz("Asia/Tokyo")
+        : null;
 
       for (const item of items) {
         const { category, name, staff: itemStaff, price, quantity } = item;
         const amount = price * quantity;
 
-        // スタッフのフィルターをここで適用
-        if (staff && staff !== "all" && itemStaff !== staff) {
-          continue; // このアイテムをスキップ
-        }
+        // スタッフとメニューのフィルタリング
+        if (staff && staff !== "all" && itemStaff !== staff) continue;
+        if (menu && menu !== "all" && name !== menu) continue;
 
-        // メニューのフィルターをここで適用
-        if (menu && menu !== "all" && name !== menu) {
-          continue; // このアイテムをスキップ
-        }
-
-       // 時差調整を省いてそのまま格納
-resultData.push({
-  customer_name,
-  start_time: start_time ? dayjs(start_time).format('YYYY/MM/DD HH:mm') : null,
-  closing_date: closing_date ? dayjs(closing_date).format('YYYY/MM/DD HH:mm') : null,
-  category,
-  name,
-  staff: itemStaff,
-  price,
-  quantity,
-  amount,
-});
+        resultData.push({
+          customer_name,
+          start_time: start_time ? start_time.format("YYYY/MM/DD HH:mm:ss") : null,
+          closing_date: closing_date ? closing_date.format("YYYY/MM/DD HH:mm:ss") : null,
+          category,
+          name,
+          staff: itemStaff,
+          price,
+          quantity,
+          amount,
+        });
       }
     }
 
-    // ソートキーの動的設定
+    // ソート
     const sortKey = searchTarget === "visitDate" ? "start_time" : "closing_date";
-
-    // ソート（新しいものを上に）
     resultData.sort((a, b) => {
-      const timeA = new Date(a[sortKey]).getTime();
-      const timeB = new Date(b[sortKey]).getTime();
-      return timeB - timeA; // 降順（新しいものを上に）
+      if (!a[sortKey]) return 1;
+      if (!b[sortKey]) return -1;
+      return sortOrder === "desc"
+        ? dayjs(b[sortKey]).valueOf() - dayjs(a[sortKey]).valueOf()
+        : dayjs(a[sortKey]).valueOf() - dayjs(b[sortKey]).valueOf();
     });
 
-    // ページネーションを適用
+    // ページネーション
     const totalItems = resultData.length;
     const startIndex = (page - 1) * itemsPerPage;
-    const endIndex = page * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
     const paginatedData = resultData.slice(startIndex, endIndex);
 
     return NextResponse.json(

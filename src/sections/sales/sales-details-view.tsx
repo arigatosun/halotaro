@@ -40,7 +40,7 @@ import { supabase } from "@/lib/supabaseClient";
 // dayjsプラグインの設定
 dayjs.extend(utc);
 dayjs.extend(timezone);
-dayjs.tz.setDefault("Asia/Tokyo");  // デフォルトタイムゾーンを日本時間に設定
+dayjs.tz.setDefault("Asia/Tokyo");
 
 const SalesDetailView: React.FC = () => {
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
@@ -60,6 +60,18 @@ const SalesDetailView: React.FC = () => {
   // スタッフとメニューの状態変数
   const [staffList, setStaffList] = useState<any[]>([]);
   const [menuList, setMenuList] = useState<any[]>([]);
+
+  const convertToTimezoneDateString = (date: Date | undefined, isEndDate: boolean = false): string => {
+    if (!date) return "";
+    
+    const d = dayjs(date).tz("Asia/Tokyo");
+    if (isEndDate) {
+      // 終了日の場合は23:59:59.999に設定
+      return d.endOf('day').toISOString();
+    }
+    // 開始日の場合は00:00:00.000に設定
+    return d.startOf('day').toISOString();
+  };
 
   // スタッフデータを取得
   const fetchStaffData = async () => {
@@ -100,14 +112,13 @@ const SalesDetailView: React.FC = () => {
   }, [user]);
 
   const fetchSalesData = async () => {
-    if (!session) {
-      return;
-    }
+    if (!session) return;
 
     setLoading(true);
     setError(null);
+    
     try {
-      const params: any = {
+      const params: Record<string, any> = {
         page: currentPage,
         itemsPerPage,
         sortBy: searchTarget === "visitDate" ? "start_time" : "closing_date",
@@ -115,37 +126,41 @@ const SalesDetailView: React.FC = () => {
         searchTarget,
       };
 
+      // 日付範囲の処理を改善
       if (dateRange?.from) {
-        params.startDate = dayjs(dateRange.from)
-          .tz("Asia/Tokyo")
-          .startOf("day")
-          .toISOString();
+        params.startDate = convertToTimezoneDateString(dateRange.from);
       }
       if (dateRange?.to) {
-        params.endDate = dayjs(dateRange.to)
-          .add(1, "day")
-          .tz("Asia/Tokyo")
-          .startOf("day")
-          .toISOString();
+        params.endDate = convertToTimezoneDateString(dateRange.to, true);
       }
+
+      // その他のフィルター条件
       if (staff && staff !== "all") {
         params.staff = staff;
       }
-      if (customer) {
-        params.customer = customer;
+      if (customer.trim()) {
+        params.customer = customer.trim();
       }
       if (menu && menu !== "all") {
         params.menu = menu;
       }
 
-      const queryString = new URLSearchParams(params).toString();
+      // パラメータのクリーンアップ（undefinedや空文字を除去）
+      const cleanParams = Object.entries(params).reduce((acc, [key, value]) => {
+        if (value !== undefined && value !== "") {
+          acc[key] = value;
+        }
+        return acc;
+      }, {} as Record<string, any>);
+
+      const queryString = new URLSearchParams(cleanParams).toString();
       const response = await axios.get(`/api/sales-details?${queryString}`, {
         headers: {
           Authorization: `Bearer ${session.access_token}`,
         },
       });
+      
       const { data, totalItems } = response.data;
-
       setSalesData(data);
       setTotalItems(totalItems);
     } catch (error) {
@@ -179,6 +194,12 @@ const SalesDetailView: React.FC = () => {
   };
 
   const paginate = (pageNumber: number) => setCurrentPage(pageNumber);
+
+  // 日付フォーマット用のユーティリティ関数
+  const formatDateTime = (dateString: string | null): string => {
+    if (!dateString) return "";
+    return dayjs(dateString).tz("Asia/Tokyo").format("YYYY/MM/DD HH:mm");
+  };
 
   return (
     <div className="p-8 max-w-7xl mx-auto">
@@ -315,12 +336,8 @@ const SalesDetailView: React.FC = () => {
                       {item.customer_name}
                       <br />
                       {searchTarget === "visitDate"
-                        ? item.start_time
-                          ? dayjs(item.start_time).tz("Asia/Tokyo").format("YYYY/MM/DD HH:mm")
-                          : ""
-                        : item.closing_date
-                        ? dayjs(item.closing_date).tz("Asia/Tokyo").format("YYYY/MM/DD HH:mm")
-                        : ""}
+                        ? formatDateTime(item.start_time)
+                        : formatDateTime(item.closing_date)}
                     </TableCell>
                     <TableCell>{item.category}</TableCell>
                     <TableCell>{item.name}</TableCell>
