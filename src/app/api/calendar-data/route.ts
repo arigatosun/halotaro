@@ -582,21 +582,15 @@ export async function PUT(request: Request) {
     }
 
     // 顧客情報の更新（顧客IDが存在する場合のみ）
-    if (
-      customerId &&
-      (updateFields.customer_name ||
-        updateFields.customer_email ||
-        updateFields.customer_phone ||
-        updateFields.customer_name_kana)
-    ) {
+    if (customerId) {
       const customerUpdateData: any = {};
-      if (updateFields.customer_name)
+      if (updateFields.customer_name !== undefined)
         customerUpdateData.name = updateFields.customer_name;
-      if (updateFields.customer_email)
+      if (updateFields.customer_email !== undefined)
         customerUpdateData.email = updateFields.customer_email;
-      if (updateFields.customer_phone)
+      if (updateFields.customer_phone !== undefined)
         customerUpdateData.phone = updateFields.customer_phone;
-      if (updateFields.customer_name_kana)
+      if (updateFields.customer_name_kana !== undefined)
         customerUpdateData.name_kana = updateFields.customer_name_kana;
 
       const { error: customerUpdateError } = await supabase

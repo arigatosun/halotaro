@@ -82,6 +82,8 @@ const ReservationEditForm: React.FC<ReservationEditFormProps> = ({
         customer_first_name: firstName,
         customer_last_name_kana: lastNameKana,
         customer_first_name_kana: firstNameKana,
+        staff_id: reservation.staff_id || "",
+        menu_id: reservation.menu_id, // 修正：空文字列を除去
         start_time: reservation.start_time
           ? moment(reservation.start_time)
               .tz("Asia/Tokyo")
@@ -93,20 +95,55 @@ const ReservationEditForm: React.FC<ReservationEditFormProps> = ({
               .format("YYYY-MM-DDTHH:mm")
           : "",
       });
+
       setSelectedDate(
-        moment(reservation.start_time).tz("Asia/Tokyo").format("YYYY-MM-DD")
+        reservation.start_time
+          ? moment(reservation.start_time).tz("Asia/Tokyo").format("YYYY-MM-DD")
+          : ""
       );
       setSelectedTime(
-        moment(reservation.start_time).tz("Asia/Tokyo").format("HH:mm")
+        reservation.start_time
+          ? moment(reservation.start_time).tz("Asia/Tokyo").format("HH:mm")
+          : ""
       );
     }
   }, [reservation]);
 
   useEffect(() => {
-    if (selectedDate && editingFormData.staff_id && editingFormData.menu_id) {
+    if (
+      selectedDate &&
+      editingFormData.staff_id &&
+      editingFormData.menu_id != null // 修正
+    ) {
       generateAvailableTimeSlots();
     }
   }, [selectedDate, editingFormData.staff_id, editingFormData.menu_id]);
+
+  useEffect(() => {
+    if (
+      selectedTime &&
+      selectedDate &&
+      editingFormData.menu_id != null // 修正
+    ) {
+      const selectedMenu = menuList.find(
+        (menu) => menu.id === editingFormData.menu_id
+      );
+      if (selectedMenu) {
+        const start = moment.tz(
+          `${selectedDate}T${selectedTime}`,
+          "YYYY-MM-DDTHH:mm",
+          "Asia/Tokyo"
+        );
+        const end = start.clone().add(selectedMenu.duration, "minutes");
+
+        setEditingFormData((prev) => ({
+          ...prev,
+          start_time: start.format("YYYY-MM-DDTHH:mm"),
+          end_time: end.format("YYYY-MM-DDTHH:mm"),
+        }));
+      }
+    }
+  }, [selectedTime, selectedDate, editingFormData.menu_id, menuList]);
 
   const generateAvailableTimeSlots = () => {
     const selectedMenu = menuList.find(
@@ -239,14 +276,27 @@ const ReservationEditForm: React.FC<ReservationEditFormProps> = ({
       editingFormData.customer_last_name_kana || ""
     } ${editingFormData.customer_first_name_kana || ""}`.trim();
 
+    // `start_time` と `end_time` を UTC に変換
+    const utcStartTime = editingFormData.start_time
+      ? moment
+          .tz(editingFormData.start_time, "YYYY-MM-DDTHH:mm", "Asia/Tokyo")
+          .utc()
+          .format()
+      : reservation.start_time;
+    const utcEndTime = editingFormData.end_time
+      ? moment
+          .tz(editingFormData.end_time, "YYYY-MM-DDTHH:mm", "Asia/Tokyo")
+          .utc()
+          .format()
+      : reservation.end_time;
+
     const updatedReservation: Partial<Reservation> = {
       ...editingFormData,
       customer_name,
       customer_name_kana,
-      // メニューや予約時間が選択されていない場合は既存の値を使用
       menu_id: editingFormData.menu_id || reservation.menu_id,
-      start_time: editingFormData.start_time || reservation.start_time,
-      end_time: editingFormData.end_time || reservation.end_time,
+      start_time: utcStartTime,
+      end_time: utcEndTime,
     };
 
     try {
@@ -388,12 +438,12 @@ const ReservationEditForm: React.FC<ReservationEditFormProps> = ({
                   </Select>
                 </div>
 
-                {/* メニューの選択（必須ではないため required を削除） */}
+                {/* メニューの選択 */}
                 <div className="space-y-2">
                   <Label htmlFor="menu_id">メニュー</Label>
                   <Select
                     value={
-                      editingFormData.menu_id
+                      editingFormData.menu_id != null // 修正
                         ? editingFormData.menu_id.toString()
                         : ""
                     }
@@ -428,10 +478,10 @@ const ReservationEditForm: React.FC<ReservationEditFormProps> = ({
                   />
                 </div>
 
-                {/* 予約時間（必須ではないため選択しなくても良い） */}
+                {/* 予約時間 */}
                 {selectedDate &&
                   editingFormData.staff_id &&
-                  editingFormData.menu_id && (
+                  editingFormData.menu_id != null && ( // 修正
                     <div className="space-y-2">
                       <Label>予約時間</Label>
                       <Paper
