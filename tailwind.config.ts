@@ -83,6 +83,10 @@ const config: Config = {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
       },
+      screens: {
+        "xl-1290": "1290px", // ここに追加
+        "lg-1229": "1229px", // 1229px以上
+      },
     },
   },
   plugins: [require("tailwindcss-animate")],

@@ -5,11 +5,7 @@ import FullCalendar from "@fullcalendar/react";
 import resourceTimelinePlugin from "@fullcalendar/resource-timeline";
 import interactionPlugin, { DateClickArg } from "@fullcalendar/interaction";
 import listPlugin from "@fullcalendar/list";
-import {
-  EventClickArg,
-  EventDropArg,
-  DateSelectArg,
-} from "@fullcalendar/core";
+import { EventClickArg, EventDropArg, DateSelectArg } from "@fullcalendar/core";
 import { Reservation, Staff, BusinessHour } from "@/types/reservation";
 import moment from "moment-timezone";
 import "moment/locale/ja";
@@ -108,13 +104,17 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
 
     const earliestOpenTime = currentBusinessHours.length
       ? moment
-          .min(currentBusinessHours.map((bh) => moment(bh.open_time, "HH:mm:ss")))
+          .min(
+            currentBusinessHours.map((bh) => moment(bh.open_time, "HH:mm:ss"))
+          )
           .format("HH:mm:ss")
       : defaultOpenTime;
 
     const latestCloseTime = currentBusinessHours.length
       ? moment
-          .max(currentBusinessHours.map((bh) => moment(bh.close_time, "HH:mm:ss")))
+          .max(
+            currentBusinessHours.map((bh) => moment(bh.close_time, "HH:mm:ss"))
+          )
           .format("HH:mm:ss")
       : defaultCloseTime;
 
@@ -307,7 +307,7 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
           },
         }}
       >
-         <FullCalendar
+        <FullCalendar
           expandRows={false}
           ref={ref}
           plugins={plugins}
@@ -324,6 +324,8 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
           eventResourceEditable={!isUpdating}
           dragRevertDuration={0}
           select={onDateSelect}
+          selectMinDistance={50} // 追加: 少なくとも1ピクセル以上ドラッグしないとselectイベントが発生しない
+          selectLongPressDelay={500} // 追加: 長押しによる選択を500ms以上の長押しに設定
           schedulerLicenseKey="GPL-My-Project-Is-Open-Source"
           events={events}
           resources={resources}
@@ -331,7 +333,7 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
           eventClick={onEventClick}
           eventDrop={onEventDrop}
           slotDuration="00:30:00"
-          slotMinWidth={50}
+          slotMinWidth={20}
           slotMinTime={earliestOpenTime}
           slotMaxTime={latestCloseTime}
           timeZone="local"

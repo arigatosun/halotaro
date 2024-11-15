@@ -149,32 +149,33 @@ const ReservationCalendar: React.FC = () => {
   const handleDateSelect = (selectInfo: DateSelectArg) => {
     const { start, end, resource } = selectInfo;
 
-    // 開始時間と終了時間の差を計算（ミリ秒単位）
+    // slotDuration（スロットの長さ）をミリ秒単位で計算
+    const slotDurationMs = 30 * 60 * 1000; // 30分スロットの場合
+
+    // 選択期間を計算
     const duration = end.getTime() - start.getTime();
 
-    // 1分未満の場合は処理をスキップ
-    if (duration < 60000) {
-      return;
+    // 選択期間が slotDuration より大きい場合にのみスタッフスケジュールフォームを表示
+    if (duration > slotDurationMs) {
+      if (!resource) {
+        setSnackbar({
+          message: "スタッフを選択してください",
+          severity: "error",
+        });
+        return;
+      }
+
+      const newStaffSchedule: Partial<Reservation> = {
+        start_time: start.toISOString(),
+        end_time: end.toISOString(),
+        staff_id: resource.id,
+        is_staff_schedule: true,
+      };
+
+      setSelectedStaffSchedule(newStaffSchedule as Reservation);
+      setIsNewStaffSchedule(true);
+      setIsStaffScheduleFormOpen(true);
     }
-
-    if (!resource) {
-      setSnackbar({
-        message: "スタッフを選択してください",
-        severity: "error",
-      });
-      return;
-    }
-
-    const newStaffSchedule: Partial<Reservation> = {
-      start_time: start.toISOString(),
-      end_time: end.toISOString(),
-      staff_id: resource.id,
-      is_staff_schedule: true,
-    };
-
-    setSelectedStaffSchedule(newStaffSchedule as Reservation);
-    setIsNewStaffSchedule(true);
-    setIsStaffScheduleFormOpen(true);
   };
 
   // イベントクリックハンドラ

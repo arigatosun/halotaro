@@ -127,7 +127,11 @@ const Header = () => {
             />
             {isMobile ? (
               <button className="focus:outline-none" onClick={toggleMenu}>
-                {isMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+                {isMenuOpen ? (
+                  <X className="w-6 h-6" />
+                ) : (
+                  <Menu className="w-6 h-6" />
+                )}
               </button>
             ) : (
               <>
@@ -199,11 +203,19 @@ interface NavItemProps {
   onClick?: () => void;
 }
 
-const NavItem: React.FC<NavItemProps> = ({ href, icon, children, isActive, onClick }) => {
+const NavItem: React.FC<NavItemProps> = ({
+  href,
+  icon,
+  children,
+  isActive,
+  onClick,
+}) => {
   const content = (
     <>
       {icon}
-      <span className="ml-2">{children}</span>
+      <span className="ml-2 hidden min-[1168px]:inline text-xs lg-1229:text-sm xl-1290:text-base transition-all">
+        {children}
+      </span>
     </>
   );
 
@@ -253,7 +265,9 @@ const SubHeader: React.FC<{ pathname: string }> = ({ pathname }) => {
       { href: "/dashboard/listing/salonmenu", label: "店販" },
       { href: "/dashboard/listing/coupon", label: "クーポン" },
     ],
-    "/dashboard/customer": [{ href: "/dashboard/customer", label: "お客様一覧" }],
+    "/dashboard/customer": [
+      { href: "/dashboard/customer", label: "お客様一覧" },
+    ],
     "/dashboard/sales": [
       { href: "/dashboard/sales", label: "売上管理TOP" },
       { href: "/dashboard/sales/sales-details", label: "売上明細" },
@@ -271,7 +285,9 @@ const SubHeader: React.FC<{ pathname: string }> = ({ pathname }) => {
     ],
   };
 
-  const currentSubPages = Object.entries(subPages).find(([key]) => pathname.startsWith(key))?.[1];
+  const currentSubPages = Object.entries(subPages).find(([key]) =>
+    pathname.startsWith(key)
+  )?.[1];
 
   if (!currentSubPages) return null;
 

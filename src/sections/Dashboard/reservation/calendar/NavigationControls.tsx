@@ -1,12 +1,19 @@
-// NavigationControls.tsx
-import React, { useState } from 'react';
-import { Box, Typography, Button, useMediaQuery, Theme, IconButton, Dialog } from '@mui/material';
-import { PlusCircle, ChevronLeft, ChevronRight } from 'lucide-react';
-import { CalendarMonth } from '@mui/icons-material';
-import moment from 'moment';
-import { StaticDatePicker } from '@mui/x-date-pickers/StaticDatePicker'; // 変更
-import { LocalizationProvider } from '@mui/x-date-pickers';
-import { AdapterMoment } from '@mui/x-date-pickers/AdapterMoment';
+import React, { useState } from "react";
+import {
+  Box,
+  Typography,
+  Button,
+  IconButton,
+  Dialog,
+  Theme,
+  useMediaQuery,
+} from "@mui/material";
+import { PlusCircle, ChevronLeft, ChevronRight } from "lucide-react";
+import { CalendarMonth } from "@mui/icons-material";
+import moment from "moment";
+import { StaticDatePicker } from "@mui/x-date-pickers/StaticDatePicker";
+import { LocalizationProvider } from "@mui/x-date-pickers";
+import { AdapterMoment } from "@mui/x-date-pickers/AdapterMoment";
 
 interface NavigationControlsProps {
   currentDate: moment.Moment;
@@ -27,46 +34,208 @@ const NavigationControls: React.FC<NavigationControlsProps> = ({
   onAddStaffSchedule,
   onDateChange,
 }) => {
-  const isMobile = useMediaQuery((theme: Theme) => theme.breakpoints.down('sm'));
+  const isMobile = useMediaQuery((theme: Theme) =>
+    theme.breakpoints.down("sm")
+  );
+  const isSmallScreen = useMediaQuery("(max-width: 1168px)");
+  const isMediumScreen = useMediaQuery("(max-width: 1229px)");
+  const isLargeScreen = useMediaQuery("(max-width: 1290px)");
   const [datePickerOpen, setDatePickerOpen] = useState(false);
 
+  // テキストサイズの動的な計算
+  const getTextSize = () => {
+    if (isSmallScreen) return "text-xs";
+    if (isMediumScreen) return "text-xs";
+    if (isLargeScreen) return "text-sm";
+    return "text-base";
+  };
+
+  // ボタンテキストの表示制御
+  const getButtonText = (text: string) => {
+    if (isSmallScreen) return "";
+    return text;
+  };
+
   return (
-    <Box sx={{ mb: 3, display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'space-between', alignItems: 'center', gap: 2 }}>
-      <Box sx={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', alignItems: 'center', gap: 2 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <Button variant="outlined" onClick={onPrevDay} sx={{ color: '#F25C05', borderColor: '#F25C05', minWidth: 0, padding: isMobile ? '4px 8px' : '6px 16px' }}>
-            <ChevronLeft className="h-4 w-4" />
-            {!isMobile && <span className="ml-1">前日</span>}
+    <Box
+      sx={{
+        mb: 3,
+        display: "flex",
+        flexDirection: { xs: "column", sm: "row" },
+        justifyContent: "space-between",
+        alignItems: "center",
+        gap: 2,
+      }}
+    >
+      <Box
+        sx={{
+          display: "flex",
+          flexDirection: { xs: "column", sm: "row" },
+          alignItems: "center",
+          gap: 2,
+        }}
+      >
+        <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+          <Button
+            variant="outlined"
+            onClick={onPrevDay}
+            sx={{
+              color: "#F25C05",
+              borderColor: "#F25C05",
+              minWidth: 0,
+              padding: { xs: "4px 8px", sm: "6px 16px" },
+              fontSize: isSmallScreen
+                ? "0.75rem"
+                : isMediumScreen
+                ? "0.875rem"
+                : "1rem",
+            }}
+          >
+            <ChevronLeft
+              className={`${isSmallScreen ? "h-3 w-3" : "h-4 w-4"}`}
+            />
+            <span
+              className={`ml-1 ${
+                isSmallScreen ? "hidden" : "inline"
+              } ${getTextSize()}`}
+            >
+              {getButtonText("前日")}
+            </span>
           </Button>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Typography variant={isMobile ? "h6" : "h4"} sx={{ whiteSpace: 'nowrap' }}>
-              {currentDate.format('YYYY年M月D日(ddd)')}
+
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <Typography
+              className={getTextSize()}
+              sx={{
+                whiteSpace: "nowrap",
+                fontSize: {
+                  xs: "1rem",
+                  sm: isSmallScreen
+                    ? "0.875rem"
+                    : isMediumScreen
+                    ? "1rem"
+                    : "1.25rem",
+                },
+              }}
+            >
+              {currentDate.format("YYYY年M月D日(ddd)")}
             </Typography>
-            {/* アイコンボタンを追加 */}
-            <IconButton onClick={() => setDatePickerOpen(true)} sx={{ color: '#F25C05', fontSize: '2rem' }}> {/* アイコンサイズを調整 */}
+            <IconButton
+              onClick={() => setDatePickerOpen(true)}
+              sx={{
+                color: "#F25C05",
+                fontSize: isSmallScreen ? "1.5rem" : "2rem",
+              }}
+            >
               <CalendarMonth fontSize="inherit" />
             </IconButton>
           </Box>
-          <Button variant="outlined" onClick={onNextDay} sx={{ color: '#F25C05', borderColor: '#F25C05', minWidth: 0, padding: isMobile ? '4px 8px' : '6px 16px' }}>
-            {!isMobile && <span className="mr-1">翌日</span>}
-            <ChevronRight className="h-4 w-4" />
+
+          <Button
+            variant="outlined"
+            onClick={onNextDay}
+            sx={{
+              color: "#F25C05",
+              borderColor: "#F25C05",
+              minWidth: 0,
+              padding: { xs: "4px 8px", sm: "6px 16px" },
+              fontSize: isSmallScreen
+                ? "0.75rem"
+                : isMediumScreen
+                ? "0.875rem"
+                : "1rem",
+            }}
+          >
+            <span
+              className={`mr-1 ${
+                isSmallScreen ? "hidden" : "inline"
+              } ${getTextSize()}`}
+            >
+              {getButtonText("翌日")}
+            </span>
+            <ChevronRight
+              className={`${isSmallScreen ? "h-3 w-3" : "h-4 w-4"}`}
+            />
           </Button>
         </Box>
-        <Button variant="outlined" onClick={onToday} sx={{ color: '#F25C05', borderColor: '#F25C05' }}>
-          今日
+
+        <Button
+          variant="outlined"
+          onClick={onToday}
+          sx={{
+            color: "#F25C05",
+            borderColor: "#F25C05",
+            fontSize: isSmallScreen
+              ? "0.75rem"
+              : isMediumScreen
+              ? "0.875rem"
+              : "1rem",
+          }}
+        >
+          <span className={getTextSize()}>今日</span>
         </Button>
       </Box>
-      <Box sx={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', alignItems: 'center', gap: 2, width: isMobile ? '100%' : 'auto' }}>
-        <Button variant="contained" onClick={onAddReservation} sx={{ backgroundColor: '#F25C05', '&:hover': { backgroundColor: '#d94f04' }, width: isMobile ? '100%' : 'auto' }}>
-          <PlusCircle className="mr-2 h-4 w-4" /> 新規予約
+
+      <Box
+        sx={{
+          display: "flex",
+          flexDirection: { xs: "column", sm: "row" },
+          alignItems: "center",
+          gap: 2,
+          width: { xs: "100%", sm: "auto" },
+        }}
+      >
+        <Button
+          variant="contained"
+          onClick={onAddReservation}
+          sx={{
+            backgroundColor: "#F25C05",
+            "&:hover": { backgroundColor: "#d94f04" },
+            width: { xs: "100%", sm: "auto" },
+            fontSize: isSmallScreen
+              ? "0.75rem"
+              : isMediumScreen
+              ? "0.875rem"
+              : "1rem",
+          }}
+        >
+          <PlusCircle
+            className={`mr-2 ${isSmallScreen ? "h-3 w-3" : "h-4 w-4"}`}
+          />
+          <span className={getTextSize()}>新規予約</span>
         </Button>
-        <Button variant="contained" onClick={onAddStaffSchedule} sx={{ backgroundColor: '#F25C05', '&:hover': { backgroundColor: '#d94f04' }, width: isMobile ? '100%' : 'auto' }}>
-          <PlusCircle className="mr-2 h-4 w-4" /> スタッフスケジュール追加
+
+        <Button
+          variant="contained"
+          onClick={onAddStaffSchedule}
+          sx={{
+            backgroundColor: "#F25C05",
+            "&:hover": { backgroundColor: "#d94f04" },
+            width: { xs: "100%", sm: "auto" },
+            fontSize: isSmallScreen
+              ? "0.75rem"
+              : isMediumScreen
+              ? "0.875rem"
+              : "1rem",
+          }}
+        >
+          <PlusCircle
+            className={`mr-2 ${isSmallScreen ? "h-3 w-3" : "h-4 w-4"}`}
+          />
+          <span className={getTextSize()}>スタッフスケジュール追加</span>
         </Button>
       </Box>
-      {/* DatePicker をモーダルダイアログ内に表示 */}
+
       <LocalizationProvider dateAdapter={AdapterMoment}>
-        <Dialog open={datePickerOpen} onClose={() => setDatePickerOpen(false)}>
+        <Dialog
+          open={datePickerOpen}
+          onClose={() => setDatePickerOpen(false)}
+          sx={{
+            "& .MuiDialog-paper": {
+              margin: { xs: "16px", sm: "32px" },
+            },
+          }}
+        >
           <StaticDatePicker
             displayStaticWrapperAs="desktop"
             value={currentDate}
