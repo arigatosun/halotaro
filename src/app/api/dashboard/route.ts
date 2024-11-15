@@ -4,7 +4,7 @@ import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
 // プラグインを設定
 dayjs.extend(utc);
@@ -43,7 +43,9 @@ interface DashboardResponse {
   upcomingAppointments: Appointment[];
 }
 
-export async function GET(req: NextRequest): Promise<NextResponse<DashboardResponse | { error: string }>> {
+export async function GET(
+  req: NextRequest
+): Promise<NextResponse<DashboardResponse | { error: string }>> {
   try {
     // 認証処理
     const authHeader = req.headers.get("Authorization");
@@ -51,8 +53,10 @@ export async function GET(req: NextRequest): Promise<NextResponse<DashboardRespo
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     const token = authHeader.split("Bearer ")[1];
-    const { data: userData, error: authError } = await supabase.auth.getUser(token);
-    
+    const { data: userData, error: authError } = await supabase.auth.getUser(
+      token
+    );
+
     if (authError || !userData.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -64,7 +68,7 @@ export async function GET(req: NextRequest): Promise<NextResponse<DashboardRespo
     const year = today.format("YYYY");
     const month = today.format("MM");
     const selectedDate = dayjs(`${year}-${month}-01`).tz("Asia/Tokyo");
-    
+
     const startOfMonth = selectedDate.startOf("month").toISOString();
     const endOfMonth = selectedDate.endOf("month").toISOString();
     const startOfToday = today.startOf("day").toISOString();
@@ -149,14 +153,16 @@ export async function GET(req: NextRequest): Promise<NextResponse<DashboardRespo
 
     const { data: upcomingReservations, error: upcomingError } = await supabase
       .from("reservations")
-      .select(`
+      .select(
+        `
         start_time,
         scraped_customer,
         scraped_menu,
-        reservation_customers!fk_customer(name),
+        reservation_customers!fk_customer(name, name_kana),
         menu_items!left(name),
         staff!left(name)
-      `)
+      `
+      )
       .eq("user_id", userId)
       .eq("status", "confirmed")
       .eq("is_staff_schedule", false)
@@ -167,18 +173,27 @@ export async function GET(req: NextRequest): Promise<NextResponse<DashboardRespo
 
     if (upcomingError) throw upcomingError;
 
-    const appointments: Appointment[] = upcomingReservations.map((reservation: any) => {
-      const clientName = reservation.reservation_customers?.name || reservation.scraped_customer || "顧客名未設定";
-      const serviceName = reservation.menu_items?.name || reservation.scraped_menu || "サービス未設定";
-      const staffName = reservation.staff?.name || "スタッフ未設定";
+    const appointments: Appointment[] = upcomingReservations.map(
+      (reservation: any) => {
+        const clientName =
+          reservation.reservation_customers?.name ||
+          reservation.reservation_customers?.name_kana ||
+          reservation.scraped_customer ||
+          "顧客名未設定";
+        const serviceName =
+          reservation.menu_items?.name ||
+          reservation.scraped_menu ||
+          "サービス未設定";
+        const staffName = reservation.staff?.name || "スタッフ未設定";
 
-      return {
-        time: dayjs(reservation.start_time).tz("Asia/Tokyo").format("HH:mm"),
-        client: clientName,
-        service: serviceName,
-        staff: staffName,
-      };
-    });
+        return {
+          time: dayjs(reservation.start_time).tz("Asia/Tokyo").format("HH:mm"),
+          client: clientName,
+          service: serviceName,
+          staff: staffName,
+        };
+      }
+    );
 
     // レスポンスの返却
     return NextResponse.json({
@@ -188,7 +203,6 @@ export async function GET(req: NextRequest): Promise<NextResponse<DashboardRespo
       yesterdaySales,
       upcomingAppointments: appointments,
     });
-
   } catch (error: any) {
     console.error("ダッシュボードデータ取得エラー:", error);
     return NextResponse.json(
