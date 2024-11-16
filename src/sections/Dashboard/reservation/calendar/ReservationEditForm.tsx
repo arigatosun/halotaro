@@ -243,13 +243,12 @@ const ReservationEditForm: React.FC<ReservationEditFormProps> = ({
       return;
     }
 
-    // 必須項目のバリデーション
     if (
-      !editingFormData.customer_last_name_kana ||
+      !editingFormData.customer_last_name_kana &&
       !editingFormData.customer_first_name_kana
     ) {
       setSnackbar({
-        message: "顧客名（カナ）は必須項目です。",
+        message: "顧客名（カナ）の姓または名を入力してください。",
         severity: "error",
       });
       return;
@@ -272,9 +271,17 @@ const ReservationEditForm: React.FC<ReservationEditFormProps> = ({
     const customer_name = `${editingFormData.customer_last_name || ""} ${
       editingFormData.customer_first_name || ""
     }`.trim();
-    const customer_name_kana = `${
-      editingFormData.customer_last_name_kana || ""
-    } ${editingFormData.customer_first_name_kana || ""}`.trim();
+    let customer_name_kana = "";
+    if (
+      editingFormData.customer_last_name_kana &&
+      editingFormData.customer_first_name_kana
+    ) {
+      customer_name_kana = `${editingFormData.customer_last_name_kana} ${editingFormData.customer_first_name_kana}`;
+    } else if (editingFormData.customer_last_name_kana) {
+      customer_name_kana = editingFormData.customer_last_name_kana;
+    } else if (editingFormData.customer_first_name_kana) {
+      customer_name_kana = editingFormData.customer_first_name_kana;
+    }
 
     // `start_time` と `end_time` を UTC に変換
     const utcStartTime = editingFormData.start_time
@@ -375,7 +382,6 @@ const ReservationEditForm: React.FC<ReservationEditFormProps> = ({
                     onChange={(e) =>
                       handleChange("customer_last_name_kana", e.target.value)
                     }
-                    required
                   />
                 </div>
 
@@ -389,7 +395,6 @@ const ReservationEditForm: React.FC<ReservationEditFormProps> = ({
                     onChange={(e) =>
                       handleChange("customer_first_name_kana", e.target.value)
                     }
-                    required
                   />
                 </div>
 
@@ -547,8 +552,8 @@ const ReservationEditForm: React.FC<ReservationEditFormProps> = ({
               type="submit"
               disabled={
                 isOverlap ||
-                !editingFormData.customer_last_name_kana ||
-                !editingFormData.customer_first_name_kana ||
+                (!editingFormData.customer_last_name_kana &&
+                  !editingFormData.customer_first_name_kana) ||
                 !editingFormData.staff_id ||
                 !selectedDate
               }
