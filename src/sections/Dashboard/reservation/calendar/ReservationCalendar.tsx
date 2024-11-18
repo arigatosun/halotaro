@@ -75,6 +75,7 @@ const ReservationCalendar: React.FC = () => {
     menuList,
     closedDays,
     businessHours,
+    staffShifts,
     loadData,
     setReservations,
     dateRange,
@@ -976,6 +977,7 @@ const ReservationCalendar: React.FC = () => {
         staffList={filteredStaffList}
         closedDays={closedDays}
         businessHours={businessHours}
+        staffShifts={staffShifts}
         onDateClick={handleDateClick}
         onDateSelect={handleDateSelect}
         onEventClick={handleEventClick}

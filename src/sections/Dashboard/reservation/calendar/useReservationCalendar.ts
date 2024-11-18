@@ -1,8 +1,25 @@
 // useReservationCalendar.ts
-import { useState, useEffect, useRef } from 'react';
-import { Reservation, Staff, MenuItem, BusinessHour } from '@/types/reservation';
-import { useAuth } from '@/contexts/authcontext';
-import moment from 'moment';
+
+import { useState, useEffect, useRef } from "react";
+import {
+  Reservation,
+  Staff,
+  MenuItem,
+  BusinessHour,
+} from "@/types/reservation";
+import { useAuth } from "@/contexts/authcontext";
+import moment from "moment";
+
+// スタッフシフトの型定義を追加
+interface StaffShift {
+  id: string;
+  staff_id: string;
+  date: string;
+  shift_status: string; // "出勤" または "休日"
+  start_time?: string;
+  end_time?: string;
+  memo?: string;
+}
 
 interface UseReservationCalendarReturn {
   reservations: Reservation[];
@@ -10,15 +27,21 @@ interface UseReservationCalendarReturn {
   menuList: MenuItem[];
   closedDays: string[];
   businessHours: BusinessHour[];
+  staffShifts: StaffShift[]; // 追加
   loadData: () => Promise<void>;
   setReservations: React.Dispatch<React.SetStateAction<Reservation[]>>;
   setClosedDays: React.Dispatch<React.SetStateAction<string[]>>;
   setBusinessHours: React.Dispatch<React.SetStateAction<BusinessHour[]>>;
   dateRange: { start: string; end: string };
-  setDateRange: React.Dispatch<React.SetStateAction<{ start: string; end: string }>>;
-  snackbar: { message: string; severity: 'success' | 'error' } | null;
+  setDateRange: React.Dispatch<
+    React.SetStateAction<{ start: string; end: string }>
+  >;
+  snackbar: { message: string; severity: "success" | "error" } | null;
   setSnackbar: React.Dispatch<
-    React.SetStateAction<{ message: string; severity: 'success' | 'error' } | null>
+    React.SetStateAction<{
+      message: string;
+      severity: "success" | "error";
+    } | null>
   >;
   isLoading: boolean; // ローディング状態を追加
 }
@@ -27,8 +50,10 @@ const useReservationCalendar = (): UseReservationCalendarReturn => {
   // reservations の状態を useRef で管理
   const reservationsRef = useRef<Reservation[]>([]);
   const [reservations, setReservationsState] = useState<Reservation[]>([]);
-  const setReservations: React.Dispatch<React.SetStateAction<Reservation[]>> = (value) => {
-    if (typeof value === 'function') {
+  const setReservations: React.Dispatch<React.SetStateAction<Reservation[]>> = (
+    value
+  ) => {
+    if (typeof value === "function") {
       const newValue = value(reservationsRef.current);
       reservationsRef.current = newValue;
       setReservationsState(newValue);
@@ -41,8 +66,10 @@ const useReservationCalendar = (): UseReservationCalendarReturn => {
   // closedDays の状態を useRef で管理
   const closedDaysRef = useRef<string[]>([]);
   const [closedDays, setClosedDaysState] = useState<string[]>([]);
-  const setClosedDays: React.Dispatch<React.SetStateAction<string[]>> = (value) => {
-    if (typeof value === 'function') {
+  const setClosedDays: React.Dispatch<React.SetStateAction<string[]>> = (
+    value
+  ) => {
+    if (typeof value === "function") {
       const newValue = value(closedDaysRef.current);
       closedDaysRef.current = newValue;
       setClosedDaysState(newValue);
@@ -55,8 +82,10 @@ const useReservationCalendar = (): UseReservationCalendarReturn => {
   // businessHours の状態を useRef で管理
   const businessHoursRef = useRef<BusinessHour[]>([]);
   const [businessHours, setBusinessHoursState] = useState<BusinessHour[]>([]);
-  const setBusinessHours: React.Dispatch<React.SetStateAction<BusinessHour[]>> = (value) => {
-    if (typeof value === 'function') {
+  const setBusinessHours: React.Dispatch<
+    React.SetStateAction<BusinessHour[]>
+  > = (value) => {
+    if (typeof value === "function") {
       const newValue = value(businessHoursRef.current);
       businessHoursRef.current = newValue;
       setBusinessHoursState(newValue);
@@ -66,19 +95,38 @@ const useReservationCalendar = (): UseReservationCalendarReturn => {
     }
   };
 
+  // staffShifts の状態を useRef で管理（追加）
+  const staffShiftsRef = useRef<StaffShift[]>([]);
+  const [staffShifts, setStaffShiftsState] = useState<StaffShift[]>([]);
+  const setStaffShifts: React.Dispatch<React.SetStateAction<StaffShift[]>> = (
+    value
+  ) => {
+    if (typeof value === "function") {
+      const newValue = value(staffShiftsRef.current);
+      staffShiftsRef.current = newValue;
+      setStaffShiftsState(newValue);
+    } else {
+      staffShiftsRef.current = value;
+      setStaffShiftsState(value);
+    }
+  };
+
   // その他の状態と関数
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const [menuList, setMenuList] = useState<MenuItem[]>([]);
-  const [snackbar, setSnackbar] = useState<{ message: string; severity: 'success' | 'error' } | null>(
-    null
-  );
+  const [snackbar, setSnackbar] = useState<{
+    message: string;
+    severity: "success" | "error";
+  } | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false); // ローディング状態を追加
 
-  const [dateRange, setDateRange] = useState<{ start: string; end: string }>(() => {
-    const start = moment().startOf('day').format('YYYY-MM-DD');
-    const end = moment().add(1, 'months').endOf('month').format('YYYY-MM-DD');
-    return { start, end };
-  });
+  const [dateRange, setDateRange] = useState<{ start: string; end: string }>(
+    () => {
+      const start = moment().startOf("day").format("YYYY-MM-DD");
+      const end = moment().add(1, "months").endOf("month").format("YYYY-MM-DD");
+      return { start, end };
+    }
+  );
 
   const { user, session } = useAuth();
 
@@ -95,23 +143,23 @@ const useReservationCalendar = (): UseReservationCalendarReturn => {
           headers: {
             Authorization: `Bearer ${session.access_token}`,
           },
-          cache: 'no-store',
+          cache: "no-store",
         });
 
         if (!response.ok) {
           const errorData = await response.json();
-          console.error('Error fetching initial data:', errorData);
-          throw new Error('Failed to fetch initial data');
+          console.error("Error fetching initial data:", errorData);
+          throw new Error("Failed to fetch initial data");
         }
 
         const data = await response.json();
         setStaffList(data.staffList);
         setMenuList(data.menuList);
       } catch (error) {
-        console.error('Error in loadInitialData:', error);
+        console.error("Error in loadInitialData:", error);
         setSnackbar({
-          message: '初期データの取得に失敗しました',
-          severity: 'error',
+          message: "初期データの取得に失敗しました",
+          severity: "error",
         });
       }
     };
@@ -119,7 +167,7 @@ const useReservationCalendar = (): UseReservationCalendarReturn => {
     loadInitialData();
   }, [user, session]);
 
-  // 日付範囲が変更されたときに予約データを取得
+  // 日付範囲が変更されたときに予約データとスタッフシフトデータを取得
   useEffect(() => {
     if (!session || !user) return;
 
@@ -146,17 +194,20 @@ const useReservationCalendar = (): UseReservationCalendarReturn => {
           userId: user.id,
         });
 
-        const response = await fetch(`/api/calendar-data?${queryParams.toString()}`, {
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-          },
-          cache: 'no-store',
-        });
+        const response = await fetch(
+          `/api/calendar-data?${queryParams.toString()}`,
+          {
+            headers: {
+              Authorization: `Bearer ${session.access_token}`,
+            },
+            cache: "no-store",
+          }
+        );
 
         if (!response.ok) {
           const errorData = await response.json();
-          console.error('Error fetching data:', errorData);
-          throw new Error('Failed to fetch data');
+          console.error("Error fetching data:", errorData);
+          throw new Error("Failed to fetch data");
         }
 
         const data = await response.json();
@@ -164,11 +215,12 @@ const useReservationCalendar = (): UseReservationCalendarReturn => {
         setReservations(data.reservations);
         setClosedDays(data.closedDays || []);
         setBusinessHours(data.businessHours || []);
+        setStaffShifts(data.staffShifts || []); // スタッフシフトデータをセット
       } catch (error) {
-        console.error('Error in loadData:', error);
+        console.error("Error in loadData:", error);
         setSnackbar({
-          message: 'データの取得に失敗しました',
-          severity: 'error',
+          message: "データの取得に失敗しました",
+          severity: "error",
         });
       } finally {
         setIsLoading(false); // ローディング終了
@@ -184,6 +236,7 @@ const useReservationCalendar = (): UseReservationCalendarReturn => {
     menuList,
     closedDays,
     businessHours,
+    staffShifts, // 追加
     loadData: async () => {}, // データが既にロードされているため空の関数を返す
     setReservations,
     setClosedDays,

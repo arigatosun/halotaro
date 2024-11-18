@@ -5,7 +5,12 @@ import FullCalendar from "@fullcalendar/react";
 import resourceTimelinePlugin from "@fullcalendar/resource-timeline";
 import interactionPlugin, { DateClickArg } from "@fullcalendar/interaction";
 import listPlugin from "@fullcalendar/list";
-import { EventClickArg, EventDropArg, DateSelectArg } from "@fullcalendar/core";
+import {
+  EventClickArg,
+  EventDropArg,
+  DateSelectArg,
+  DateSpanApi,
+} from "@fullcalendar/core";
 import { Reservation, Staff, BusinessHour } from "@/types/reservation";
 import moment from "moment-timezone";
 import "moment/locale/ja";
@@ -13,11 +18,27 @@ import { Box } from "@mui/material";
 
 moment.locale("ja");
 
+interface StaffShift {
+  id: string;
+  staff_id: string;
+  date: string;
+  shift_status: string; // "出勤" または "休日"
+  start_time?: string;
+  end_time?: string;
+  memo?: string;
+}
+
+interface CalendarEventProps extends Reservation {
+  is_closed_day?: boolean;
+  is_staff_holiday?: boolean;
+}
+
 interface CalendarViewProps {
   reservations: Reservation[];
   staffList: Staff[];
   closedDays: string[];
   businessHours: BusinessHour[];
+  staffShifts: StaffShift[];
   onDateSelect: (selectInfo: DateSelectArg) => void;
   onEventClick: (clickInfo: EventClickArg) => void;
   onEventDrop: (dropInfo: EventDropArg) => void;
@@ -50,6 +71,7 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
       staffList,
       closedDays,
       businessHours,
+      staffShifts,
       onDateSelect,
       onEventClick,
       onEventDrop,
@@ -92,7 +114,7 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
       return <div>営業時間を読み込んでいます...</div>;
     }
 
-    // 営業時間の計算を元に戻す
+    // 営業時間の計算
     const currentDateStr = currentDate.tz("Asia/Tokyo").format("YYYY-MM-DD");
     const currentBusinessHours = businessHours.filter(
       (bh) => bh.date === currentDateStr && !bh.is_holiday
@@ -122,6 +144,22 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
       id: staff.id.toString(),
       title: staff.name,
     }));
+
+    // スタッフ休日イベントを作成
+    const staffHolidayEvents = staffShifts
+      .filter((shift) => shift.shift_status === "休日")
+      .map((shift) => ({
+        id: `staff-holiday-${shift.staff_id}-${shift.date}`,
+        title: "スタッフ休日",
+        start: `${shift.date}T00:00:00`,
+        end: `${shift.date}T23:59:59`,
+        resourceId: shift.staff_id.toString(),
+        classNames: ["staff-holiday"],
+        editable: false,
+        extendedProps: {
+          is_staff_holiday: true,
+        },
+      }));
 
     const events = [
       ...reservations
@@ -164,6 +202,8 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
             is_closed_day: true,
           },
         })),
+      // スタッフ休日イベントを追加
+      ...staffHolidayEvents,
     ];
 
     const handleViewDidMount = (arg: { el: HTMLElement; view: any }) => {
@@ -190,12 +230,21 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
         ];
 
     // 選択やイベントの移動を制限するための関数
-    const isDateAllowed = (date: Date) => {
+    const isDateAllowed = (date: Date, resourceId?: string) => {
       const dateStr = moment(date).format("YYYY-MM-DD");
       const isHoliday = businessHours.some(
         (bh) => bh.date === dateStr && bh.is_holiday
       );
-      return !isHoliday;
+
+      // スタッフの休日を確認
+      const isStaffHoliday = staffShifts.some(
+        (shift) =>
+          shift.staff_id === resourceId &&
+          shift.shift_status === "休日" &&
+          shift.date === dateStr
+      );
+
+      return !isHoliday && !isStaffHoliday;
     };
 
     return (
@@ -228,6 +277,18 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
               fontSize: "1rem",
             },
           },
+          "& .staff-holiday": {
+            backgroundColor: "rgba(255, 193, 7, 0.1) !important",
+            borderLeft: "4px solid #FFC107",
+            "& .fc-event-title": {
+              color: "#FFC107",
+              fontWeight: "bold",
+              textAlign: "center",
+              padding: "8px",
+              fontSize: "1rem",
+            },
+          },
+          // 他のスタイル設定
           "& .fc-timeline-lane-frame": {
             padding: 0,
             margin: 0,
@@ -323,9 +384,11 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
           eventConstraint="businessHours"
           eventResourceEditable={!isUpdating}
           dragRevertDuration={0}
-          select={onDateSelect}
-          selectMinDistance={50} // 追加: 少なくとも1ピクセル以上ドラッグしないとselectイベントが発生しない
-          selectLongPressDelay={500} // 追加: 長押しによる選択を500ms以上の長押しに設定
+          select={(selectInfo: DateSelectArg) => {
+            onDateSelect(selectInfo);
+          }}
+          selectMinDistance={50}
+          selectLongPressDelay={500}
           schedulerLicenseKey="GPL-My-Project-Is-Open-Source"
           events={events}
           resources={resources}
@@ -361,30 +424,37 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
           eventDisplay="block"
           eventOverlap={(stillEvent, movingEvent) => {
             if (!movingEvent) return false;
-            if (
-              stillEvent.extendedProps.is_closed_day ||
-              movingEvent.extendedProps.is_closed_day
-            ) {
-              return false;
-            }
-            return true;
+            const isOverlapAllowed =
+              !stillEvent.extendedProps.is_closed_day &&
+              !stillEvent.extendedProps.is_staff_holiday &&
+              !movingEvent.extendedProps.is_closed_day &&
+              !movingEvent.extendedProps.is_staff_holiday;
+            return isOverlapAllowed;
           }}
-          selectOverlap={false}
-          selectAllow={(selectInfo) => {
-            // 選択範囲が休業日にかかっていないか確認
-            return isDateAllowed(selectInfo.start);
+          selectOverlap={(event) => {
+            return (
+              !event.extendedProps.is_closed_day &&
+              !event.extendedProps.is_staff_holiday
+            );
           }}
-          eventAllow={(dropInfo) => {
-            // イベントの移動先が休業日にかかっていないか確認
-            return isDateAllowed(dropInfo.start);
+          selectAllow={(span: DateSpanApi) => {
+            const resourceId = span.resource?.id;
+            return isDateAllowed(span.start, resourceId);
+          }}
+          eventAllow={(span, movingEvent) => {
+            const resourceId =
+              span.resource?.id || movingEvent?.getResources()[0]?.id;
+            return isDateAllowed(span.start, resourceId);
           }}
           resourceLabelDidMount={(info) => {
             info.el.style.height = "auto";
           }}
           eventDidMount={(info) => {
-            const reservation = info.event.extendedProps as Reservation;
+            const reservation = info.event.extendedProps as CalendarEventProps;
             if (reservation.is_closed_day) {
               info.el.classList.add("closed-day");
+            } else if (reservation.is_staff_holiday) {
+              info.el.classList.add("staff-holiday");
             } else if (reservation.is_staff_schedule) {
               info.el.parentElement?.classList.add("staff-schedule");
             } else if (reservation.is_hair_sync) {
@@ -405,10 +475,17 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
               : undefined
           }
           eventContent={(eventInfo) => {
-            const reservation = eventInfo.event.extendedProps as Reservation;
+            const reservation = eventInfo.event
+              .extendedProps as CalendarEventProps;
             if (reservation.is_closed_day) {
               return {
                 html: `<div class="fc-event-title">サロン休業日</div>`,
+              };
+            }
+
+            if (reservation.is_staff_holiday) {
+              return {
+                html: `<div class="fc-event-title">スタッフ休日</div>`,
               };
             }
 

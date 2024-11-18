@@ -11,7 +11,6 @@ import {
 } from "@/types/reservation";
 import moment from "moment-timezone";
 import { createClient } from "@supabase/supabase-js";
-import * as Sentry from "@sentry/nextjs";
 
 // Supabase サービスクライアントの初期化
 const supabaseService = createClient(
@@ -132,7 +131,7 @@ export async function GET(request: Request) {
     // 予約データのフォーマット
     const formattedReservations = reservations.map(formatReservation);
 
-    // サロンIDの取得
+    // サロンデータの取得
     const { data: salonData, error: salonError } = await supabase
       .from("salons")
       .select("*")
@@ -152,6 +151,7 @@ export async function GET(request: Request) {
         reservations: formattedReservations,
         closedDays: [],
         businessHours: [],
+        staffShifts: [], // スタッフシフトデータも空配列を返す
       });
     }
 
@@ -218,10 +218,38 @@ export async function GET(request: Request) {
       )
       .map((bh) => bh.date);
 
+    // スタッフシフトの取得（追加）
+    const { data: staffShiftsData, error: staffShiftsError } = await supabase
+      .from("staff_shifts")
+      .select("*, staff!inner(user_id)")
+      .eq("staff.user_id", userId)
+      .gte("date", startDateStr)
+      .lte("date", endDateStr);
+
+    if (staffShiftsError) {
+      console.error("Error fetching staff shifts:", staffShiftsError);
+      return NextResponse.json(
+        { error: staffShiftsError.message },
+        { status: 500 }
+      );
+    }
+
+    // スタッフシフトデータの整形
+    const staffShifts = staffShiftsData.map((shift) => ({
+      id: shift.id,
+      staff_id: shift.staff_id,
+      date: shift.date,
+      shift_status: shift.shift_status,
+      start_time: shift.start_time,
+      end_time: shift.end_time,
+      memo: shift.memo,
+    }));
+
     return NextResponse.json({
       reservations: formattedReservations,
       closedDays,
       businessHours: dateRange,
+      staffShifts, // 追加
     });
   } catch (error) {
     console.error("Unexpected error in GET handler:", error);
