@@ -1,7 +1,14 @@
 "use client";
 
 import React, { useState, useMemo, useEffect } from "react";
-import { Search, X, ChevronDown, ChevronUp, AlertCircle } from "lucide-react";
+import {
+  Search,
+  X,
+  ChevronDown,
+  ChevronUp,
+  AlertCircle,
+  UserPlus,
+} from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,11 +38,19 @@ import {
 } from "@/components/ui/pagination";
 import Link from "next/link";
 import { DateRange } from "react-day-picker";
-import { useAuth } from "@/contexts/authcontext"; // AuthContextをインポート
+import { useAuth } from "@/contexts/authcontext";
 import { isWithinInterval, parse, addMonths, subMonths } from "date-fns";
 import * as Tooltip from "@radix-ui/react-tooltip";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { NewCustomerForm } from "@/app/dashboard/customer/components/NewCustomerForm";
 
-// ソート可能なキーを定義
 type SortableCustomerKeys =
   | "kana"
   | "name"
@@ -44,7 +59,6 @@ type SortableCustomerKeys =
   | "visits"
   | "lastVisit";
 
-// Customer型を定義
 type Customer = {
   id: string;
   name: string;
@@ -53,17 +67,17 @@ type Customer = {
   phone: string;
   visits: number;
   gender: string;
-  lastVisit: string; // ISO文字列
-  birthDate?: string; // "MM-DD" 形式または "0-0" (未選択)
-  weddingAnniversary?: string; // "MM-DD" 形式または "0-0" (未選択)
+  lastVisit: string;
+  birthDate?: string;
+  weddingAnniversary?: string;
   children?: Array<{
     name: string;
-    birthDate: string; // "MM-DD" 形式または "0-0" (未選択)
+    birthDate: string;
   }>;
 };
 
 const CustomerListPage: React.FC = () => {
-  const { session, user } = useAuth(); // セッションとユーザー情報を取得
+  const { session, user } = useAuth();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [sortConfig, setSortConfig] = useState<{
     key: SortableCustomerKeys;
@@ -71,17 +85,17 @@ const CustomerListPage: React.FC = () => {
   } | null>({
     key: "lastVisit",
     direction: "descending",
-  }); // 初期ソート設定
+  });
   const [kanaSearchTerm, setKanaSearchTerm] = useState("");
   const [phoneSearchTerm, setPhoneSearchTerm] = useState("");
-  const [genderSearchTerm, setGenderSearchTerm] = useState("all"); // 性別の状態変数を追加
+  const [genderSearchTerm, setGenderSearchTerm] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
   const [loading, setLoading] = useState(true);
+  const [isNewCustomerDialogOpen, setIsNewCustomerDialogOpen] = useState(false);
 
-  // ユーティリティ関数
   const isDateWithinOneMonth = (dateStr: string): boolean => {
-    if (dateStr === "0-0") return false; // 未設定の場合はfalse
+    if (dateStr === "0-0") return false;
 
     const [monthStr, dayStr] = dateStr.split("-");
     const month = parseInt(monthStr, 10);
@@ -95,11 +109,9 @@ const CustomerListPage: React.FC = () => {
     const today = new Date();
     const targetDate = new Date(today.getFullYear(), month - 1, day);
 
-    // 比較対象の範囲を設定 (過去1か月から未来1か月)
     const start = subMonths(today, 1);
     const end = addMonths(today, 1);
 
-    // 年を跨ぐ場合の調整
     targetDate.setFullYear(today.getFullYear());
 
     const result = isWithinInterval(targetDate, { start, end });
@@ -114,21 +126,25 @@ const CustomerListPage: React.FC = () => {
   const hasUpcomingDates = (customer: Customer): boolean => {
     const { birthDate, weddingAnniversary, children } = customer;
 
-    console.log(`Checking customer ID: ${customer.id}`); // 追加: 顧客IDをログ出力
+    console.log(`Checking customer ID: ${customer.id}`);
 
     if (birthDate && isDateWithinOneMonth(birthDate)) {
       console.log(`Customer ID ${customer.id}: Birthdate is within one month.`);
       return true;
     }
     if (weddingAnniversary && isDateWithinOneMonth(weddingAnniversary)) {
-      console.log(`Customer ID ${customer.id}: Wedding anniversary is within one month.`);
+      console.log(
+        `Customer ID ${customer.id}: Wedding anniversary is within one month.`
+      );
       return true;
     }
 
     if (children && children.length > 0) {
       for (const child of children) {
         if (child.birthDate && isDateWithinOneMonth(child.birthDate)) {
-          console.log(`Customer ID ${customer.id}: Child (${child.name}) birthdate is within one month.`);
+          console.log(
+            `Customer ID ${customer.id}: Child (${child.name}) birthdate is within one month.`
+          );
           return true;
         }
       }
@@ -137,7 +153,6 @@ const CustomerListPage: React.FC = () => {
     return false;
   };
 
-  // ソート要求を処理する関数
   const requestSort = (key: SortableCustomerKeys) => {
     let direction: "ascending" | "descending" = "ascending";
     if (
@@ -150,7 +165,6 @@ const CustomerListPage: React.FC = () => {
     setSortConfig({ key, direction });
   };
 
-  // APIからデータを取得
   const fetchCustomers = async () => {
     if (!session) {
       setLoading(false);
@@ -159,7 +173,6 @@ const CustomerListPage: React.FC = () => {
     setLoading(true);
 
     try {
-      // クエリパラメータの構築
       const params = new URLSearchParams();
       if (dateRange?.from) {
         params.append("startDate", dateRange.from.toISOString().split("T")[0]);
@@ -182,11 +195,11 @@ const CustomerListPage: React.FC = () => {
           Authorization: `Bearer ${session.access_token}`,
         },
       });
-  
+
       const data = await response.json();
-  
-      console.log("Fetched Data:", data); // デバッグ用
-  
+
+      console.log("Fetched Data:", data);
+
       if (response.ok) {
         const mappedCustomers = data.customers.map((customer: any) => ({
           id: customer.id,
@@ -201,44 +214,39 @@ const CustomerListPage: React.FC = () => {
           weddingAnniversary: customer.weddingAnniversary || "0-0",
           children: customer.children || [],
         }));
-  
-        console.log("Mapped Customers:", mappedCustomers); // デバッグ用
-  
+
+        console.log("Mapped Customers:", mappedCustomers);
+
         setCustomers(mappedCustomers);
-        setCurrentPage(1); // ページをリセット
+        setCurrentPage(1);
       } else {
         console.error("Error fetching customers:", data.error);
       }
     } catch (error) {
       console.error("Error fetching customers:", error);
     }
-  
+
     setLoading(false);
   };
 
   useEffect(() => {
     fetchCustomers();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session, kanaSearchTerm, phoneSearchTerm, genderSearchTerm, dateRange]); // 依存関係を追加
+  }, [session, kanaSearchTerm, phoneSearchTerm, genderSearchTerm, dateRange]);
 
-  // ハンドル検索ボタンのクリック
   const handleSearch = () => {
     fetchCustomers();
   };
 
-  // ハンドルクリアボタンのクリック
   const handleClear = () => {
     setKanaSearchTerm("");
     setPhoneSearchTerm("");
-    setGenderSearchTerm("all"); // 性別の検索条件をリセット
+    setGenderSearchTerm("all");
     setDateRange(undefined);
     fetchCustomers();
   };
 
-  // 1ページあたりの表示件数
   const itemsPerPage = 10;
 
-  // フィルタリングされたリストをソート
   const sortedCustomers = useMemo(() => {
     let sortableItems = [...customers];
     if (sortConfig !== null) {
@@ -247,8 +255,10 @@ const CustomerListPage: React.FC = () => {
           const dateA = a.lastVisit ? new Date(a.lastVisit).getTime() : 0;
           const dateB = b.lastVisit ? new Date(b.lastVisit).getTime() : 0;
 
-          if (dateA < dateB) return sortConfig.direction === "ascending" ? -1 : 1;
-          if (dateA > dateB) return sortConfig.direction === "ascending" ? 1 : -1;
+          if (dateA < dateB)
+            return sortConfig.direction === "ascending" ? -1 : 1;
+          if (dateA > dateB)
+            return sortConfig.direction === "ascending" ? 1 : -1;
           return 0;
         } else {
           let aValue: string | number = "";
@@ -267,7 +277,6 @@ const CustomerListPage: React.FC = () => {
               bValue = b.visits ?? 0;
               break;
             default:
-              // SortableCustomerKeys に含まれないキーの場合はデフォルト値を設定
               aValue = "";
               bValue = "";
           }
@@ -285,7 +294,6 @@ const CustomerListPage: React.FC = () => {
     return sortableItems;
   }, [customers, sortConfig]);
 
-  // 現在のページに表示するお客様リスト
   const currentCustomers = useMemo(() => {
     return sortedCustomers.slice(
       (currentPage - 1) * itemsPerPage,
@@ -293,8 +301,12 @@ const CustomerListPage: React.FC = () => {
     );
   }, [sortedCustomers, currentPage]);
 
-  // 総ページ数を計算
   const totalPages = Math.ceil(sortedCustomers.length / itemsPerPage);
+
+  const handleNewCustomerSuccess = () => {
+    setIsNewCustomerDialogOpen(false);
+    fetchCustomers();
+  };
 
   if (loading) {
     return <div>Loading...</div>;
@@ -309,7 +321,6 @@ const CustomerListPage: React.FC = () => {
       <div className="p-8">
         <h2 className="text-3xl font-bold mb-8">お客様情報一覧</h2>
 
-        {/* 検索条件入力部分 */}
         <Card className="mb-8">
           <CardContent className="p-6">
             <div className="space-y-4">
@@ -330,7 +341,10 @@ const CustomerListPage: React.FC = () => {
                   onChange={(e) => setPhoneSearchTerm(e.target.value)}
                   className="w-full md:w-auto"
                 />
-                <Select value={genderSearchTerm} onValueChange={setGenderSearchTerm}>
+                <Select
+                  value={genderSearchTerm}
+                  onValueChange={setGenderSearchTerm}
+                >
                   <SelectTrigger className="w-full md:w-[200px]">
                     <SelectValue placeholder="すべての性別" />
                   </SelectTrigger>
@@ -355,13 +369,32 @@ const CustomerListPage: React.FC = () => {
           </CardContent>
         </Card>
 
-        {/* 検索結果件数と新規登録ボタン */}
         <div className="flex justify-between items-center mb-4">
           <p>該当するお客様情報が {sortedCustomers.length} 件あります</p>
-          {/*<Button>お客様情報を新しく登録する</Button>*/}
+          <Dialog
+            open={isNewCustomerDialogOpen}
+            onOpenChange={setIsNewCustomerDialogOpen}
+          >
+            <DialogTrigger asChild>
+              <Button className="bg-green-600 hover:bg-green-700 text-white">
+                <UserPlus className="mr-2 h-4 w-4" /> 新規お客様を登録
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[425px]">
+              <DialogHeader>
+                <DialogTitle>新規お客様登録</DialogTitle>
+                <DialogDescription>
+                  新しいお客様の情報を入力してください。
+                </DialogDescription>
+              </DialogHeader>
+              <NewCustomerForm
+                onSuccess={handleNewCustomerSuccess}
+                onCancel={() => setIsNewCustomerDialogOpen(false)}
+              />
+            </DialogContent>
+          </Dialog>
         </div>
 
-        {/* 検索結果表示テーブル */}
         <Card>
           <CardContent>
             <Table>
@@ -462,9 +495,9 @@ const CustomerListPage: React.FC = () => {
                       </Link>
                     </TableCell>
                     <TableCell>{customer.name}</TableCell>
-                    <TableCell>{customer.phone}</TableCell> {/* 電話番号の表示 */}
-                    <TableCell>{customer.gender}</TableCell> {/* 性別の表示 */}
-                    <TableCell>{customer.visits}</TableCell> {/* 来店回数の表示 */}
+                    <TableCell>{customer.phone}</TableCell>
+                    <TableCell>{customer.gender}</TableCell>
+                    <TableCell>{customer.visits}</TableCell>
                     <TableCell>
                       {customer.lastVisit
                         ? new Date(customer.lastVisit).toLocaleDateString()
@@ -477,7 +510,6 @@ const CustomerListPage: React.FC = () => {
           </CardContent>
         </Card>
 
-        {/* ページネーション */}
         <Pagination className="mt-4">
           <PaginationContent>
             <PaginationItem>

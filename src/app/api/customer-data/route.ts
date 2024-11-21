@@ -1,10 +1,10 @@
 // app/api/customer-data/route.ts
 
-import { NextResponse } from 'next/server';
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
+import { NextResponse } from "next/server";
+import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
+import { cookies } from "next/headers";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
 // インターフェースの定義
 interface CustomerDetails {
@@ -55,17 +55,20 @@ interface MappedCustomer {
 // 認証チェック関数
 async function checkAuth(request: Request) {
   const supabaseClient = createRouteHandlerClient({ cookies });
-  const authHeader = request.headers.get('Authorization');
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return { error: 'Missing or invalid authorization header', status: 401 };
+  const authHeader = request.headers.get("Authorization");
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return { error: "Missing or invalid authorization header", status: 401 };
   }
 
-  const token = authHeader.split(' ')[1];
-  const { data: { user }, error } = await supabaseClient.auth.getUser(token);
+  const token = authHeader.split(" ")[1];
+  const {
+    data: { user },
+    error,
+  } = await supabaseClient.auth.getUser(token);
 
   if (error || !user) {
-    console.error('Authentication error:', error);
-    return { error: 'User not authenticated', status: 401 };
+    console.error("Authentication error:", error);
+    return { error: "User not authenticated", status: 401 };
   }
 
   return { user };
@@ -73,7 +76,7 @@ async function checkAuth(request: Request) {
 
 export async function GET(request: Request) {
   const authResult = await checkAuth(request);
-  if ('error' in authResult) {
+  if ("error" in authResult) {
     return NextResponse.json(
       { error: authResult.error },
       { status: authResult.status }
@@ -86,8 +89,9 @@ export async function GET(request: Request) {
   try {
     // リレーションシップを明示的に指定して、お客様情報を取得
     const { data: customersData, error } = await supabaseClient
-      .from('reservation_customers')
-      .select(`
+      .from("reservation_customers")
+      .select(
+        `
         id,
         user_id,
         name,
@@ -106,15 +110,13 @@ export async function GET(request: Request) {
           start_time,
           status
         )
-      `)
-      .eq('user_id', userId);
+      `
+      )
+      .eq("user_id", userId);
 
     if (error) {
-      console.error('Error fetching customers:', error);
-      return NextResponse.json(
-        { error: error.message },
-        { status: 500 }
-      );
+      console.error("Error fetching customers:", error);
+      return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
     if (!customersData) {
@@ -133,7 +135,7 @@ export async function GET(request: Request) {
       // 条件に合致する予約をフィルタリング
       const validReservations = reservations.filter(
         (reservation) =>
-          reservation.status === 'paid' &&
+          reservation.status === "paid" &&
           new Date(reservation.start_time) <= new Date()
       );
 
@@ -145,13 +147,13 @@ export async function GET(request: Request) {
 
       // 最も近い予約のstart_timeを取得
       const lastVisit =
-        validReservations.length > 0 ? validReservations[0].start_time : '';
+        validReservations.length > 0 ? validReservations[0].start_time : "";
 
       // customer_details の処理
       const customerDetails = customer.customer_details?.[0] || {
-        gender: '',
-        birth_date: '0-0',
-        wedding_anniversary: '0-0',
+        gender: "",
+        birth_date: "0-0",
+        wedding_anniversary: "0-0",
         children: [],
       };
 
@@ -160,15 +162,14 @@ export async function GET(request: Request) {
         customersMap.set(customer.id, {
           id: customer.id,
           name: customer.name,
-          kana: customer.name_kana || '',
-          email: customer.email || '',
-          phone: customer.phone || '',
+          kana: customer.name_kana || "",
+          email: customer.email || "",
+          phone: customer.phone || "",
           visits: customer.reservation_count || 0,
-          gender: customerDetails.gender || '',
+          gender: customerDetails.gender || "",
           lastVisit: lastVisit,
-          birthDate: customerDetails.birth_date || '0-0',
-          weddingAnniversary:
-            customerDetails.wedding_anniversary || '0-0',
+          birthDate: customerDetails.birth_date || "0-0",
+          weddingAnniversary: customerDetails.wedding_anniversary || "0-0",
           children: customerDetails.children || [],
         });
       }
@@ -178,9 +179,9 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ customers });
   } catch (error) {
-    console.error('Unexpected error:', error);
+    console.error("Unexpected error:", error);
     return NextResponse.json(
-      { error: 'An unexpected error occurred' },
+      { error: "An unexpected error occurred" },
       { status: 500 }
     );
   }
