@@ -15,6 +15,7 @@ export async function GET(request: Request) {
   const endDate = searchParams.get("endDate");
   const menuId = searchParams.get("menuId");
   const salonId = searchParams.get("salonId"); // salonIdを取得
+  const excludeStatuses = searchParams.get("excludeStatuses"); // 除外するステータスを取得
 
   if (!startDate || !endDate || !salonId) {
     return NextResponse.json(
@@ -74,13 +75,30 @@ export async function GET(request: Request) {
       return NextResponse.json({});
     }
 
+    // 除外するステータスを処理
+    let excludeStatusArray: string[] = [];
+    if (excludeStatuses) {
+      excludeStatusArray = excludeStatuses.split(",");
+    }
+
+    // 除外するステータスを括弧付きの文字列に変換（シングルクォートなし）
+    const excludeStatusesString =
+      excludeStatusArray.length > 0 ? `(${excludeStatusArray.join(",")})` : "";
+
     // 予約の取得（対応可能なスタッフのみ）
-    const { data, error } = await supabase
+    let query = supabase
       .from("reservations")
       .select("staff_id, start_time, end_time")
       .in("staff_id", availableStaffIds)
       .gte("start_time", `${startDate}T00:00:00`)
       .lte("end_time", `${endDate}T23:59:59`);
+
+    // 除外するステータスがある場合、クエリに追加
+    if (excludeStatusesString) {
+      query = query.not("status", "in", excludeStatusesString);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       throw error;
