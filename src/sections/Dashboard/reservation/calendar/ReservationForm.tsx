@@ -38,19 +38,19 @@ interface Customer {
 }
 
 interface FormDataType {
-  customer_first_name?: string;
-  customer_last_name?: string;
-  customer_first_name_kana?: string;
-  customer_last_name_kana?: string;
-  customer_email?: string;
-  customer_phone?: string;
+  customer_first_name: string;
+  customer_last_name: string;
+  customer_first_name_kana: string;
+  customer_last_name_kana: string;
+  customer_email: string;
+  customer_phone: string;
   menu_id?: number;
-  staff_id?: string;
-  start_time?: string;
-  end_time?: string;
-  event?: string;
-  id?: string;
-  customer_id?: string;
+  staff_id: string;
+  start_time: string;
+  end_time: string;
+  event: string;
+  id: string;
+  customer_id: string;
 }
 
 interface ReservationFormProps {
@@ -79,7 +79,25 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
   isCreatingFromButton = false,
 }) => {
   const { session } = useAuth(); // useAuthからsessionを取得
-  const [formData, setFormData] = useState<FormDataType>({});
+
+  // ★ 必須フィールドを全て含む初期値を設定
+  const initialFormData: FormDataType = {
+    customer_first_name: "",
+    customer_last_name: "",
+    customer_first_name_kana: "",
+    customer_last_name_kana: "",
+    customer_email: "",
+    customer_phone: "",
+    menu_id: undefined,
+    staff_id: "",
+    start_time: "",
+    end_time: "",
+    event: "",
+    id: "",
+    customer_id: "",
+  };
+
+  const [formData, setFormData] = useState<FormDataType>(initialFormData);
   const [computedEndTime, setComputedEndTime] = useState<string>("");
   const [isOverlap, setIsOverlap] = useState<boolean>(false);
   const [overlapMessage, setOverlapMessage] = useState<string>("");
@@ -179,7 +197,7 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
 
   // フォームをクリアする関数
   const handleClearForm = () => {
-    setFormData({});
+    setFormData(initialFormData); // ★ 初期値にリセット
     setSelectedCustomer(null);
     setIsCustomerSelected(false);
     setSearchValue("");
@@ -200,13 +218,14 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
       const firstNameKana = nameKanaParts[1] || "";
 
       setFormData({
+        ...initialFormData, // ★ 初期値をベースに設定
         ...reservation,
         customer_last_name: lastName,
         customer_first_name: firstName,
         customer_last_name_kana: lastNameKana,
         customer_first_name_kana: firstNameKana,
         menu_id: reservation.menu_id,
-        staff_id: reservation.staff_id,
+        staff_id: reservation.staff_id || "",
       });
 
       if (reservation.start_time) {
@@ -231,7 +250,7 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
       setOverlapMessage("");
     } else {
       // 新規予約の場合の初期化
-      setFormData({});
+      setFormData(initialFormData); // ★ 初期値を設定
       setSelectedDate(new Date());
       setSelectedTimeSlot(null);
       setComputedEndTime("");
@@ -397,7 +416,6 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
     e.preventDefault();
 
     // カナ姓名のバリデーションを追加
-    // 変更後
     if (
       !formData.customer_last_name_kana &&
       !formData.customer_first_name_kana
