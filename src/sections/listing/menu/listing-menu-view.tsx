@@ -99,6 +99,7 @@ const AuthenticatedMenuSettingsPage: React.FC<{ userId: string }> = ({
         throw new Error("Failed to fetch menu items");
       }
       const data = await response.json();
+      console.log("Fetched menu items:", data); // デバッグ用ログ
       setMenuItems(data);
     } catch (error) {
       console.error("Error fetching menu items:", error);
