@@ -66,6 +66,12 @@ interface ReservationFormProps {
   businessHours: BusinessHour[];
 }
 
+// カタカナのみを許可するバリデーション関数
+const isKatakana = (str: string): boolean => {
+  const regex = /^[\u30A0-\u30FF]+$/;
+  return regex.test(str);
+};
+
 const ReservationForm: React.FC<ReservationFormProps> = ({
   reservation,
   isNew,
@@ -118,6 +124,12 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isCustomerSelected, setIsCustomerSelected] = useState(false); // 顧客が選択されているかどうか
+
+  // バリデーションエラーの状態
+  const [validationErrors, setValidationErrors] = useState<{
+    customer_last_name_kana?: string;
+    customer_first_name_kana?: string;
+  }>({});
 
   const searchRef = useRef<HTMLDivElement>(null);
 
@@ -203,6 +215,7 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
     setSearchValue("");
     setSelectedTimeSlot(null); // 選択された時間帯もクリア
     setAvailableTimes([]);
+    setValidationErrors({}); // バリデーションエラーをクリア
   };
 
   // フォームデータの初期化
@@ -269,6 +282,27 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
     // 担当スタッフが変更された場合、selectedTimeSlotをリセット
     if (name === "staff_id") {
       setSelectedTimeSlot(null);
+    }
+
+    // カナのフィールドをリアルタイムにバリデーション
+    if (
+      name === "customer_last_name_kana" ||
+      name === "customer_first_name_kana"
+    ) {
+      if (!isKatakana(value)) {
+        setValidationErrors((prevErrors) => ({
+          ...prevErrors,
+          [name]:
+            name === "customer_last_name_kana"
+              ? "顧客名（カナ・姓）はカタカナのみで入力してください"
+              : "顧客名（カナ・名）はカタカナのみで入力してください",
+        }));
+      } else {
+        setValidationErrors((prevErrors) => ({
+          ...prevErrors,
+          [name]: undefined,
+        }));
+      }
     }
   };
 
@@ -415,24 +449,46 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
+    // バリデーションエラーを初期化
+    const errors: { [key: string]: string } = {};
+
     // カナ姓名のバリデーションを追加
     if (
       !formData.customer_last_name_kana &&
       !formData.customer_first_name_kana
     ) {
-      setSnackbar({
-        message: "顧客名（カナ）の姓または名を入力してください",
-        severity: "error",
-      });
+      errors.customer_last_name_kana =
+        "顧客名（カナ）の姓または名を入力してください";
+    }
+
+    // カナのフィールドがカタカナのみかチェック
+    if (
+      formData.customer_last_name_kana &&
+      !isKatakana(formData.customer_last_name_kana)
+    ) {
+      errors.customer_last_name_kana =
+        "顧客名（カナ・姓）はカタカナのみで入力してください";
+    }
+
+    if (
+      formData.customer_first_name_kana &&
+      !isKatakana(formData.customer_first_name_kana)
+    ) {
+      errors.customer_first_name_kana =
+        "顧客名（カナ・名）はカタカナのみで入力してください";
+    }
+
+    // エラーがある場合はバリデーションエラーを設定して処理を中断
+    if (Object.keys(errors).length > 0) {
+      setValidationErrors(errors);
       return;
+    } else {
+      // エラーがなければバリデーションエラーをクリア
+      setValidationErrors({});
     }
 
     // 既存の重複チェック
-    if (
-      isOverlap ||
-      !selectedTimeSlot ||
-      (!formData.customer_last_name_kana && !formData.customer_first_name_kana)
-    ) {
+    if (isOverlap || !selectedTimeSlot) {
       setSnackbar({
         message: overlapMessage || "予約情報に問題があります",
         severity: "error",
@@ -620,13 +676,29 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
                 </Label>
                 <input
                   id="customer_last_name_kana"
-                  className="w-full border rounded-md p-1 text-sm"
+                  className={`w-full border rounded-md p-1 text-sm ${
+                    validationErrors.customer_last_name_kana
+                      ? "border-red-500"
+                      : ""
+                  }`}
                   value={formData.customer_last_name_kana || ""}
-                  onChange={(e) =>
-                    handleChange("customer_last_name_kana", e.target.value)
-                  }
+                  onChange={(e) => {
+                    handleChange("customer_last_name_kana", e.target.value);
+                    // エラーをリアルタイムにクリア
+                    if (validationErrors.customer_last_name_kana) {
+                      setValidationErrors((prevErrors) => ({
+                        ...prevErrors,
+                        customer_last_name_kana: undefined,
+                      }));
+                    }
+                  }}
                   disabled={isCustomerSelected} // 編集不可
                 />
+                {validationErrors.customer_last_name_kana && (
+                  <p className="text-xs text-red-500">
+                    {validationErrors.customer_last_name_kana}
+                  </p>
+                )}
               </div>
               <div className="space-y-1">
                 <Label htmlFor="customer_first_name_kana" className="text-sm">
@@ -634,13 +706,29 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
                 </Label>
                 <input
                   id="customer_first_name_kana"
-                  className="w-full border rounded-md p-1 text-sm"
+                  className={`w-full border rounded-md p-1 text-sm ${
+                    validationErrors.customer_first_name_kana
+                      ? "border-red-500"
+                      : ""
+                  }`}
                   value={formData.customer_first_name_kana || ""}
-                  onChange={(e) =>
-                    handleChange("customer_first_name_kana", e.target.value)
-                  }
+                  onChange={(e) => {
+                    handleChange("customer_first_name_kana", e.target.value);
+                    // エラーをリアルタイムにクリア
+                    if (validationErrors.customer_first_name_kana) {
+                      setValidationErrors((prevErrors) => ({
+                        ...prevErrors,
+                        customer_first_name_kana: undefined,
+                      }));
+                    }
+                  }}
                   disabled={isCustomerSelected} // 編集不可
                 />
+                {validationErrors.customer_first_name_kana && (
+                  <p className="text-xs text-red-500">
+                    {validationErrors.customer_first_name_kana}
+                  </p>
+                )}
               </div>
               <div className="space-y-1">
                 <Label htmlFor="customer_email" className="text-sm">
