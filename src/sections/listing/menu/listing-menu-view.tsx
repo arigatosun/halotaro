@@ -271,11 +271,12 @@ const AuthenticatedMenuSettingsPage: React.FC<{ userId: string }> = ({
         throw new Error("Failed to update menu item reservable status");
       }
 
-      const updatedMenuItem = await response.json();
-
+      // サーバーからの応答を使用せず、ローカル状態を更新
       setMenuItems((prevItems) =>
         prevItems.map((item) =>
-          item.id === updatedMenuItem.id ? updatedMenuItem : item
+          item.id === menuItemId
+            ? { ...item, is_reservable: isReservable }
+            : item
         )
       );
 
