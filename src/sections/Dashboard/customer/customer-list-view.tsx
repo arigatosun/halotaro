@@ -39,7 +39,7 @@ import {
 import Link from "next/link";
 import { DateRange } from "react-day-picker";
 import { useAuth } from "@/contexts/authcontext";
-import { isWithinInterval, parse, addMonths, subMonths } from "date-fns";
+import { isWithinInterval, addMonths, subMonths } from "date-fns";
 import * as Tooltip from "@radix-ui/react-tooltip";
 import {
   Dialog,
@@ -96,7 +96,6 @@ const CustomerListPage: React.FC = () => {
 
   const isDateWithinOneMonth = (dateStr: string): boolean => {
     if (dateStr === "0-0") return false;
-
     const [monthStr, dayStr] = dateStr.split("-");
     const month = parseInt(monthStr, 10);
     const day = parseInt(dayStr, 10);
@@ -108,43 +107,27 @@ const CustomerListPage: React.FC = () => {
 
     const today = new Date();
     const targetDate = new Date(today.getFullYear(), month - 1, day);
-
     const start = subMonths(today, 1);
     const end = addMonths(today, 1);
 
     targetDate.setFullYear(today.getFullYear());
 
-    const result = isWithinInterval(targetDate, { start, end });
-
-    console.log(
-      `Checking date: ${dateStr} -> Target Date: ${targetDate.toDateString()}, Within Interval: ${result}`
-    );
-
-    return result;
+    return isWithinInterval(targetDate, { start, end });
   };
 
   const hasUpcomingDates = (customer: Customer): boolean => {
     const { birthDate, weddingAnniversary, children } = customer;
 
-    console.log(`Checking customer ID: ${customer.id}`);
-
     if (birthDate && isDateWithinOneMonth(birthDate)) {
-      console.log(`Customer ID ${customer.id}: Birthdate is within one month.`);
       return true;
     }
     if (weddingAnniversary && isDateWithinOneMonth(weddingAnniversary)) {
-      console.log(
-        `Customer ID ${customer.id}: Wedding anniversary is within one month.`
-      );
       return true;
     }
 
     if (children && children.length > 0) {
       for (const child of children) {
         if (child.birthDate && isDateWithinOneMonth(child.birthDate)) {
-          console.log(
-            `Customer ID ${customer.id}: Child (${child.name}) birthdate is within one month.`
-          );
           return true;
         }
       }
@@ -173,32 +156,14 @@ const CustomerListPage: React.FC = () => {
     setLoading(true);
 
     try {
-      const params = new URLSearchParams();
-      if (dateRange?.from) {
-        params.append("startDate", dateRange.from.toISOString().split("T")[0]);
-      }
-      if (dateRange?.to) {
-        params.append("endDate", dateRange.to.toISOString().split("T")[0]);
-      }
-      if (kanaSearchTerm) {
-        params.append("kanaSearchTerm", kanaSearchTerm);
-      }
-      if (phoneSearchTerm) {
-        params.append("phoneSearchTerm", phoneSearchTerm);
-      }
-      if (genderSearchTerm && genderSearchTerm !== "all") {
-        params.append("genderSearchTerm", genderSearchTerm);
-      }
-
-      const response = await fetch(`/api/customer-data?${params.toString()}`, {
+      // 初回取得：条件なしで全顧客取得、以降はclientsideでフィルタ。
+      const response = await fetch(`/api/customer-data`, {
         headers: {
           Authorization: `Bearer ${session.access_token}`,
         },
       });
 
       const data = await response.json();
-
-      console.log("Fetched Data:", data);
 
       if (response.ok) {
         const mappedCustomers = data.customers.map((customer: any) => ({
@@ -215,8 +180,6 @@ const CustomerListPage: React.FC = () => {
           children: customer.children || [],
         }));
 
-        console.log("Mapped Customers:", mappedCustomers);
-
         setCustomers(mappedCustomers);
         setCurrentPage(1);
       } else {
@@ -229,28 +192,39 @@ const CustomerListPage: React.FC = () => {
     setLoading(false);
   };
 
+  // 初回マウント(またはsession確定時)に一度だけデータを取得
   useEffect(() => {
-    fetchCustomers();
-  }, [session, kanaSearchTerm, phoneSearchTerm, genderSearchTerm, dateRange]);
+    if (session) {
+      fetchCustomers();
+    } else {
+      setLoading(false);
+    }
+  }, [session]);
 
-  const handleSearch = () => {
-    fetchCustomers();
-  };
+  // フィルタ＆ソートをローカルで行う
+  const filteredAndSortedCustomers = useMemo(() => {
+    let filtered = [...customers];
 
-  const handleClear = () => {
-    setKanaSearchTerm("");
-    setPhoneSearchTerm("");
-    setGenderSearchTerm("all");
-    setDateRange(undefined);
-    fetchCustomers();
-  };
+    // フィルタリング
+    filtered = filtered.filter((c) => {
+      const matchKana = !kanaSearchTerm || c.kana.includes(kanaSearchTerm);
+      const matchPhone = !phoneSearchTerm || c.phone.includes(phoneSearchTerm);
+      const matchGender =
+        genderSearchTerm === "all" || c.gender === genderSearchTerm;
 
-  const itemsPerPage = 10;
+      let matchDateRange = true;
+      if (dateRange?.from && dateRange?.to && c.lastVisit) {
+        const lastVisitDate = new Date(c.lastVisit);
+        matchDateRange =
+          lastVisitDate >= dateRange.from && lastVisitDate <= dateRange.to;
+      }
 
-  const sortedCustomers = useMemo(() => {
-    let sortableItems = [...customers];
+      return matchKana && matchPhone && matchGender && matchDateRange;
+    });
+
+    // ソート処理
     if (sortConfig !== null) {
-      sortableItems.sort((a, b) => {
+      filtered.sort((a, b) => {
         if (sortConfig.key === "lastVisit") {
           const dateA = a.lastVisit ? new Date(a.lastVisit).getTime() : 0;
           const dateB = b.lastVisit ? new Date(b.lastVisit).getTime() : 0;
@@ -269,8 +243,8 @@ const CustomerListPage: React.FC = () => {
             case "name":
             case "phone":
             case "gender":
-              aValue = a[sortConfig.key] ?? "";
-              bValue = b[sortConfig.key] ?? "";
+              aValue = (a as any)[sortConfig.key] ?? "";
+              bValue = (b as any)[sortConfig.key] ?? "";
               break;
             case "visits":
               aValue = a.visits ?? 0;
@@ -291,21 +265,47 @@ const CustomerListPage: React.FC = () => {
         }
       });
     }
-    return sortableItems;
-  }, [customers, sortConfig]);
 
+    return filtered;
+  }, [
+    customers,
+    kanaSearchTerm,
+    phoneSearchTerm,
+    genderSearchTerm,
+    dateRange,
+    sortConfig,
+  ]);
+
+  const itemsPerPage = 10;
   const currentCustomers = useMemo(() => {
-    return sortedCustomers.slice(
+    return filteredAndSortedCustomers.slice(
       (currentPage - 1) * itemsPerPage,
       currentPage * itemsPerPage
     );
-  }, [sortedCustomers, currentPage]);
+  }, [filteredAndSortedCustomers, currentPage]);
 
-  const totalPages = Math.ceil(sortedCustomers.length / itemsPerPage);
+  const totalPages = Math.ceil(
+    filteredAndSortedCustomers.length / itemsPerPage
+  );
+
+  const handleSearch = () => {
+    // フェッチは行わず、検索条件更新でfilteredAndSortedCustomersが即時更新
+  };
+
+  const handleClear = () => {
+    setKanaSearchTerm("");
+    setPhoneSearchTerm("");
+    setGenderSearchTerm("all");
+    setDateRange(undefined);
+    // 再フェッチ不要、即時に全顧客一覧表示へ戻る
+  };
 
   const handleNewCustomerSuccess = () => {
     setIsNewCustomerDialogOpen(false);
-    fetchCustomers();
+    // 新規顧客登録後はサーバーから最新データを取得
+    if (session) {
+      fetchCustomers();
+    }
   };
 
   if (loading) {
@@ -370,7 +370,9 @@ const CustomerListPage: React.FC = () => {
         </Card>
 
         <div className="flex justify-between items-center mb-4">
-          <p>該当するお客様情報が {sortedCustomers.length} 件あります</p>
+          <p>
+            該当するお客様情報が {filteredAndSortedCustomers.length} 件あります
+          </p>
           <Dialog
             open={isNewCustomerDialogOpen}
             onOpenChange={setIsNewCustomerDialogOpen}
