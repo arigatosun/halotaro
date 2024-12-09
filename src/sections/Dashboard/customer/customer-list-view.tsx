@@ -341,19 +341,6 @@ const CustomerListPage: React.FC = () => {
                   onChange={(e) => setPhoneSearchTerm(e.target.value)}
                   className="w-full md:w-auto"
                 />
-                <Select
-                  value={genderSearchTerm}
-                  onValueChange={setGenderSearchTerm}
-                >
-                  <SelectTrigger className="w-full md:w-[200px]">
-                    <SelectValue placeholder="すべての性別" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">すべての性別</SelectItem>
-                    <SelectItem value="male">男性</SelectItem>
-                    <SelectItem value="female">女性</SelectItem>
-                  </SelectContent>
-                </Select>
                 <Button className="w-full md:w-auto" onClick={handleSearch}>
                   <Search className="mr-2 h-4 w-4" /> 検索する
                 </Button>
