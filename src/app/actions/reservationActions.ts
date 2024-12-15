@@ -65,7 +65,7 @@ export async function getReservations(
       reservation_customers!fk_customer (name_kana),
       staff (name),
       menu_items (name),
-      coupons (name)
+      coupons!fk_coupon_id (name)
     `,
     { count: "exact" }
   );
