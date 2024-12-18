@@ -64,11 +64,13 @@ const AuthenticatedListingSalonMenuView: React.FC<{
   const [editingMenu, setEditingMenu] = useState<MenuItem | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
 
-  // ローディング状態を管理するステートを追加
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeletingId, setIsDeletingId] = useState<number | string | null>(
     null
   );
+
+  // Select用のstateを追加
+  const [selectedCategory, setSelectedCategory] = useState<string>("");
 
   useEffect(() => {
     fetchMenuItems();
@@ -77,7 +79,7 @@ const AuthenticatedListingSalonMenuView: React.FC<{
   const fetchMenuItems = async () => {
     try {
       setLoading(true);
-      const response = await fetch("/api/get-sales-menu-items", {
+      const response = await fetch("/api/sales-menu-items", {
         method: "GET",
         headers: {
           Authorization: `Bearer ${session.access_token}`,
@@ -88,9 +90,9 @@ const AuthenticatedListingSalonMenuView: React.FC<{
       }
       const data = await response.json();
       setMenuItems(data);
-    } catch (error) {
+    } catch (error: any) {
       console.error("店販メニュー取得エラー:", error);
-      setError(error instanceof Error ? error : new Error("不明なエラー"));
+      setError(error);
     } finally {
       setLoading(false);
     }
@@ -99,22 +101,26 @@ const AuthenticatedListingSalonMenuView: React.FC<{
   const handleEdit = (menu: MenuItem) => {
     setEditingMenu(menu);
     setImageFile(null);
+    setSelectedCategory(menu.category);
     setIsModalOpen(true);
   };
 
   const handleAdd = () => {
     setEditingMenu(null);
     setImageFile(null);
+    setSelectedCategory("");
     setIsModalOpen(true);
   };
 
   const handleModalSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-
-    setIsSubmitting(true); // ローディング開始
+    setIsSubmitting(true);
 
     try {
       const formData = new FormData(event.currentTarget);
+
+      // categoryはSelectから取得できないので手動で追加
+      formData.append("category", selectedCategory);
 
       if (editingMenu) {
         formData.append("id", editingMenu.id.toString());
@@ -124,21 +130,17 @@ const AuthenticatedListingSalonMenuView: React.FC<{
         formData.append("image", imageFile);
       }
 
-      // user_id を追加
-      formData.append("user_id", user.id);
+      // user_id はサーバー側で認証から判別できる想定ですが、
+      // もし必要ならここでappendしてください
+      // formData.append("user_id", user.id);
 
-      const response = await fetch(
-        editingMenu
-          ? "/api/update-sales-menu-item"
-          : "/api/post-sales-menu-item",
-        {
-          method: editingMenu ? "PATCH" : "POST",
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-          },
-          body: formData,
-        }
-      );
+      const response = await fetch("/api/sales-menu-items", {
+        method: editingMenu ? "PATCH" : "POST",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: formData,
+      });
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -173,7 +175,7 @@ const AuthenticatedListingSalonMenuView: React.FC<{
         variant: "destructive",
       });
     } finally {
-      setIsSubmitting(false); // ローディング終了
+      setIsSubmitting(false);
     }
   };
 
@@ -185,10 +187,10 @@ const AuthenticatedListingSalonMenuView: React.FC<{
 
   const handleDelete = async (menuItemId: number | string) => {
     if (window.confirm("このメニューを削除してもよろしいですか？")) {
-      setIsDeletingId(menuItemId); // ローディング開始
+      setIsDeletingId(menuItemId);
 
       try {
-        const response = await fetch("/api/delete-sales-menu-item", {
+        const response = await fetch("/api/sales-menu-items", {
           method: "DELETE",
           headers: {
             "Content-Type": "application/json",
@@ -223,7 +225,7 @@ const AuthenticatedListingSalonMenuView: React.FC<{
           variant: "destructive",
         });
       } finally {
-        setIsDeletingId(null); // ローディング終了
+        setIsDeletingId(null);
       }
     }
   };
@@ -335,18 +337,22 @@ const AuthenticatedListingSalonMenuView: React.FC<{
                   カテゴリ
                 </Label>
                 <Select
-                  name="category"
-                  defaultValue={editingMenu?.category}
+                  value={selectedCategory}
+                  onValueChange={(value) => setSelectedCategory(value)}
                   required
                 >
                   <SelectTrigger className="col-span-3">
                     <SelectValue placeholder="カテゴリを選択" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="ヘアケア">ヘアケア</SelectItem>
-                    <SelectItem value="スキンケア">スキンケア</SelectItem>
-                    <SelectItem value="ボディケア">ボディケア</SelectItem>
-                    <SelectItem value="スタイリング">スタイリング</SelectItem>
+                    <SelectItem value="シャンプー">シャンプー</SelectItem>
+                    <SelectItem value="トリートメント">
+                      トリートメント
+                    </SelectItem>
+                    <SelectItem value="スタイリング剤">
+                      スタイリング剤
+                    </SelectItem>
+                    <SelectItem value="アロマ">アロマ</SelectItem>
                     <SelectItem value="その他">その他</SelectItem>
                   </SelectContent>
                 </Select>

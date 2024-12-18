@@ -40,10 +40,7 @@ export async function POST(request: NextRequest) {
     const userId = formData.get("user_id") as string;
 
     if (!userId) {
-      return NextResponse.json(
-        { message: "Unauthorized" },
-        { status: 401 }
-      );
+      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
 
     const name = formData.get("name") as string;
@@ -52,7 +49,10 @@ export async function POST(request: NextRequest) {
     const description = formData.get("description") as string;
     const is_published = formData.get("is_published") === "true";
     const image = formData.get("image") as File;
-    const schedule_order = parseInt(formData.get("schedule_order") as string, 10);
+    const schedule_order = parseInt(
+      formData.get("schedule_order") as string,
+      10
+    );
 
     // バリデーション: 必須フィールドが存在するか確認
     if (!name || !role) {
@@ -63,11 +63,7 @@ export async function POST(request: NextRequest) {
     }
 
     // スケジュール表示順のバリデーション
-    if (
-      isNaN(schedule_order) ||
-      schedule_order < 1 ||
-      schedule_order > 20
-    ) {
+    if (isNaN(schedule_order) || schedule_order < 1 || schedule_order > 20) {
       return NextResponse.json(
         { message: "Schedule order must be between 1 and 20." },
         { status: 400 }
@@ -175,11 +171,7 @@ export async function PATCH(request: NextRequest) {
     const schedule_order = formData.get("schedule_order");
     if (schedule_order !== null) {
       const orderNumber = parseInt(schedule_order as string, 10);
-      if (
-        isNaN(orderNumber) ||
-        orderNumber < 1 ||
-        orderNumber > 20
-      ) {
+      if (isNaN(orderNumber) || orderNumber < 1 || orderNumber > 20) {
         return NextResponse.json(
           { message: "Schedule order must be between 1 and 20." },
           { status: 400 }
