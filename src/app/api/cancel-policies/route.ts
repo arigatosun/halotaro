@@ -12,7 +12,10 @@ export async function GET(request: Request) {
     const userId = searchParams.get("userId");
 
     if (!userId) {
-      return NextResponse.json({ error: "userId is required" }, { status: 400 });
+      return NextResponse.json(
+        { error: "userId is required" },
+        { status: 400 }
+      );
     }
 
     const { data, error } = await supabase
@@ -29,7 +32,10 @@ export async function GET(request: Request) {
       );
     }
 
-    return NextResponse.json({ policies: data?.policies || [] });
+    // data?.policiesが存在するならそのまま、存在しない場合は空オブジェクトを返す
+    const policiesData = data?.policies || { policies: [], customText: "" };
+
+    return NextResponse.json({ policies: policiesData });
   } catch (error) {
     console.error("Unexpected error:", error);
     return NextResponse.json(
@@ -44,13 +50,30 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { userId, policies } = body;
 
-    if (!userId || !Array.isArray(policies)) {
+    // policiesは { policies: [...], customText: "..."} の形
+    if (!userId || typeof policies !== "object") {
       return NextResponse.json({ error: "Invalid input" }, { status: 400 });
     }
 
-    const { error } = await supabase
-      .from("cancel_policies")
-      .upsert({ user_id: userId, policies }, { onConflict: "user_id" });
+    const { policies: policyArray, customText } = policies;
+
+    if (!Array.isArray(policyArray)) {
+      return NextResponse.json(
+        { error: "policies must be an array" },
+        { status: 400 }
+      );
+    }
+
+    const { error } = await supabase.from("cancel_policies").upsert(
+      {
+        user_id: userId,
+        policies: {
+          policies: policyArray,
+          customText: customText || "",
+        },
+      },
+      { onConflict: "user_id" }
+    );
 
     if (error) {
       console.error("Error saving cancel policies:", error);

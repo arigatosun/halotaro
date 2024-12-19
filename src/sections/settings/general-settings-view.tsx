@@ -37,7 +37,9 @@ const BasicInfoSettingsView: React.FC = () => {
   const [isReservationEnabled, setIsReservationEnabled] = useState(true);
   const [cancelPolicies, setCancelPolicies] = useState<CancelPolicy[]>([]);
   const [cancelPolicyText, setCancelPolicyText] = useState("");
-  const [reservationMessages, setReservationMessages] = useState<ReservationMessage[]>([]);
+  const [reservationMessages, setReservationMessages] = useState<
+    ReservationMessage[]
+  >([]);
 
   useEffect(() => {
     if (user) {
@@ -47,17 +49,16 @@ const BasicInfoSettingsView: React.FC = () => {
     }
   }, [user]);
 
-  useEffect(() => {
-    generateCancelPolicyText();
-  }, [cancelPolicies]);
-
   const fetchCancelPolicies = async (userId: string) => {
     try {
       const response = await fetch(`/api/cancel-policies?userId=${userId}`);
       const data = await response.json();
-      if (data.policies) {
-        setCancelPolicies(data.policies);
-      }
+      // data.policiesが { policies: [...], customText: ... } の構造を想定
+      const policiesArray = data?.policies?.policies || [];
+      const customText = data?.policies?.customText || "";
+
+      setCancelPolicies(policiesArray);
+      setCancelPolicyText(customText);
     } catch (error) {
       console.error("キャンセルポリシーの取得に失敗しました:", error);
     }
@@ -65,7 +66,9 @@ const BasicInfoSettingsView: React.FC = () => {
 
   const fetchReservationMessages = async (userId: string) => {
     try {
-      const response = await fetch(`/api/reservation-messages?userId=${userId}`);
+      const response = await fetch(
+        `/api/reservation-messages?userId=${userId}`
+      );
       const data = await response.json();
       if (data.messages) {
         setReservationMessages(data.messages);
@@ -79,20 +82,23 @@ const BasicInfoSettingsView: React.FC = () => {
     if (!user) return;
 
     try {
-      const response = await fetch('/api/cancel-policies', {
-        method: 'POST',
+      // DBに保存する際、customTextも一緒に送る
+      const response = await fetch("/api/cancel-policies", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           userId: user.id,
-          policies: cancelPolicies,
+          // DB側では { policies: [...], customText: "..."} という形で保持
+          policies: {
+            policies: cancelPolicies,
+            customText: cancelPolicyText,
+          },
         }),
       });
 
-      if (response.ok) {
-        console.log("キャンセルポリシーが保存されました");
-      } else {
+      if (!response.ok) {
         console.error("キャンセルポリシーの保存に失敗しました");
       }
     } catch (error) {
@@ -104,10 +110,10 @@ const BasicInfoSettingsView: React.FC = () => {
     if (!user) return;
 
     try {
-      const response = await fetch('/api/reservation-messages', {
-        method: 'POST',
+      const response = await fetch("/api/reservation-messages", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           userId: user.id,
@@ -115,9 +121,7 @@ const BasicInfoSettingsView: React.FC = () => {
         }),
       });
 
-      if (response.ok) {
-        console.log("予約メッセージが保存されました");
-      } else {
+      if (!response.ok) {
         console.error("予約メッセージの保存に失敗しました");
       }
     } catch (error) {
@@ -137,9 +141,7 @@ const BasicInfoSettingsView: React.FC = () => {
       cancelPolicyText,
       reservationMessages,
     });
-    // ここで他の設定の保存処理を行う
   };
-
 
   const copyToClipboard = () => {
     navigator.clipboard.writeText(reservationUrl).then(() => {
@@ -154,7 +156,6 @@ const BasicInfoSettingsView: React.FC = () => {
       { id: Date.now().toString(), days: 0, feePercentage: 0 },
     ];
     setCancelPolicies(newPolicies);
-    saveCancelPolicies();
   };
 
   const updateCancelPolicy = (
@@ -166,30 +167,36 @@ const BasicInfoSettingsView: React.FC = () => {
       policy.id === id ? { ...policy, [field]: value } : policy
     );
     setCancelPolicies(newPolicies);
-    saveCancelPolicies();
   };
 
   const removeCancelPolicy = (id: string) => {
     const newPolicies = cancelPolicies.filter((policy) => policy.id !== id);
     setCancelPolicies(newPolicies);
-    saveCancelPolicies();
   };
 
-  const generateCancelPolicyText = () => {
+  // ユーザーがcancelPolicyTextを空にしている場合のみ、自動生成テキストを表示するロジック
+  const generatedPolicyText = React.useMemo(() => {
     const sortedPolicies = [...cancelPolicies].sort((a, b) => b.days - a.days);
     let policyText = "キャンセルポリシー:\n";
-    sortedPolicies.forEach((policy, index) => {
-      if (index === 0) {
-        policyText += `・予約日の${policy.days}日前から${policy.feePercentage}%のキャンセル料が発生します。\n`;
-      } else {
-        policyText += `・予約日の${policy.days}日前から${policy.feePercentage}%のキャンセル料となります。\n`;
-      }
-    });
-    policyText += "・上記以前のキャンセルは全額返金されます。";
-    setCancelPolicyText(policyText);
-  };
+    if (sortedPolicies.length === 0) {
+      policyText += "・キャンセルポリシーは設定されていません。\n";
+    } else {
+      sortedPolicies.forEach((policy, index) => {
+        if (index === 0) {
+          policyText += `・予約日の${policy.days}日前から${policy.feePercentage}%のキャンセル料が発生します。\n`;
+        } else {
+          policyText += `・予約日の${policy.days}日前から${policy.feePercentage}%のキャンセル料となります。\n`;
+        }
+      });
+      policyText += "・上記以前のキャンセルは全額返金されます。";
+    }
+    return policyText;
+  }, [cancelPolicies]);
 
-   const addReservationMessage = () => {
+  const displayText =
+    cancelPolicyText.trim() === "" ? generatedPolicyText : cancelPolicyText;
+
+  const addReservationMessage = () => {
     setReservationMessages([
       ...reservationMessages,
       { id: Date.now().toString(), days: 0, message: "" },
@@ -211,7 +218,6 @@ const BasicInfoSettingsView: React.FC = () => {
   const removeReservationMessage = (id: string) => {
     setReservationMessages(reservationMessages.filter((msg) => msg.id !== id));
   };
-
 
   return (
     <div className="p-8 max-w-4xl mx-auto">
@@ -293,7 +299,7 @@ const BasicInfoSettingsView: React.FC = () => {
                   </Tooltip>
                 </TooltipProvider>
               </Label>
-              {cancelPolicies.map((policy, index) => (
+              {cancelPolicies.map((policy) => (
                 <div key={policy.id} className="flex items-center space-x-2">
                   <Input
                     type="number"
@@ -347,73 +353,81 @@ const BasicInfoSettingsView: React.FC = () => {
               </Button>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="cancel-policy-text">キャンセルポリシー</Label>
+              <Label htmlFor="cancel-policy-text">
+                キャンセルポリシー（未設定の場合は下記ポリシーに基づく文面が表示されます）
+              </Label>
               <Textarea
                 id="cancel-policy-text"
                 value={cancelPolicyText}
                 onChange={(e) => setCancelPolicyText(e.target.value)}
                 rows={5}
               />
+              <div className="text-sm text-gray-500 mt-2">
+                現在表示されるテキスト:
+              </div>
+              <pre className="bg-gray-100 p-2 rounded text-sm whitespace-pre-wrap">
+                {displayText}
+              </pre>
             </div>
           </CardContent>
         </Card>
         <Card className="mb-6">
-        <CardHeader>
-          <CardTitle className="text-lg">予約者へのメッセージ設定</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {reservationMessages.map((message, index) => (
-            <div key={message.id} className="space-y-2">
-              <div className="flex items-center space-x-2">
-                <Input
-                  type="number"
-                  value={message.days}
+          <CardHeader>
+            <CardTitle className="text-lg">予約者へのメッセージ設定</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {reservationMessages.map((message) => (
+              <div key={message.id} className="space-y-2">
+                <div className="flex items-center space-x-2">
+                  <Input
+                    type="number"
+                    value={message.days}
+                    onChange={(e) =>
+                      updateReservationMessage(
+                        message.id,
+                        "days",
+                        Number(e.target.value)
+                      )
+                    }
+                    placeholder="日数"
+                    className="w-24"
+                    min="0"
+                  />
+                  <span>日前に送信</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => removeReservationMessage(message.id)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+                <Textarea
+                  value={message.message}
                   onChange={(e) =>
                     updateReservationMessage(
                       message.id,
-                      "days",
-                      Number(e.target.value)
+                      "message",
+                      e.target.value
                     )
                   }
-                  placeholder="日数"
-                  className="w-24"
-                  min="0"
+                  placeholder="メッセージを入力"
+                  rows={3}
                 />
-                <span>日前に送信</span>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => removeReservationMessage(message.id)}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
               </div>
-              <Textarea
-                value={message.message}
-                onChange={(e) =>
-                  updateReservationMessage(
-                    message.id,
-                    "message",
-                    e.target.value
-                  )
-                }
-                placeholder="メッセージを入力"
-                rows={3}
-              />
-            </div>
-          ))}
-          <Button
-            type="button"
-            variant="outline"
-            onClick={addReservationMessage}
-            className="mt-2"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            メッセージ設定を追加
-          </Button>
-        </CardContent>
-      </Card>
+            ))}
+            <Button
+              type="button"
+              variant="outline"
+              onClick={addReservationMessage}
+              className="mt-2"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              メッセージ設定を追加
+            </Button>
+          </CardContent>
+        </Card>
 
         <Alert className="mb-6 bg-yellow-100 border-yellow-400 text-yellow-800">
           <AlertCircle className="h-4 w-4" />
@@ -424,8 +438,8 @@ const BasicInfoSettingsView: React.FC = () => {
         </Alert>
 
         <Button type="submit" className="w-full" onClick={handleSubmit}>
-        保存する
-      </Button>
+          保存する
+        </Button>
       </form>
     </div>
   );
