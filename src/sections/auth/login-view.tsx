@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
-import { useAuth } from "@/lib/useAuth";
+import { useAuth } from "@/contexts/authcontext";
 import Image from "next/image";
 
 const LoginPage = () => {

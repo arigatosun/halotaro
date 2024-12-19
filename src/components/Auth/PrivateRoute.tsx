@@ -1,5 +1,5 @@
 import { useRouter } from "next/navigation";
-import { useAuth } from "@/lib/useAuth";
+import { useAuth } from "@/contexts/authcontext";
 
 export default function PrivateRoute({
   children,
