@@ -388,6 +388,8 @@ export const AccountingPage: React.FC<AccountingPageProps> = ({
           itemsByCategory[item.category].push(item);
         });
         setRetailItemsByCategory(itemsByCategory);
+        console.log("retailItemsByCategory", retailItemsByCategory);
+        console.log("itemsByCategory", itemsByCategory);
       } catch (error) {
         console.error("店販項目の取得エラー:", error);
       }
