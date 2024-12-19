@@ -133,9 +133,9 @@ export const AccountingPage: React.FC<AccountingPageProps> = ({
 
   const [showCalculator, setShowCalculator] = useState(false);
   const [calculatorInput, setCalculatorInput] = useState("");
-  const [currentPaymentMethod, setCurrentPaymentMethod] = useState<string | null>(
-    null
-  );
+  const [currentPaymentMethod, setCurrentPaymentMethod] = useState<
+    string | null
+  >(null);
   const [showPaymentMethodModal, setShowPaymentMethodModal] = useState(false);
 
   const [treatmentCategories, setTreatmentCategories] = useState<string[]>([]);
@@ -367,7 +367,9 @@ export const AccountingPage: React.FC<AccountingPageProps> = ({
 
         const data: SalesMenuItem[] = await response.json();
 
-        const userSalesMenuItems = data.filter((item) => item.user_id === userId);
+        const userSalesMenuItems = data.filter(
+          (item) => item.user_id === userId
+        );
 
         const categories = Array.from(
           new Set(userSalesMenuItems.map((item) => item.category))
@@ -465,9 +467,7 @@ export const AccountingPage: React.FC<AccountingPageProps> = ({
 
   const updateItem = (id: string, field: keyof Item, value: any) => {
     setItems(
-      items.map((item) =>
-        item.id === id ? { ...item, [field]: value } : item
-      )
+      items.map((item) => (item.id === id ? { ...item, [field]: value } : item))
     );
   };
 
@@ -823,9 +823,7 @@ export const AccountingPage: React.FC<AccountingPageProps> = ({
         <CardContent className="p-6">
           <div className="space-y-6">
             <div className="flex justify-between items-center">
-              <h3 className="text-2xl font-bold">
-                {customerName || ""} 様
-              </h3>
+              <h3 className="text-2xl font-bold">{customerName || ""} 様</h3>
               <div className="flex items-center space-x-4">
                 {/* 指名スタッフ */}
                 <div className="flex flex-col">
@@ -877,11 +875,15 @@ export const AccountingPage: React.FC<AccountingPageProps> = ({
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="text-black font-bold">カテゴリ</TableHead>
+                  <TableHead className="text-black font-bold">
+                    カテゴリ
+                  </TableHead>
                   <TableHead className="text-black font-bold">
                     メニュー・店販
                   </TableHead>
-                  <TableHead className="text-black font-bold">スタッフ</TableHead>
+                  <TableHead className="text-black font-bold">
+                    スタッフ
+                  </TableHead>
                   <TableHead className="text-black font-bold">単価</TableHead>
                   <TableHead className="text-black font-bold">個数</TableHead>
                   <TableHead className="text-black font-bold">金額</TableHead>
@@ -937,7 +939,27 @@ export const AccountingPage: React.FC<AccountingPageProps> = ({
 
             <div className="grid grid-cols-3 gap-6">
               <div className="col-span-2">
-                <Tabs defaultValue="treatment">
+                <Tabs
+                  defaultValue="treatment"
+                  onValueChange={(tabValue) => {
+                    if (tabValue === "treatment") {
+                      // 施術タブが選択された場合、treatmentCategoriesの先頭をセット
+                      if (treatmentCategories.length > 0) {
+                        setSelectedCategory(treatmentCategories[0]);
+                      } else {
+                        setSelectedCategory(""); // 該当カテゴリがなければ空文字など適当な値をセット
+                      }
+                    } else if (tabValue === "retail") {
+                      // 店販タブが選択された場合、retailCategoriesの先頭をセット
+                      if (retailCategories.length > 0) {
+                        setSelectedCategory(retailCategories[0]);
+                      } else {
+                        setSelectedCategory("");
+                      }
+                    }
+                    // discountタブがある場合も同様にハンドリング
+                  }}
+                >
                   <TabsList className="w-full">
                     <TabsTrigger value="treatment" className="flex-1">
                       施術
@@ -956,7 +978,9 @@ export const AccountingPage: React.FC<AccountingPageProps> = ({
                           <Button
                             key={category}
                             variant={
-                              category === selectedCategory ? "default" : "outline"
+                              category === selectedCategory
+                                ? "default"
+                                : "outline"
                             }
                             onClick={() => setSelectedCategory(category)}
                             className={
@@ -995,7 +1019,9 @@ export const AccountingPage: React.FC<AccountingPageProps> = ({
                           <Button
                             key={category}
                             variant={
-                              category === selectedCategory ? "default" : "outline"
+                              category === selectedCategory
+                                ? "default"
+                                : "outline"
                             }
                             onClick={() => setSelectedCategory(category)}
                             className={
@@ -1015,7 +1041,9 @@ export const AccountingPage: React.FC<AccountingPageProps> = ({
                               key={item.id}
                               variant="outline"
                               className="w-full justify-start"
-                              onClick={() => addItem("店販", item.name, item.price)}
+                              onClick={() =>
+                                addItem("店販", item.name, item.price)
+                              }
                             >
                               <PlusIcon className="mr-2 h-4 w-4" />
                               {item.name}
