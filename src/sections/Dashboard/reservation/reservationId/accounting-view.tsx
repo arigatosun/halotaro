@@ -25,7 +25,6 @@ import { PlusIcon, MinusIcon, XIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Label } from "@/components/ui/label";
 
-// Item interface
 interface Item {
   id: string;
   category: string; // 「施術」、「店販」、「割引・サービス・オプション」
@@ -35,7 +34,6 @@ interface Item {
   quantity: number;
 }
 
-// MenuItem interface
 interface MenuItem {
   id: number;
   user_id: string;
@@ -50,7 +48,6 @@ interface MenuItem {
   image_url: string | null;
 }
 
-// SalesMenuItem interface
 interface SalesMenuItem {
   id: number;
   user_id: string;
@@ -63,7 +60,6 @@ interface SalesMenuItem {
   image_url: string | null;
 }
 
-// Staff interface
 interface Staff {
   id: string;
   name: string;
@@ -77,7 +73,6 @@ interface Staff {
   user_id: string;
 }
 
-// ReservationCustomer interface
 interface ReservationCustomer {
   id: string;
   reservation_id: string;
@@ -126,7 +121,6 @@ export const AccountingPage: React.FC<AccountingPageProps> = ({
   const [selectedCashier, setSelectedCashier] = useState<string>("");
   const [selectedCategory, setSelectedCategory] = useState<string>("");
 
-  // 複数の支払い方法を管理するためのステート
   const [paymentMethods, setPaymentMethods] = useState<
     { method: string; amount: number }[]
   >([]);
@@ -143,7 +137,6 @@ export const AccountingPage: React.FC<AccountingPageProps> = ({
     [category: string]: MenuItem[];
   }>({});
 
-  // 店販データのステートを追加
   const [retailCategories, setRetailCategories] = useState<string[]>([]);
   const [retailItemsByCategory, setRetailItemsByCategory] = useState<{
     [category: string]: SalesMenuItem[];
@@ -156,21 +149,16 @@ export const AccountingPage: React.FC<AccountingPageProps> = ({
 
   const userId = user?.id;
 
-  // フラグを設定して一度だけフェッチする
   const fetchReservationRef = useRef<boolean>(false);
   const fetchStaffRef = useRef<boolean>(false);
   const fetchMenuItemsRef = useRef<boolean>(false);
-  const fetchSalesMenuItemsRef = useRef<boolean>(false); // 店販データ取得用
+  const fetchSalesMenuItemsRef = useRef<boolean>(false);
   const fetchTemporarySaveRef = useRef<boolean>(false);
 
   useEffect(() => {
     if (authLoading) return;
-    if (!user || !session) {
-      // ユーザーがログインしていない場合の処理
-      return;
-    }
-
-    if (fetchReservationRef.current) return; // 既にフェッチ済みの場合は実行しない
+    if (!user || !session) return;
+    if (fetchReservationRef.current) return;
     fetchReservationRef.current = true;
 
     const fetchReservation = async () => {
@@ -216,7 +204,7 @@ export const AccountingPage: React.FC<AccountingPageProps> = ({
             category: "施術",
             name: data.reservation.scraped_menu,
             staff: data.reservation.staff?.name || selectedStaff,
-            price: data.reservation.total_price || 0, // 価格が不明な場合は0を設定
+            price: data.reservation.total_price || 0,
             quantity: 1,
           };
         }
@@ -250,12 +238,8 @@ export const AccountingPage: React.FC<AccountingPageProps> = ({
 
   useEffect(() => {
     if (authLoading) return;
-    if (!user || !session) {
-      // ユーザーがログインしていない場合の処理
-      return;
-    }
-
-    if (fetchStaffRef.current) return; // 既にフェッチ済みの場合は実行しない
+    if (!user || !session) return;
+    if (fetchStaffRef.current) return;
     fetchStaffRef.current = true;
 
     const fetchStaff = async () => {
@@ -289,12 +273,8 @@ export const AccountingPage: React.FC<AccountingPageProps> = ({
 
   useEffect(() => {
     if (authLoading) return;
-    if (!user || !session) {
-      // ユーザーがログインしていない場合の処理
-      return;
-    }
-
-    if (fetchMenuItemsRef.current) return; // 既にフェッチ済みの場合は実行しない
+    if (!user || !session) return;
+    if (fetchMenuItemsRef.current) return;
     fetchMenuItemsRef.current = true;
 
     const fetchMenuItems = async () => {
@@ -340,22 +320,18 @@ export const AccountingPage: React.FC<AccountingPageProps> = ({
     fetchMenuItems();
   }, [user, session, authLoading, userId, selectedCategory]);
 
-  // 店販データを取得するuseEffectを追加
+  // ここで /api/get-sales-menu-items => /api/sales-menu-items に変更
   useEffect(() => {
     if (authLoading) return;
-    if (!user || !session) {
-      // ユーザーがログインしていない場合の処理
-      return;
-    }
-
-    if (fetchSalesMenuItemsRef.current) return; // 既にフェッチ済みの場合は実行しない
+    if (!user || !session) return;
+    if (fetchSalesMenuItemsRef.current) return;
     fetchSalesMenuItemsRef.current = true;
 
     const fetchSalesMenuItems = async () => {
       if (!userId || !session.access_token) return;
 
       try {
-        const response = await fetch("/api/get-sales-menu-items", {
+        const response = await fetch("/api/sales-menu-items", {
           headers: {
             Authorization: `Bearer ${session.access_token}`,
           },
@@ -400,12 +376,8 @@ export const AccountingPage: React.FC<AccountingPageProps> = ({
 
   useEffect(() => {
     if (authLoading) return;
-    if (!user || !session) {
-      // ユーザーがログインしていない場合の処理
-      return;
-    }
-
-    if (fetchTemporarySaveRef.current) return; // 既にフェッチ済みの場合は実行しない
+    if (!user || !session) return;
+    if (fetchTemporarySaveRef.current) return;
     fetchTemporarySaveRef.current = true;
 
     const fetchTemporarySave = async () => {
@@ -479,7 +451,6 @@ export const AccountingPage: React.FC<AccountingPageProps> = ({
 
   const handleAccounting = async () => {
     try {
-      // 支払い総額の計算
       const totalPayment = paymentMethods.reduce(
         (sum, method) => sum + method.amount,
         0
@@ -496,9 +467,9 @@ export const AccountingPage: React.FC<AccountingPageProps> = ({
         items,
         staff_name: selectedStaff,
         cashier_name: selectedCashier,
-        payment_methods: paymentMethods, // JSONB形式で送信
+        payment_methods: paymentMethods,
         total_price: total,
-        isTemporary: false, // 最終会計
+        isTemporary: false,
       };
 
       const response = await fetch("/api/accounting", {
@@ -515,19 +486,14 @@ export const AccountingPage: React.FC<AccountingPageProps> = ({
         throw new Error(errorData.error || "会計情報の保存に失敗しました");
       }
 
-      // 予約ステータスを "paid" に更新
       await updateReservationStatus(reservationId, "paid");
 
-      // 状態のリセット
       setItems([]);
       setTotal(0);
       setPaymentMethods([]);
       setSelectedCashier("");
 
-      // 会計完了後に成功メッセージを表示
       alert("会計が完了しました。");
-
-      // ダッシュボードの予約一覧にリダイレクト
       router.push("/dashboard/reservations/list");
     } catch (error: any) {
       console.error("会計情報の保存エラー:", error.message || error);
@@ -543,9 +509,9 @@ export const AccountingPage: React.FC<AccountingPageProps> = ({
         items,
         staff_name: selectedStaff,
         cashier_name: selectedCashier,
-        payment_methods: paymentMethods, // JSONB形式で送信
+        payment_methods: paymentMethods,
         total_price: total,
-        isTemporary: true, // 一時保存
+        isTemporary: true,
       };
 
       const response = await fetch("/api/accounting", {
@@ -584,7 +550,6 @@ export const AccountingPage: React.FC<AccountingPageProps> = ({
       });
 
       if (!response.ok) {
-        // レスポンスがJSONでない場合のエラーハンドリング
         let errorData;
         try {
           errorData = await response.json();
@@ -597,7 +562,7 @@ export const AccountingPage: React.FC<AccountingPageProps> = ({
       }
     } catch (error: any) {
       console.error("予約ステータスの更新エラー:", error.message || error);
-      throw error; // エラーを再スローして handleAccounting でキャッチ
+      throw error;
     }
   };
 
@@ -722,7 +687,6 @@ export const AccountingPage: React.FC<AccountingPageProps> = ({
   );
 
   const renderAccountingSection = () => {
-    // お釣りの計算
     const totalPayment = paymentMethods.reduce((sum, pm) => sum + pm.amount, 0);
     const change = totalPayment - total;
 
@@ -738,7 +702,6 @@ export const AccountingPage: React.FC<AccountingPageProps> = ({
               <span>（内消費税:</span>
               <span>{Math.floor(total * 0.1).toLocaleString()}円）</span>
             </div>
-            {/* 支払い方法と金額の一覧を表示 */}
             <div className="space-y-2">
               {paymentMethods.map((pm, index) => (
                 <div key={index} className="flex items-center justify-between">
@@ -756,7 +719,6 @@ export const AccountingPage: React.FC<AccountingPageProps> = ({
                 </div>
               ))}
             </div>
-            {/* 支払い方法の選択ボタン */}
             <div className="grid grid-cols-2 gap-2">
               <Button
                 variant="outline"
@@ -771,7 +733,6 @@ export const AccountingPage: React.FC<AccountingPageProps> = ({
                 カード・その他
               </Button>
             </div>
-            {/* 支払い方法の合計表示とバリデーション */}
             <div className="space-y-2">
               {paymentMethods.length > 0 && (
                 <>
@@ -794,7 +755,6 @@ export const AccountingPage: React.FC<AccountingPageProps> = ({
                 </>
               )}
             </div>
-            {/* 会計ボタン */}
             <div className="flex space-x-4">
               <Button
                 onClick={handleAccounting}
@@ -827,7 +787,6 @@ export const AccountingPage: React.FC<AccountingPageProps> = ({
             <div className="flex justify-between items-center">
               <h3 className="text-2xl font-bold">{customerName || ""} 様</h3>
               <div className="flex items-center space-x-4">
-                {/* 指名スタッフ */}
                 <div className="flex flex-col">
                   <Label htmlFor="selectedStaff" className="mb-1">
                     指名スタッフ
@@ -848,7 +807,6 @@ export const AccountingPage: React.FC<AccountingPageProps> = ({
                     </SelectContent>
                   </Select>
                 </div>
-                {/* レジ担当者 */}
                 <div className="flex flex-col">
                   <Label htmlFor="selectedCashier" className="mb-1">
                     レジ担当者
@@ -869,7 +827,6 @@ export const AccountingPage: React.FC<AccountingPageProps> = ({
                     </SelectContent>
                   </Select>
                 </div>
-                {/* 一時保存ボタン */}
                 <Button onClick={handleTemporarySave}>一時保存</Button>
               </div>
             </div>
@@ -945,21 +902,18 @@ export const AccountingPage: React.FC<AccountingPageProps> = ({
                   defaultValue="treatment"
                   onValueChange={(tabValue) => {
                     if (tabValue === "treatment") {
-                      // 施術タブが選択された場合、treatmentCategoriesの先頭をセット
                       if (treatmentCategories.length > 0) {
                         setSelectedCategory(treatmentCategories[0]);
                       } else {
-                        setSelectedCategory(""); // 該当カテゴリがなければ空文字など適当な値をセット
+                        setSelectedCategory("");
                       }
                     } else if (tabValue === "retail") {
-                      // 店販タブが選択された場合、retailCategoriesの先頭をセット
                       if (retailCategories.length > 0) {
                         setSelectedCategory(retailCategories[0]);
                       } else {
                         setSelectedCategory("");
                       }
                     }
-                    // discountタブがある場合も同様にハンドリング
                   }}
                 >
                   <TabsList className="w-full">
@@ -969,9 +923,6 @@ export const AccountingPage: React.FC<AccountingPageProps> = ({
                     <TabsTrigger value="retail" className="flex-1">
                       店販
                     </TabsTrigger>
-                    {/*<TabsTrigger value="discount" className="flex-1">
-                      割引・サービス・オプション
-                    </TabsTrigger>*/}
                   </TabsList>
                   <TabsContent value="treatment">
                     <div className="space-y-4">
@@ -1053,34 +1004,6 @@ export const AccountingPage: React.FC<AccountingPageProps> = ({
                           )
                         )}
                       </div>
-                    </div>
-                  </TabsContent>
-                  <TabsContent value="discount">
-                    <div className="space-y-2">
-                      <Button
-                        variant="outline"
-                        className="w-full justify-start"
-                        onClick={() =>
-                          addItem("割引・サービス・オプション", "初回割引", 0)
-                        }
-                      >
-                        <PlusIcon className="mr-2 h-4 w-4" />
-                        初回割引
-                      </Button>
-                      <Button
-                        variant="outline"
-                        className="w-full justify-start"
-                        onClick={() =>
-                          addItem(
-                            "割引・サービス・オプション",
-                            "ポイントサービス",
-                            0
-                          )
-                        }
-                      >
-                        <PlusIcon className="mr-2 h-4 w-4" />
-                        ポイントサービス
-                      </Button>
                     </div>
                   </TabsContent>
                 </Tabs>
