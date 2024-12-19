@@ -41,13 +41,28 @@ const BasicInfoSettingsView: React.FC = () => {
     ReservationMessage[]
   >([]);
 
+  // キャンセルポリシー取得後、「既にフェッチ済みかどうか」をstateで管理します。
+  const [hasFetchedPolicies, setHasFetchedPolicies] = useState(false);
+
+  // 入力変更時にlocalStorageにも保存
   useEffect(() => {
-    if (user) {
-      setReservationUrl(`https://harotalo.com/reservation-user/${user.id}`);
-      fetchCancelPolicies(user.id);
-      fetchReservationMessages(user.id);
+    localStorage.setItem("cancelPolicyText", cancelPolicyText);
+  }, [cancelPolicyText]);
+
+  // コンポーネント初期マウント時にlocalStorageから復元
+  useEffect(() => {
+    const savedText = localStorage.getItem("cancelPolicyText");
+    if (savedText !== null && savedText.trim() !== "") {
+      setCancelPolicyText(savedText);
+    } else {
+      // ユーザーが編集していない場合は、フェッチして上書きする
+      if (user && !hasFetchedPolicies) {
+        fetchCancelPolicies(user.id);
+        fetchReservationMessages(user.id);
+        setHasFetchedPolicies(true);
+      }
     }
-  }, [user]);
+  }, [user, hasFetchedPolicies]);
 
   const fetchCancelPolicies = async (userId: string) => {
     try {
