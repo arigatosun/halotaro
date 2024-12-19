@@ -34,6 +34,8 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    console.log("user.id", user.id);
+
     const { data, error } = await supabase
       .from("sales_menu_items")
       .select("*")
