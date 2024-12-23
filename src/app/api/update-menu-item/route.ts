@@ -7,22 +7,44 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+// トークンからユーザを取得する共通関数
+async function getUserFromToken(request: NextRequest) {
+  const authHeader = request.headers.get("Authorization");
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return null;
+  }
+  const token = authHeader.substring("Bearer ".length);
+
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser(token);
+
+  if (userError || !user) {
+    return null;
+  }
+  return user;
+}
+
 export async function PATCH(request: NextRequest) {
   try {
+    // ユーザー認証
+    const user = await getUserFromToken(request);
+    if (!user) {
+      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+    }
+
     const formData = await request.formData();
     const menuItemId = formData.get("id") as string;
 
-    if (
-      !menuItemId ||
-      typeof menuItemId !== "string" ||
-      menuItemId.length === 0
-    ) {
+    if (!menuItemId) {
       return NextResponse.json(
         { message: "Invalid menu item ID" },
         { status: 400 }
       );
     }
 
+    // ここからは既存コードとほぼ同じ
     const name = formData.get("name") as string;
     const category = formData.get("category") as string;
     const description = formData.get("description") as string;
@@ -37,7 +59,7 @@ export async function PATCH(request: NextRequest) {
     if (image && image.size > 0) {
       const fileExt = image.name.split(".").pop();
       const fileName = `${uuidv4()}.${fileExt}`;
-      const { data: uploadData, error: uploadError } = await supabase.storage
+      const { error: uploadError } = await supabase.storage
         .from("menu-images")
         .upload(fileName, image);
 
@@ -57,15 +79,16 @@ export async function PATCH(request: NextRequest) {
       price,
       duration,
     };
-
     if (imageUrl) {
       updateData.image_url = imageUrl;
     }
 
+    // user.id と menuItemId が一致するものだけ更新
     const { data, error } = await supabase
       .from("menu_items")
       .update(updateData)
       .eq("id", menuItemId)
+      .eq("user_id", user.id) // ★ 認証ユーザのみ
       .select()
       .single();
 
@@ -79,7 +102,7 @@ export async function PATCH(request: NextRequest) {
 
     if (deleteError) throw deleteError;
 
-    // 新しい対応不可スタッフを挿入
+    // 新しい対応不可スタッフを追加
     if (unavailableStaffIds && unavailableStaffIds.length > 0) {
       const insertData = unavailableStaffIds.map((staffId) => ({
         menu_item_id: menuItemId,
