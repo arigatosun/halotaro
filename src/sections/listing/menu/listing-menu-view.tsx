@@ -18,7 +18,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -43,7 +42,7 @@ const supabase = createClient(
 );
 
 const MenuSettingsPage: React.FC = () => {
-  const { user, loading: authLoading, refreshAuthState } = useAuth();
+  const { user, session, loading: authLoading, refreshAuthState } = useAuth();
   const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
@@ -57,31 +56,34 @@ const MenuSettingsPage: React.FC = () => {
     return <div>認証状態を確認中...</div>;
   }
 
-  if (!user) {
+  if (!user || !session) {
     return <div>認証に失敗しました。ページをリロードしてください。</div>;
   }
 
-  return <AuthenticatedMenuSettingsPage userId={user.id} />;
+  return <AuthenticatedMenuSettingsPage session={session} />;
 };
 
-const AuthenticatedMenuSettingsPage: React.FC<{ userId: string }> = ({
-  userId,
+// Authenticated component
+const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
+  session,
 }) => {
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [editingMenu, setEditingMenu] = useState<MenuItem | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
 
+  // スタッフ関連のhook
   const {
     staffList,
     loading: staffLoading,
     error: staffError,
-  } = useStaffManagement(userId);
-
+  } = useStaffManagement(session.user.id);
   const [unavailableStaffIds, setUnavailableStaffIds] = useState<string[]>([]);
 
+  // メニュー一覧を取得
   useEffect(() => {
     fetchMenuItems();
   }, []);
@@ -91,15 +93,16 @@ const AuthenticatedMenuSettingsPage: React.FC<{ userId: string }> = ({
       setLoading(true);
       const response = await fetch("/api/get-menu-items", {
         method: "GET",
+        // ★Bearerトークンを送る
         headers: {
-          "user-id": userId,
+          Authorization: `Bearer ${session.access_token}`,
         },
       });
       if (!response.ok) {
         throw new Error("Failed to fetch menu items");
       }
       const data = await response.json();
-      console.log("Fetched menu items:", data); // デバッグ用ログ
+      console.log("Fetched menu items:", data);
       setMenuItems(data);
     } catch (error) {
       console.error("Error fetching menu items:", error);
@@ -109,12 +112,14 @@ const AuthenticatedMenuSettingsPage: React.FC<{ userId: string }> = ({
     }
   };
 
+  // メニュー編集モーダルを開く
   const handleEdit = (menu: MenuItem) => {
     setEditingMenu(menu);
     setImageFile(null);
     setIsModalOpen(true);
   };
 
+  // 対応不可スタッフ一覧を取得
   useEffect(() => {
     if (editingMenu) {
       const fetchUnavailableStaff = async () => {
@@ -136,7 +141,6 @@ const AuthenticatedMenuSettingsPage: React.FC<{ userId: string }> = ({
           );
         }
       };
-
       fetchUnavailableStaff();
     } else {
       setUnavailableStaffIds([]);
@@ -150,19 +154,19 @@ const AuthenticatedMenuSettingsPage: React.FC<{ userId: string }> = ({
     setIsModalOpen(true);
   };
 
+  // メニュー新規作成 or 更新
   const handleModalSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
-    formData.append("user_id", userId);
+    // user_idはサーバーで認証から判別できる想定だが、必要なら formData.append("user_id", session.user.id);
 
     if (editingMenu) {
       formData.append("id", editingMenu.id.toString());
     }
-
     if (imageFile) {
       formData.append("image", imageFile);
     }
-
+    // 対応不可スタッフ
     unavailableStaffIds.forEach((staffId) => {
       formData.append("unavailable_staff_ids[]", staffId);
     });
@@ -172,6 +176,10 @@ const AuthenticatedMenuSettingsPage: React.FC<{ userId: string }> = ({
         editingMenu ? "/api/update-menu-item" : "/api/post-menu-item",
         {
           method: editingMenu ? "PATCH" : "POST",
+          // Bearerトークンを送る
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
           body: formData,
         }
       );
@@ -207,54 +215,55 @@ const AuthenticatedMenuSettingsPage: React.FC<{ userId: string }> = ({
     }
   };
 
+  // 画像の選択
   const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files[0]) {
       setImageFile(event.target.files[0]);
     }
   };
 
+  // メニュー削除
   const handleDelete = async (menuItemId: number | string) => {
-    if (window.confirm("このメニューを削除してもよろしいですか？")) {
-      try {
-        const response = await fetch("/api/delete-menu-item", {
-          method: "DELETE",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ menuItemId }),
-        });
+    if (!window.confirm("このメニューを削除してもよろしいですか？")) return;
+    try {
+      const response = await fetch("/api/delete-menu-item", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`, // ★Bearerトークン
+        },
+        body: JSON.stringify({ menuItemId }),
+      });
 
-        const data = await response.json();
-
-        if (!response.ok) {
-          throw new Error(
-            data.message || "メニューの削除中にエラーが発生しました。"
-          );
-        }
-
-        setMenuItems((prevItems) =>
-          prevItems.filter((item) => item.id !== menuItemId)
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(
+          data.message || "メニューの削除中にエラーが発生しました。"
         );
-
-        toast({
-          title: "削除成功",
-          description:
-            data.message || `メニューID: ${menuItemId} が削除されました`,
-        });
-      } catch (error) {
-        console.error("Error deleting menu item:", error);
-        toast({
-          title: "削除エラー",
-          description:
-            error instanceof Error
-              ? error.message
-              : "メニューの削除中にエラーが発生しました。",
-          variant: "destructive",
-        });
       }
+
+      setMenuItems((prevItems) =>
+        prevItems.filter((item) => item.id !== menuItemId)
+      );
+      toast({
+        title: "削除成功",
+        description:
+          data.message || `メニューID: ${menuItemId} が削除されました`,
+      });
+    } catch (error) {
+      console.error("Error deleting menu item:", error);
+      toast({
+        title: "削除エラー",
+        description:
+          error instanceof Error
+            ? error.message
+            : "メニューの削除中にエラーが発生しました。",
+        variant: "destructive",
+      });
     }
   };
 
+  // 予約可能スイッチ
   const handleToggleReservable = async (
     menuItemId: number | string,
     isReservable: boolean
@@ -264,6 +273,7 @@ const AuthenticatedMenuSettingsPage: React.FC<{ userId: string }> = ({
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`, // ★Bearerトークン
         },
         body: JSON.stringify({ menuItemId, isReservable }),
       });
@@ -272,7 +282,7 @@ const AuthenticatedMenuSettingsPage: React.FC<{ userId: string }> = ({
         throw new Error("Failed to update menu item reservable status");
       }
 
-      // サーバーからの応答を使用せず、ローカル状態を更新
+      // ローカル状態を更新
       setMenuItems((prevItems) =>
         prevItems.map((item) =>
           item.id === menuItemId
@@ -297,6 +307,7 @@ const AuthenticatedMenuSettingsPage: React.FC<{ userId: string }> = ({
     }
   };
 
+  // チェックボックス(対応不可スタッフ)
   const handleStaffCheckboxChange = (staffId: string) => {
     setUnavailableStaffIds((prev) =>
       prev.includes(staffId)
@@ -395,6 +406,7 @@ const AuthenticatedMenuSettingsPage: React.FC<{ userId: string }> = ({
           ))}
         </TableBody>
       </Table>
+      {/* モーダル: 新規/編集 */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogContent>
           <DialogHeader>
