@@ -1,14 +1,17 @@
-export interface MenuItem {
-  id: number | string;
+export type MenuItem = {
+  id: number;
   user_id: string;
   name: string;
-  category: string;
-  description: string;
+  description?: string;
   price: number;
   duration: number;
-  is_reservable: boolean;
-  isCoupon?: boolean;
-  coupon_id?: string;
-  image_url?: string;
-  unavailable_staff_ids?: string[]; // 追加
-}
+  image_url?: string | null;
+  is_reservable?: boolean;
+  created_at?: string; // or Date
+  category_id?: number | null;
+  // JOIN した結果「categories」というオブジェクトが入るかもしれない
+  categories?: {
+    id: number;
+    name: string;
+  } | null;
+};

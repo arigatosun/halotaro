@@ -46,7 +46,7 @@ export async function PATCH(request: NextRequest) {
 
     // ここからは既存コードとほぼ同じ
     const name = formData.get("name") as string;
-    const category = formData.get("category") as string;
+    const categoryId = formData.get("category_id") as string;
     const description = formData.get("description") as string;
     const price = parseInt(formData.get("price") as string);
     const duration = parseInt(formData.get("duration") as string);
@@ -74,7 +74,7 @@ export async function PATCH(request: NextRequest) {
 
     const updateData: any = {
       name,
-      category,
+      category_id: categoryId,
       description,
       price,
       duration,

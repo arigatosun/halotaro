@@ -31,9 +31,24 @@ export async function GET(request: NextRequest) {
     console.log("user.id", user.id);
 
     // user.id に合致する menu_items を取得
+    // JOINして categories の id, name も取得する
     const { data, error } = await supabase
       .from("menu_items")
-      .select("*")
+      .select(
+        `
+        id,
+        user_id,
+        name,
+        description,
+        price,
+        duration,
+        image_url,
+        is_reservable,
+        created_at,
+        category_id,
+        categories ( id, name )
+      `
+      )
       .eq("user_id", user.id)
       .order("created_at", { ascending: false });
 

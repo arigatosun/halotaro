@@ -63,7 +63,9 @@ const MenuSettingsPage: React.FC = () => {
   return <AuthenticatedMenuSettingsPage session={session} />;
 };
 
+// ------------------------------------
 // Authenticated component
+// ------------------------------------
 const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
   session,
 }) => {
@@ -71,17 +73,48 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
+  // カテゴリ一覧
+  const [categories, setCategories] = useState<{ id: number; name: string }[]>(
+    []
+  );
+  // カテゴリ追加用
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState("");
+
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [editingMenu, setEditingMenu] = useState<MenuItem | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
 
-  // スタッフ関連のhook
+  // スタッフ関連
   const {
     staffList,
     loading: staffLoading,
     error: staffError,
   } = useStaffManagement(session.user.id);
   const [unavailableStaffIds, setUnavailableStaffIds] = useState<string[]>([]);
+
+  // カテゴリ一覧を取得
+  useEffect(() => {
+    fetchCategories();
+  }, []);
+
+  const fetchCategories = async () => {
+    try {
+      const res = await fetch("/api/categories", {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+      if (!res.ok) {
+        throw new Error("カテゴリ一覧の取得に失敗しました");
+      }
+      const data = await res.json();
+      setCategories(data);
+    } catch (error) {
+      console.error(error);
+    }
+  };
 
   // メニュー一覧を取得
   useEffect(() => {
@@ -93,7 +126,6 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
       setLoading(true);
       const response = await fetch("/api/get-menu-items", {
         method: "GET",
-        // ★Bearerトークンを送る
         headers: {
           Authorization: `Bearer ${session.access_token}`,
         },
@@ -112,14 +144,49 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
     }
   };
 
-  // メニュー編集モーダルを開く
+  // ------------------------------------
+  // カテゴリ削除処理
+  // ------------------------------------
+  const handleDeleteCategory = async (categoryId: number) => {
+    if (!window.confirm("このカテゴリを削除しますか？")) return;
+    try {
+      const res = await fetch("/api/categories", {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ id: categoryId }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "カテゴリ削除に失敗しました");
+      }
+
+      toast({
+        title: "削除成功",
+        description: "カテゴリを削除しました",
+      });
+      await fetchCategories();
+    } catch (err: any) {
+      console.error(err);
+      toast({
+        title: "エラー",
+        description: err.message || "カテゴリ削除中にエラーが発生しました",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // ------------------------------------
+  // メニュー追加・編集モーダル制御
+  // ------------------------------------
   const handleEdit = (menu: MenuItem) => {
     setEditingMenu(menu);
     setImageFile(null);
     setIsModalOpen(true);
   };
 
-  // 対応不可スタッフ一覧を取得
   useEffect(() => {
     if (editingMenu) {
       const fetchUnavailableStaff = async () => {
@@ -154,11 +221,9 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
     setIsModalOpen(true);
   };
 
-  // メニュー新規作成 or 更新
   const handleModalSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
-    // user_idはサーバーで認証から判別できる想定だが、必要なら formData.append("user_id", session.user.id);
 
     if (editingMenu) {
       formData.append("id", editingMenu.id.toString());
@@ -166,17 +231,20 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
     if (imageFile) {
       formData.append("image", imageFile);
     }
-    // 対応不可スタッフ
     unavailableStaffIds.forEach((staffId) => {
       formData.append("unavailable_staff_ids[]", staffId);
     });
+
+    const categoryId = formData.get("category_id");
+    if (categoryId) {
+      formData.set("category_id", categoryId.toString());
+    }
 
     try {
       const response = await fetch(
         editingMenu ? "/api/update-menu-item" : "/api/post-menu-item",
         {
           method: editingMenu ? "PATCH" : "POST",
-          // Bearerトークンを送る
           headers: {
             Authorization: `Bearer ${session.access_token}`,
           },
@@ -215,14 +283,12 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
     }
   };
 
-  // 画像の選択
   const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files[0]) {
       setImageFile(event.target.files[0]);
     }
   };
 
-  // メニュー削除
   const handleDelete = async (menuItemId: number | string) => {
     if (!window.confirm("このメニューを削除してもよろしいですか？")) return;
     try {
@@ -230,11 +296,10 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
         method: "DELETE",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`, // ★Bearerトークン
+          Authorization: `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({ menuItemId }),
       });
-
       const data = await response.json();
       if (!response.ok) {
         throw new Error(
@@ -263,7 +328,6 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
     }
   };
 
-  // 予約可能スイッチ
   const handleToggleReservable = async (
     menuItemId: number | string,
     isReservable: boolean
@@ -273,7 +337,7 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`, // ★Bearerトークン
+          Authorization: `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({ menuItemId, isReservable }),
       });
@@ -282,7 +346,6 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
         throw new Error("Failed to update menu item reservable status");
       }
 
-      // ローカル状態を更新
       setMenuItems((prevItems) =>
         prevItems.map((item) =>
           item.id === menuItemId
@@ -307,13 +370,41 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
     }
   };
 
-  // チェックボックス(対応不可スタッフ)
   const handleStaffCheckboxChange = (staffId: string) => {
     setUnavailableStaffIds((prev) =>
       prev.includes(staffId)
         ? prev.filter((id) => id !== staffId)
         : [...prev, staffId]
     );
+  };
+
+  const handleCreateCategory = async () => {
+    if (!newCategoryName.trim()) return;
+    try {
+      const res = await fetch("/api/categories", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ name: newCategoryName }),
+      });
+      if (!res.ok) throw new Error("カテゴリの追加に失敗しました");
+      await fetchCategories();
+      setIsCategoryModalOpen(false);
+      setNewCategoryName("");
+      toast({
+        title: "カテゴリ追加",
+        description: "新規カテゴリを追加しました",
+      });
+    } catch (err: any) {
+      console.error(err);
+      toast({
+        title: "エラー",
+        description: err.message ?? "カテゴリ追加エラー",
+        variant: "destructive",
+      });
+    }
   };
 
   if (loading || staffLoading) {
@@ -340,7 +431,14 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
           <PlusCircle className="mr-2 h-4 w-4" />
           メニュー新規追加
         </Button>
+
+        {/* カテゴリ追加ボタン */}
+        <Button onClick={() => setIsCategoryModalOpen(true)}>
+          カテゴリ管理
+        </Button>
       </div>
+
+      {/* メニュー一覧テーブル */}
       <Table>
         <TableHeader>
           <TableRow>
@@ -373,7 +471,7 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
                 )}
               </TableCell>
               <TableCell>{item.name}</TableCell>
-              <TableCell>{item.category}</TableCell>
+              <TableCell>{item.categories?.name ?? "未分類"}</TableCell>
               <TableCell>¥{item.price.toLocaleString()}</TableCell>
               <TableCell>{item.duration}分</TableCell>
               <TableCell>
@@ -406,7 +504,8 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
           ))}
         </TableBody>
       </Table>
-      {/* モーダル: 新規/編集 */}
+
+      {/* メニュー作成/編集モーダル */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogContent>
           <DialogHeader>
@@ -416,6 +515,7 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
           </DialogHeader>
           <form onSubmit={handleModalSubmit}>
             <div className="grid gap-4 py-4">
+              {/* メニュー名 */}
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="name" className="text-right">
                   メニュー名
@@ -427,27 +527,34 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
                   className="col-span-3"
                 />
               </div>
+              {/* カテゴリ */}
               <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="category" className="text-right">
+                <Label htmlFor="category_id" className="text-right">
                   カテゴリ
                 </Label>
                 <Select
-                  name="category"
-                  defaultValue={editingMenu?.category}
+                  name="category_id"
+                  defaultValue={
+                    editingMenu?.category_id
+                      ? String(editingMenu.category_id)
+                      : undefined
+                  }
                   required
                 >
                   <SelectTrigger className="col-span-3">
                     <SelectValue placeholder="カテゴリを選択" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="リラクゼーション">
-                      リラクゼーション
-                    </SelectItem>
-                    <SelectItem value="ヘッドスパ">ヘッドスパ</SelectItem>
+                    {categories.map((cat) => (
+                      <SelectItem key={cat.id} value={String(cat.id)}>
+                        {cat.name}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
-              <div className="grid  grid-cols-4 items-center gap-4">
+              {/* 説明 */}
+              <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="description" className="text-right">
                   説明
                 </Label>
@@ -458,6 +565,7 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
                   className="col-span-3"
                 />
               </div>
+              {/* 価格 */}
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="price" className="text-right">
                   価格（税込）
@@ -471,6 +579,7 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
                   required
                 />
               </div>
+              {/* 所要時間 */}
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="duration" className="text-right">
                   所要時間（分）
@@ -484,6 +593,7 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
                   required
                 />
               </div>
+              {/* 画像 */}
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="image" className="text-right">
                   画像
@@ -505,6 +615,7 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
                   className="col-span-3"
                 />
               </div>
+              {/* 対応不可スタッフ */}
               <div className="grid grid-cols-4 items-start gap-4">
                 <Label className="text-right">対応不可スタッフ</Label>
                 <div className="col-span-3 grid gap-2">
@@ -529,6 +640,52 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* カテゴリ管理モーダル */}
+      <Dialog open={isCategoryModalOpen} onOpenChange={setIsCategoryModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>カテゴリ管理</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4">
+            <Label htmlFor="newCategoryName">カテゴリ名</Label>
+            <Input
+              id="newCategoryName"
+              value={newCategoryName}
+              onChange={(e) => setNewCategoryName(e.target.value)}
+            />
+            <Button onClick={handleCreateCategory}>カテゴリ追加</Button>
+
+            <div className="mt-4">
+              <h3 className="font-semibold mb-2">登録済みカテゴリ一覧</h3>
+              {categories.length === 0 ? (
+                <p className="text-gray-500">
+                  登録されたカテゴリはありません。
+                </p>
+              ) : (
+                <ul className="space-y-1">
+                  {categories.map((cat) => (
+                    <li
+                      key={cat.id}
+                      className="flex items-center justify-between"
+                    >
+                      <span>{cat.name}</span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleDeleteCategory(cat.id)}
+                      >
+                        削除
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Toaster />
     </div>
   );

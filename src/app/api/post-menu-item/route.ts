@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
     // FormDataを取得
     const formData = await request.formData();
     const name = formData.get("name") as string;
-    const category = formData.get("category") as string;
+    const categoryId = formData.get("category_id") as string;
     const description = formData.get("description") as string;
     const price = parseInt(formData.get("price") as string);
     const duration = parseInt(formData.get("duration") as string);
@@ -79,7 +79,7 @@ export async function POST(request: NextRequest) {
       .insert({
         user_id: user.id, // 認証したユーザーのidを使用
         name,
-        category,
+        category_id: categoryId, // ここが重要
         description,
         price,
         duration,
