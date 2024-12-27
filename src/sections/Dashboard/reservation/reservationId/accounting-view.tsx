@@ -1266,7 +1266,7 @@ useEffect(() => {
                             <SelectValue placeholder="種類" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="fixed">固定額</SelectItem>
+                            <SelectItem value="fixed">固定割引</SelectItem>
                             
                             <SelectItem value="percent">％割引</SelectItem>
                           </SelectContent>
@@ -1290,7 +1290,7 @@ useEffect(() => {
                               {d.discount_type === "percent"
                                 ? `（${d.discount_value}%割引）`
                                 : d.discount_type === "fraction"
-                                ? `（端数切り）`
+                                ? ``
                                 : `（ -${d.discount_value}円 ）`
                               }
                             </Button>
