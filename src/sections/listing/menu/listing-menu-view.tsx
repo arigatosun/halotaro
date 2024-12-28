@@ -129,6 +129,7 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
         method: "GET",
         headers: {
           Authorization: `Bearer ${session.access_token}`,
+          cache: "no-store",
         },
         cache: "no-store",
       });
@@ -275,6 +276,9 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
           editingMenu ? "更新" : "追加"
         }されました。`,
       });
+
+      // ※ カテゴリ名含めた最新データを取得するために再度フルfetchする
+      +(await fetchMenuItems());
     } catch (error) {
       console.error("操作に失敗しました:", error);
       toast({
