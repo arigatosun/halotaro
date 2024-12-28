@@ -42,6 +42,19 @@ dayjs.extend(utc);
 dayjs.extend(timezone);
 dayjs.tz.setDefault("Asia/Tokyo");
 
+// 単日選択時に `to` を `from` と同日にそろえるための関数
+const normalizeDateRange = (range: DateRange | undefined): DateRange | undefined => {
+  if (!range) return undefined;
+  // from があるのに to が無い場合は、単日の選択とみなして同一日にそろえる
+  if (range.from && !range.to) {
+    return {
+      from: range.from,
+      to: range.from,
+    };
+  }
+  return range;
+};
+
 const SalesDetailView: React.FC = () => {
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
   const [staff, setStaff] = useState<string>("all");
@@ -61,16 +74,17 @@ const SalesDetailView: React.FC = () => {
   const [staffList, setStaffList] = useState<any[]>([]);
   const [menuList, setMenuList] = useState<any[]>([]);
 
+  // タイムゾーンを考慮した ISOString を返す関数
   const convertToTimezoneDateString = (date: Date | undefined, isEndDate: boolean = false): string => {
     if (!date) return "";
     
     const d = dayjs(date).tz("Asia/Tokyo");
     if (isEndDate) {
-      // 終了日の場合は23:59:59.999に設定
-      return d.endOf('day').toISOString();
+      // 終了日の場合は 23:59:59.999 に設定
+      return d.endOf("day").toISOString();
     }
-    // 開始日の場合は00:00:00.000に設定
-    return d.startOf('day').toISOString();
+    // 開始日の場合は 00:00:00.000 に設定
+    return d.startOf("day").toISOString();
   };
 
   // スタッフデータを取得
@@ -116,8 +130,11 @@ const SalesDetailView: React.FC = () => {
 
     setLoading(true);
     setError(null);
-    
+
     try {
+      // 単日選択時などに備えて range を正規化
+      const normalizedRange = normalizeDateRange(dateRange);
+
       const params: Record<string, any> = {
         page: currentPage,
         itemsPerPage,
@@ -126,12 +143,12 @@ const SalesDetailView: React.FC = () => {
         searchTarget,
       };
 
-      // 日付範囲の処理を改善
-      if (dateRange?.from) {
-        params.startDate = convertToTimezoneDateString(dateRange.from);
+      // 日付範囲の設定
+      if (normalizedRange?.from) {
+        params.startDate = convertToTimezoneDateString(normalizedRange.from);
       }
-      if (dateRange?.to) {
-        params.endDate = convertToTimezoneDateString(dateRange.to, true);
+      if (normalizedRange?.to) {
+        params.endDate = convertToTimezoneDateString(normalizedRange.to, true);
       }
 
       // その他のフィルター条件
@@ -159,7 +176,7 @@ const SalesDetailView: React.FC = () => {
           Authorization: `Bearer ${session.access_token}`,
         },
       });
-      
+
       const { data, totalItems } = response.data;
       setSalesData(data);
       setTotalItems(totalItems);
@@ -224,6 +241,8 @@ const SalesDetailView: React.FC = () => {
             </div>
             <div className="flex items-center space-x-2">
               <Label>検索期間:</Label>
+              {/* DatePickerWithRange は from と to を両方持っている場合に2日範囲選択、
+                  単日選択時は from のみになるケースがある */}
               <DatePickerWithRange
                 date={dateRange}
                 onDateChange={(newDateRange) => setDateRange(newDateRange)}
@@ -358,28 +377,25 @@ const SalesDetailView: React.FC = () => {
           )}
         </CardContent>
       </Card>
+
       <Pagination className="mt-4">
         <PaginationContent>
           <PaginationItem>
             <PaginationPrevious
               onClick={() => paginate(currentPage - 1)}
-              className={
-                currentPage === 1 ? "pointer-events-none opacity-50" : ""
-              }
+              className={currentPage === 1 ? "pointer-events-none opacity-50" : ""}
             />
           </PaginationItem>
-          {[...Array(Math.ceil(totalItems / itemsPerPage))].map(
-            (_, index) => (
-              <PaginationItem key={index}>
-                <PaginationLink
-                  onClick={() => paginate(index + 1)}
-                  isActive={currentPage === index + 1}
-                >
-                  {index + 1}
-                </PaginationLink>
-              </PaginationItem>
-            )
-          )}
+          {[...Array(Math.ceil(totalItems / itemsPerPage))].map((_, index) => (
+            <PaginationItem key={index}>
+              <PaginationLink
+                onClick={() => paginate(index + 1)}
+                isActive={currentPage === index + 1}
+              >
+                {index + 1}
+              </PaginationLink>
+            </PaginationItem>
+          ))}
           <PaginationItem>
             <PaginationNext
               onClick={() => paginate(currentPage + 1)}
