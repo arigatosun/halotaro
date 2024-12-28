@@ -50,11 +50,14 @@ export async function GET(request: NextRequest) {
       `
       )
       .eq("user_id", user.id)
-      .order("created_at", { ascending: false });
+      // 第一ソートキー: created_at DESC
+      .order("created_at", { ascending: false })
+      // 第二ソートキー: id DESC（同一の created_at のとき順序が安定する）
+      .order("id", { ascending: false });
 
     if (error) throw error;
 
-    // --- ここで Cache-Control ヘッダーを追加 ---
+    // Cache-Control ヘッダーを追加（キャッシュを無効化）
     return NextResponse.json(data, {
       status: 200,
       headers: {
