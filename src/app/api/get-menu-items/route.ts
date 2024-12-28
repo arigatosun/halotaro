@@ -54,7 +54,13 @@ export async function GET(request: NextRequest) {
 
     if (error) throw error;
 
-    return NextResponse.json(data);
+    // --- ここで Cache-Control ヘッダーを追加 ---
+    return NextResponse.json(data, {
+      status: 200,
+      headers: {
+        "Cache-Control": "no-store, no-cache, must-revalidate",
+      },
+    });
   } catch (error: any) {
     console.error("メニューの取得エラー:", error);
     return NextResponse.json(

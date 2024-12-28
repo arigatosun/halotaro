@@ -124,11 +124,13 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
   const fetchMenuItems = async () => {
     try {
       setLoading(true);
+      // --- 修正: cache: "no-store" を追加 ---
       const response = await fetch("/api/get-menu-items", {
         method: "GET",
         headers: {
           Authorization: `Bearer ${session.access_token}`,
         },
+        cache: "no-store",
       });
       if (!response.ok) {
         throw new Error("Failed to fetch menu items");
@@ -328,6 +330,7 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
     }
   };
 
+  // --- 修正: 予約可能切り替え後に再度 fetchMenuItems() を呼ぶ ---
   const handleToggleReservable = async (
     menuItemId: number | string,
     isReservable: boolean
@@ -341,11 +344,12 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
         },
         body: JSON.stringify({ menuItemId, isReservable }),
       });
-
+  
       if (!response.ok) {
         throw new Error("Failed to update menu item reservable status");
       }
-
+  
+      // いったんローカル state を更新
       setMenuItems((prevItems) =>
         prevItems.map((item) =>
           item.id === menuItemId
@@ -353,10 +357,16 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
             : item
         )
       );
-
+  
+      // DB 上の変更を確実に反映させるため再取得
+      await fetchMenuItems();
+  
+      // menuItemId に対応するメニューの name を取得
+      const updatedItem = menuItems.find((item) => item.id === menuItemId);
+  
       toast({
         title: "予約可能状態変更",
-        description: `メニューID: ${menuItemId} の予約可能状態が ${
+        description: `メニュー名: ${updatedItem?.name} の予約可能状態が ${
           isReservable ? "可能" : "不可能"
         } に変更されました`,
       });
@@ -369,6 +379,7 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
       });
     }
   };
+  
 
   const handleStaffCheckboxChange = (staffId: string) => {
     setUnavailableStaffIds((prev) =>
