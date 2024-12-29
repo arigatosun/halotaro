@@ -118,14 +118,17 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
 
   // ------------------------------------
   // メニュー一覧を取得 (Supabase直接)
-  // categories テーブルをJOINしたい場合、select( `*, categories(name)` ) 等で取得しても良い
+  // ログインユーザーのメニューだけを取得したい => user_id = session.user.id で絞り込む
+  // categoriesテーブルをJOINしてカテゴリ名も取得
   // ------------------------------------
   const fetchMenuItems = async () => {
     try {
       setLoading(true);
       const { data, error: menuError } = await supabase
         .from("menu_items")
+        // メニューはログインユーザーのものだけに限定
         .select(`*, categories(name)`)
+        .eq("user_id", session.user.id) // <= ここで自分のuser_idのメニューだけ取得
         .order("id", { ascending: true });
 
       if (menuError) throw menuError;
@@ -233,6 +236,8 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
         .from("menu_items")
         .delete()
         .eq("id", menuItemId)
+        // 安全策: ログインユーザーのものだけ削除
+        .eq("user_id", session.user.id)
         .select("*");
 
       if (error) {
@@ -286,6 +291,8 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
         .from("menu_items")
         .update({ is_reservable: isReservable })
         .eq("id", menuItemId)
+        // 安全策: ログインユーザーのメニューだけ
+        .eq("user_id", session.user.id)
         .select(`*, categories(name)`)
         .single();
 
@@ -374,6 +381,7 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
 
       if (editingMenu) {
         // --- Update ---
+        // 安全策: user_id も条件に入れることで、他人のメニューを更新できないようにする
         const { data, error } = await supabase
           .from("menu_items")
           .update({
@@ -386,6 +394,7 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
             updated_at: new Date().toISOString(),
           })
           .eq("id", editingMenu.id)
+          .eq("user_id", session.user.id)
           .select(`*, categories(name)`)
           .single();
 
@@ -421,7 +430,7 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
             category_id: categoryId,
             created_at: new Date().toISOString(),
           })
-          .select("*")
+          .select(`*, categories(name)`) // 新規作成後もカテゴリ名がほしい場合はJOIN
           .single();
 
         if (error || !data) {
