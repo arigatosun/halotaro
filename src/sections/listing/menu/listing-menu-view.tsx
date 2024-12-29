@@ -32,10 +32,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { Toaster } from "@/components/ui/toaster";
 import { toast } from "@/components/ui/use-toast";
 import { PlusCircle, Pencil, Trash2, Loader2, ImageOff } from "lucide-react";
-import { MenuItem } from "@/types/menuItem";
-import { useStaffManagement } from "@/hooks/useStaffManagement";
-import { createClient } from "@supabase/supabase-js";
 
+import { MenuItem } from "@/types/menuItem"; // id, name, description, price, duration, is_reservable, etc.
+import { useStaffManagement } from "@/hooks/useStaffManagement"; // スタッフ一覧を取得するカスタムフック想定
+
+import { createClient } from "@supabase/supabase-js";
+import { v4 as uuidv4 } from "uuid";
+
+// ---- Supabaseクライアントを直接生成 ----
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -46,6 +50,7 @@ const MenuSettingsPage: React.FC = () => {
   const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
+    // ログイン状態をリトライして取得
     if (!authLoading && !user && retryCount < 3) {
       refreshAuthState();
       setRetryCount((prev) => prev + 1);
@@ -81,6 +86,7 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
 
+  // メニュー追加・編集モーダル制御
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [editingMenu, setEditingMenu] = useState<MenuItem | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -94,79 +100,65 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
   const [unavailableStaffIds, setUnavailableStaffIds] = useState<string[]>([]);
 
   // ------------------------------------
-  // カテゴリ一覧を取得
+  // カテゴリ一覧を取得 (Supabase直接)
   // ------------------------------------
-  useEffect(() => {
-    fetchCategories();
-  }, []);
-
   const fetchCategories = async () => {
     try {
-      const res = await fetch("/api/categories", {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
-      });
-      if (!res.ok) {
-        throw new Error("カテゴリ一覧の取得に失敗しました");
-      }
-      const data = await res.json();
-      setCategories(data);
-    } catch (error) {
-      console.error(error);
+      const { data, error: catError } = await supabase
+        .from("categories")
+        .select("*")
+        .order("id", { ascending: true });
+
+      if (catError) throw catError;
+      setCategories(data || []);
+    } catch (err: any) {
+      console.error("カテゴリ取得エラー:", err.message);
     }
   };
 
   // ------------------------------------
-  // メニュー一覧を取得
+  // メニュー一覧を取得 (Supabase直接)
+  // categories テーブルをJOINしたい場合、select( `*, categories(name)` ) 等で取得しても良い
   // ------------------------------------
-  useEffect(() => {
-    fetchMenuItems();
-  }, []);
-
   const fetchMenuItems = async () => {
     try {
       setLoading(true);
-      // キャッシュが残らないよう明示的に no-store を指定
-      const response = await fetch("/api/get-menu-items", {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        cache: "no-store",
-      });
-      if (!response.ok) {
-        throw new Error("Failed to fetch menu items");
-      }
-      const data = await response.json();
-      console.log("Fetched menu items:", data);
-      setMenuItems(data);
-    } catch (error) {
-      console.error("Error fetching menu items:", error);
-      setError(error instanceof Error ? error : new Error("Unknown error"));
+      const { data, error: menuError } = await supabase
+        .from("menu_items")
+        .select(`*, categories(name)`)
+        .order("id", { ascending: true });
+
+      if (menuError) throw menuError;
+      setMenuItems(data as MenuItem[]);
+    } catch (err: any) {
+      console.error("Error fetching menu items:", err);
+      setError(err instanceof Error ? err : new Error("Unknown error"));
     } finally {
       setLoading(false);
     }
   };
 
   // ------------------------------------
-  // カテゴリ削除処理
+  // 初期データ取得
+  // ------------------------------------
+  useEffect(() => {
+    fetchCategories();
+    fetchMenuItems();
+  }, []);
+
+  // ------------------------------------
+  // カテゴリ削除処理 (Supabase直接)
   // ------------------------------------
   const handleDeleteCategory = async (categoryId: number) => {
     if (!window.confirm("このカテゴリを削除しますか？")) return;
     try {
-      const res = await fetch("/api/categories", {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ id: categoryId }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "カテゴリ削除に失敗しました");
+      const { error } = await supabase
+        .from("categories")
+        .delete()
+        .eq("id", categoryId);
+
+      if (error) {
+        throw new Error(error.message || "カテゴリ削除に失敗しました");
       }
 
       toast({
@@ -193,33 +185,30 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
     setIsModalOpen(true);
   };
 
+  // 編集メニューが変わったら、そのメニューのunavailableStaffを取得
   useEffect(() => {
-    if (editingMenu) {
-      const fetchUnavailableStaff = async () => {
-        const { data: unavailableStaffData, error: unavailableStaffError } =
-          await supabase
-            .from("menu_item_unavailable_staff")
-            .select("staff_id")
-            .eq("menu_item_id", editingMenu.id);
+    const fetchUnavailableStaff = async (menuId: number) => {
+      const { data, error } = await supabase
+        .from("menu_item_unavailable_staff")
+        .select("staff_id")
+        .eq("menu_item_id", menuId);
 
-        if (unavailableStaffError) {
-          console.error(
-            "Error fetching unavailable staff:",
-            unavailableStaffError
-          );
-          setUnavailableStaffIds([]);
-        } else {
-          setUnavailableStaffIds(
-            unavailableStaffData.map((item) => item.staff_id)
-          );
-        }
-      };
-      fetchUnavailableStaff();
+      if (error) {
+        console.error("Error fetching unavailable staff:", error);
+        setUnavailableStaffIds([]);
+      } else {
+        setUnavailableStaffIds(data.map((item: any) => item.staff_id));
+      }
+    };
+
+    if (editingMenu) {
+      fetchUnavailableStaff(editingMenu.id);
     } else {
       setUnavailableStaffIds([]);
     }
   }, [editingMenu]);
 
+  // 「新規追加」ボタン
   const handleAdd = () => {
     setEditingMenu(null);
     setImageFile(null);
@@ -227,105 +216,43 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
     setIsModalOpen(true);
   };
 
-  const handleModalSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const formData = new FormData(event.currentTarget);
-
-    if (editingMenu) {
-      formData.append("id", editingMenu.id.toString());
-    }
-    if (imageFile) {
-      formData.append("image", imageFile);
-    }
-    // 対応不可スタッフID
-    unavailableStaffIds.forEach((staffId) => {
-      formData.append("unavailable_staff_ids[]", staffId);
-    });
-
-    const categoryId = formData.get("category_id");
-    if (categoryId) {
-      formData.set("category_id", categoryId.toString());
-    }
-
-    try {
-      const response = await fetch(
-        editingMenu ? "/api/update-menu-item" : "/api/post-menu-item",
-        {
-          method: editingMenu ? "PATCH" : "POST",
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-          },
-          body: formData,
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error("Failed to save menu item");
-      }
-
-      const updatedMenuItem = await response.json();
-
-      setMenuItems((prevItems) =>
-        editingMenu
-          ? prevItems.map((item) =>
-              item.id === updatedMenuItem.id ? updatedMenuItem : item
-            )
-          : [updatedMenuItem, ...prevItems]
-      );
-
-      setIsModalOpen(false);
-      toast({
-        title: editingMenu ? "メニュー更新" : "メニュー追加",
-        description: `メニューが正常に${
-          editingMenu ? "更新" : "追加"
-        }されました。`,
-      });
-
-      // もしカテゴリ名等も最新にしたい場合は再度フルfetch
-      // await fetchMenuItems();
-    } catch (error) {
-      console.error("操作に失敗しました:", error);
-      toast({
-        title: "エラー",
-        description: "メニューの操作中にエラーが発生しました。",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (event.target.files && event.target.files[0]) {
-      setImageFile(event.target.files[0]);
-    }
-  };
-
+  // ------------------------------------
+  // メニュー削除 (Supabase直接)
+  // ------------------------------------
   const handleDelete = async (menuItemId: number | string) => {
     if (!window.confirm("このメニューを削除してもよろしいですか？")) return;
     try {
-      const response = await fetch("/api/delete-menu-item", {
-        method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({ menuItemId }),
-      });
-      const data = await response.json();
-      if (!response.ok) {
+      // 1. menu_item_unavailable_staff から該当メニューのレコード削除（外部キー制約で自動deleteにしてもOK）
+      await supabase
+        .from("menu_item_unavailable_staff")
+        .delete()
+        .eq("menu_item_id", menuItemId);
+
+      // 2. menu_itemsテーブルから削除
+      const { error, data } = await supabase
+        .from("menu_items")
+        .delete()
+        .eq("id", menuItemId)
+        .select("*");
+
+      if (error) {
         throw new Error(
-          data.message || "メニューの削除中にエラーが発生しました。"
+          error.message || "メニューの削除中にエラーが発生しました。"
         );
       }
 
       setMenuItems((prevItems) =>
         prevItems.filter((item) => item.id !== menuItemId)
       );
+
       toast({
         title: "削除成功",
         description:
-          data.message || `メニューID: ${menuItemId} が削除されました`,
+          data && data.length > 0
+            ? `メニューID: ${data[0].id} が削除されました`
+            : `メニューID: ${menuItemId} が削除されました`,
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error deleting menu item:", error);
       toast({
         title: "削除エラー",
@@ -339,13 +266,14 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
   };
 
   // ------------------------------------
-  // 修正: 予約可能ステータスの楽観的更新(Optimistic UI)を導入
+  // 予約可能ステータス 切り替え (Supabase直接 + 楽観的UI)
   // ------------------------------------
   const handleToggleReservable = async (
     menuItemId: number | string,
     isReservable: boolean
   ) => {
-    // 1. まずはローカルステートを先行して更新
+    // 1. まずはローカルステートを先行して更新 (楽観的UI)
+    const oldItems = [...menuItems];
     setMenuItems((prevItems) =>
       prevItems.map((item) =>
         item.id === menuItemId ? { ...item, is_reservable: isReservable } : item
@@ -353,45 +281,36 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
     );
 
     try {
-      const response = await fetch("/api/update-menu-item-reservable", {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({ menuItemId, isReservable }),
-      });
+      // 2. Supabaseで更新
+      const { data, error } = await supabase
+        .from("menu_items")
+        .update({ is_reservable: isReservable })
+        .eq("id", menuItemId)
+        .select("*") // 更新後のレコードを取得
+        .single();
 
-      if (!response.ok) {
-        throw new Error("Failed to update menu item reservable status");
+      if (error || !data) {
+        throw new Error(
+          error?.message || "Failed to update menu item reservable status"
+        );
       }
 
-      // 2. サーバーから返ってきた更新後のメニュー情報を取得
-      const updatedItem = await response.json();
-      // 3. ローカルステートを改めて最新データで更新
-      setMenuItems((prevItems) =>
-        prevItems.map((item) =>
-          item.id === updatedItem.id ? updatedItem : item
-        )
+      // 3. 返却された最新データでローカルを再上書き
+      setMenuItems((prev) =>
+        prev.map((item) => (item.id === data.id ? data : item))
       );
 
       toast({
         title: "予約可能状態変更",
-        description: `メニュー名: ${updatedItem.name} の予約可能状態が ${
+        description: `メニュー名: ${data.name} の予約可能状態が ${
           isReservable ? "可能" : "不可能"
         } に変更されました`,
       });
-    } catch (error) {
-      console.error("Error updating menu item reservable status:", error);
+    } catch (err: any) {
+      console.error("Error updating menu item reservable status:", err);
 
       // 4. エラー時はロールバック
-      setMenuItems((prevItems) =>
-        prevItems.map((item) =>
-          item.id === menuItemId
-            ? { ...item, is_reservable: !isReservable }
-            : item
-        )
-      );
+      setMenuItems(oldItems);
 
       toast({
         title: "エラー",
@@ -401,6 +320,166 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
     }
   };
 
+  // ------------------------------------
+  // メニュー追加/編集フォーム送信
+  // Supabase直接: menu_items に insert もしくは update
+  // 画像アップロードがある場合は先にStorageへアップロードし、image_urlをセット
+  // menu_item_unavailable_staff も更新
+  // ------------------------------------
+  const handleModalSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+
+    const name = formData.get("name")?.toString() || "";
+    const description = formData.get("description")?.toString() || "";
+    const price = Number(formData.get("price"));
+    const duration = Number(formData.get("duration"));
+    const categoryId = Number(formData.get("category_id")) || null;
+
+    // 画像ファイルをSupabase Storageにアップする(例)
+    let uploadedImageUrl: string | null = editingMenu?.image_url || null;
+    if (imageFile) {
+      // 1. 一意のファイル名
+      const fileExt = imageFile.name.split(".").pop();
+      const fileName = `${uuidv4()}.${fileExt}`;
+      const filePath = `menu-images/${fileName}`;
+
+      // 2. Storage にアップロード
+      const { error: uploadError } = await supabase.storage
+        .from("menu-images") // バケット名: "menu-images"
+        .upload(filePath, imageFile, {
+          cacheControl: "3600",
+          upsert: false,
+        });
+      if (uploadError) {
+        console.error("画像アップロード失敗:", uploadError);
+        toast({
+          title: "エラー",
+          description: "画像のアップロードに失敗しました。",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // 3. 公開URLを取得
+      const { data: publicUrlData } = supabase.storage
+        .from("menu-images")
+        .getPublicUrl(filePath);
+
+      uploadedImageUrl = publicUrlData?.publicUrl || null;
+    }
+
+    try {
+      let newOrUpdatedItem: MenuItem | null = null;
+
+      if (editingMenu) {
+        // --- Update ---
+        const { data, error } = await supabase
+          .from("menu_items")
+          .update({
+            name,
+            description,
+            price,
+            duration,
+            image_url: uploadedImageUrl,
+            category_id: categoryId,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", editingMenu.id)
+          .select("*")
+          .single();
+
+        if (error || !data) {
+          throw new Error(error?.message || "Failed to update menu item");
+        }
+        newOrUpdatedItem = data as MenuItem;
+
+        // unavailableStaffIdsの更新(一旦削除→再登録)
+        await supabase
+          .from("menu_item_unavailable_staff")
+          .delete()
+          .eq("menu_item_id", editingMenu.id);
+
+        if (unavailableStaffIds.length > 0) {
+          const insertData = unavailableStaffIds.map((staffId) => ({
+            menu_item_id: editingMenu.id,
+            staff_id: staffId,
+          }));
+          await supabase.from("menu_item_unavailable_staff").insert(insertData);
+        }
+      } else {
+        // --- Insert ---
+        const { data, error } = await supabase
+          .from("menu_items")
+          .insert({
+            user_id: session.user.id, // 必要に応じて user_id をセット
+            name,
+            description,
+            price,
+            duration,
+            image_url: uploadedImageUrl,
+            category_id: categoryId,
+            created_at: new Date().toISOString(),
+          })
+          .select("*")
+          .single();
+
+        if (error || !data) {
+          throw new Error(error?.message || "Failed to save new menu item");
+        }
+        newOrUpdatedItem = data as MenuItem;
+
+        // unavailableStaffIdsの登録
+        if (unavailableStaffIds.length > 0) {
+          const insertData = unavailableStaffIds.map((staffId) => ({
+            menu_item_id: data.id,
+            staff_id: staffId,
+          }));
+          await supabase.from("menu_item_unavailable_staff").insert(insertData);
+        }
+      }
+
+      if (!newOrUpdatedItem) {
+        throw new Error("No item returned after insert/update");
+      }
+
+      // ローカルステートを更新
+      setMenuItems((prevItems) =>
+        editingMenu
+          ? // 更新の場合
+            prevItems.map((item) =>
+              item.id === newOrUpdatedItem!.id ? newOrUpdatedItem! : item
+            )
+          : // 新規追加の場合
+            [newOrUpdatedItem, ...prevItems]
+      );
+
+      setIsModalOpen(false);
+      toast({
+        title: editingMenu ? "メニュー更新" : "メニュー追加",
+        description: `メニューが正常に${
+          editingMenu ? "更新" : "追加"
+        }されました。`,
+      });
+    } catch (error: any) {
+      console.error("操作に失敗しました:", error);
+      toast({
+        title: "エラー",
+        description:
+          error?.message || "メニューの操作中にエラーが発生しました。",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // 画像ファイル選択ハンドラ
+  const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files && event.target.files[0]) {
+      setImageFile(event.target.files[0]);
+    }
+  };
+
+  // 対応不可スタッフのチェックボックス
   const handleStaffCheckboxChange = (staffId: string) => {
     setUnavailableStaffIds((prev) =>
       prev.includes(staffId)
@@ -409,19 +488,18 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
     );
   };
 
+  // カテゴリ新規作成
   const handleCreateCategory = async () => {
     if (!newCategoryName.trim()) return;
     try {
-      const res = await fetch("/api/categories", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ name: newCategoryName }),
-      });
-      if (!res.ok) throw new Error("カテゴリの追加に失敗しました");
+      const { data, error } = await supabase
+        .from("categories")
+        .insert({ name: newCategoryName })
+        .select("*");
+
+      if (error) throw error;
       await fetchCategories();
+
       setIsCategoryModalOpen(false);
       setNewCategoryName("");
       toast({
@@ -488,6 +566,7 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
           {menuItems.map((item, index) => (
             <TableRow key={item.id}>
               <TableCell>{index + 1}</TableCell>
+              {/* メニュー写真 */}
               <TableCell>
                 {item.image_url ? (
                   <img
@@ -502,9 +581,13 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
                 )}
               </TableCell>
               <TableCell>{item.name}</TableCell>
-              <TableCell>{item.categories?.name ?? "未分類"}</TableCell>
+              {/* カテゴリ名 */}
+              <TableCell>
+                {(item as any)?.categories?.name ?? "未分類"}
+              </TableCell>
               <TableCell>¥{item.price.toLocaleString()}</TableCell>
               <TableCell>{item.duration}分</TableCell>
+              {/* 編集ボタン */}
               <TableCell>
                 <Button
                   variant="outline"
@@ -514,6 +597,7 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
                   <Pencil className="h-4 w-4" />
                 </Button>
               </TableCell>
+              {/* 予約可能トグル */}
               <TableCell>
                 <Switch
                   checked={item.is_reservable}
@@ -522,6 +606,7 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
                   }
                 />
               </TableCell>
+              {/* 削除ボタン */}
               <TableCell>
                 <Button
                   variant="outline"
@@ -554,8 +639,9 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
                 <Input
                   id="name"
                   name="name"
-                  defaultValue={editingMenu?.name}
+                  defaultValue={editingMenu?.name || ""}
                   className="col-span-3"
+                  required
                 />
               </div>
               {/* カテゴリ */}
@@ -592,7 +678,7 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
                 <Textarea
                   id="description"
                   name="description"
-                  defaultValue={editingMenu?.description}
+                  defaultValue={editingMenu?.description || ""}
                   className="col-span-3"
                 />
               </div>
@@ -605,7 +691,7 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
                   id="price"
                   name="price"
                   type="number"
-                  defaultValue={editingMenu?.price}
+                  defaultValue={editingMenu?.price || 0}
                   className="col-span-3"
                   required
                 />
@@ -619,7 +705,7 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
                   id="duration"
                   name="duration"
                   type="number"
-                  defaultValue={editingMenu?.duration}
+                  defaultValue={editingMenu?.duration || 30}
                   className="col-span-3"
                   required
                 />
@@ -665,6 +751,7 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
                 </div>
               </div>
             </div>
+
             <div className="flex justify-end">
               <Button type="submit">保存</Button>
             </div>
