@@ -93,7 +93,9 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
   } = useStaffManagement(session.user.id);
   const [unavailableStaffIds, setUnavailableStaffIds] = useState<string[]>([]);
 
+  // ------------------------------------
   // カテゴリ一覧を取得
+  // ------------------------------------
   useEffect(() => {
     fetchCategories();
   }, []);
@@ -116,7 +118,9 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
     }
   };
 
+  // ------------------------------------
   // メニュー一覧を取得
+  // ------------------------------------
   useEffect(() => {
     fetchMenuItems();
   }, []);
@@ -124,12 +128,11 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
   const fetchMenuItems = async () => {
     try {
       setLoading(true);
-      // --- 修正: cache: "no-store" を追加 ---
+      // キャッシュが残らないよう明示的に no-store を指定
       const response = await fetch("/api/get-menu-items", {
         method: "GET",
         headers: {
           Authorization: `Bearer ${session.access_token}`,
-          cache: "no-store",
         },
         cache: "no-store",
       });
@@ -234,6 +237,7 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
     if (imageFile) {
       formData.append("image", imageFile);
     }
+    // 対応不可スタッフID
     unavailableStaffIds.forEach((staffId) => {
       formData.append("unavailable_staff_ids[]", staffId);
     });
@@ -277,8 +281,8 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
         }されました。`,
       });
 
-      // ※ カテゴリ名含めた最新データを取得するために再度フルfetchする
-      +(await fetchMenuItems());
+      // もしカテゴリ名等も最新にしたい場合は再度フルfetch
+      // await fetchMenuItems();
     } catch (error) {
       console.error("操作に失敗しました:", error);
       toast({
@@ -334,11 +338,20 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
     }
   };
 
-  // --- 修正: 予約可能切り替え後に再度 fetchMenuItems() を呼ぶ ---
+  // ------------------------------------
+  // 修正: 予約可能ステータスの楽観的更新(Optimistic UI)を導入
+  // ------------------------------------
   const handleToggleReservable = async (
     menuItemId: number | string,
     isReservable: boolean
   ) => {
+    // 1. まずはローカルステートを先行して更新
+    setMenuItems((prevItems) =>
+      prevItems.map((item) =>
+        item.id === menuItemId ? { ...item, is_reservable: isReservable } : item
+      )
+    );
+
     try {
       const response = await fetch("/api/update-menu-item-reservable", {
         method: "PUT",
@@ -348,34 +361,38 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
         },
         body: JSON.stringify({ menuItemId, isReservable }),
       });
-  
+
       if (!response.ok) {
         throw new Error("Failed to update menu item reservable status");
       }
-  
-      // いったんローカル state を更新
+
+      // 2. サーバーから返ってきた更新後のメニュー情報を取得
+      const updatedItem = await response.json();
+      // 3. ローカルステートを改めて最新データで更新
       setMenuItems((prevItems) =>
         prevItems.map((item) =>
-          item.id === menuItemId
-            ? { ...item, is_reservable: isReservable }
-            : item
+          item.id === updatedItem.id ? updatedItem : item
         )
       );
-  
-      // DB 上の変更を確実に反映させるため再取得
-      await fetchMenuItems();
-  
-      // menuItemId に対応するメニューの name を取得
-      const updatedItem = menuItems.find((item) => item.id === menuItemId);
-  
+
       toast({
         title: "予約可能状態変更",
-        description: `メニュー名: ${updatedItem?.name} の予約可能状態が ${
+        description: `メニュー名: ${updatedItem.name} の予約可能状態が ${
           isReservable ? "可能" : "不可能"
         } に変更されました`,
       });
     } catch (error) {
       console.error("Error updating menu item reservable status:", error);
+
+      // 4. エラー時はロールバック
+      setMenuItems((prevItems) =>
+        prevItems.map((item) =>
+          item.id === menuItemId
+            ? { ...item, is_reservable: !isReservable }
+            : item
+        )
+      );
+
       toast({
         title: "エラー",
         description: "予約可能状態の更新に失敗しました",
@@ -383,7 +400,6 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
       });
     }
   };
-  
 
   const handleStaffCheckboxChange = (staffId: string) => {
     setUnavailableStaffIds((prev) =>
