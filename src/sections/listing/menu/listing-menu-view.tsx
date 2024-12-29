@@ -286,7 +286,7 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
         .from("menu_items")
         .update({ is_reservable: isReservable })
         .eq("id", menuItemId)
-        .select("*") // 更新後のレコードを取得
+        .select(`*, categories(name)`)
         .single();
 
       if (error || !data) {
@@ -386,7 +386,7 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
             updated_at: new Date().toISOString(),
           })
           .eq("id", editingMenu.id)
-          .select("*")
+          .select(`*, categories(name)`)
           .single();
 
         if (error || !data) {
