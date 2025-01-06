@@ -632,7 +632,7 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
 
       {/* メニュー作成/編集モーダル */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent>
+        <DialogContent className="max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {editingMenu ? "メニュー編集" : "新規メニュー追加"}
