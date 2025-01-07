@@ -12,21 +12,43 @@ import { Input } from "@/components/ui/input";
 import { CircularProgress } from "@mui/material";
 
 interface MenuSelectionProps {
-  onSelectMenu: (menuId: string, name: string, price: number, duration: number) => void;
+  onSelectMenu: (
+    menuId: string,
+    name: string,
+    price: number,
+    duration: number
+  ) => void;
   userId: string;
 }
 
-export default function MenuSelection({ onSelectMenu, userId }: MenuSelectionProps) {
+export default function MenuSelection({
+  onSelectMenu,
+  userId,
+}: MenuSelectionProps) {
   const { setSelectedMenus } = useReservation();
-  const { menuItems, loading: menuLoading, error: menuError } = useMenuItems(userId);
-  const { coupons, loading: couponLoading, error: couponError } = useCoupons(userId);
+  const {
+    menuItems,
+    loading: menuLoading,
+    error: menuError,
+  } = useMenuItems(userId);
+  const {
+    coupons,
+    loading: couponLoading,
+    error: couponError,
+  } = useCoupons(userId);
+
   const [activeTab, setActiveTab] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
 
-  const allItems = useMemo(() => [...menuItems, ...coupons], [menuItems, coupons]);
+  // メニューとクーポンをまとめる
+  const allItems = useMemo(
+    () => [...menuItems, ...coupons],
+    [menuItems, coupons]
+  );
 
+  // メニュー or クーポンを選択したときのハンドラ
   const handleItemSelect = (item: MenuItem) => {
-    console.log('Selected item:', item);
+    console.log("Selected item:", item);
     setSelectedMenus([
       {
         id: item.id.toString(),
@@ -38,42 +60,63 @@ export default function MenuSelection({ onSelectMenu, userId }: MenuSelectionPro
     onSelectMenu(item.id.toString(), item.name, item.price, item.duration);
   };
 
+  // タブや検索ワードに応じて表示するリストをフィルタリング
   const filteredItems = useMemo(() => {
     let items = allItems;
+
+    // タブ切り替えによる絞り込み
     switch (activeTab) {
       case "firstVisit":
-        items = coupons.filter(coupon => coupon.category === "new");
+        items = coupons.filter((coupon) => coupon.category === "new");
         break;
       case "repeater":
-        items = coupons.filter(coupon => coupon.category === "repeat");
+        items = coupons.filter((coupon) => coupon.category === "repeat");
         break;
       case "menu":
         items = menuItems;
         break;
+      // default: "all" の場合は allItems（すべて表示）
     }
-    return items.filter(item =>
-      item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.description?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+
+    // 予約不可能(is_reservable = false, null)を除外し、検索ワードで絞り込み
+    return items
+      .filter((item) => item.is_reservable === true) // ここで予約不可を除外
+      .filter(
+        (item) =>
+          item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          item.description?.toLowerCase().includes(searchTerm.toLowerCase())
+      );
   }, [activeTab, allItems, coupons, menuItems, searchTerm]);
 
+  // ローディング
   if (menuLoading || couponLoading) {
     return (
       <div className="w-full max-w-md mx-auto mt-8 space-y-4">
         <div className="flex flex-col items-center justify-center space-y-4">
           <CircularProgress size={60} style={{ color: "#F9802D" }} />
-          <p className="text-lg font-semibold text-[#F9802D]">メニューを読み込み中...</p>
+          <p className="text-lg font-semibold text-[#F9802D]">
+            メニューを読み込み中...
+          </p>
         </div>
       </div>
     );
   }
 
-  if (menuError || couponError) return <div className="p-2 text-center text-sm text-red-500">エラー: {(menuError || couponError)?.message}</div>;
+  // エラー表示
+  if (menuError || couponError) {
+    return (
+      <div className="p-2 text-center text-sm text-red-500">
+        エラー: {(menuError || couponError)?.message}
+      </div>
+    );
+  }
 
+  // 個別のメニュー/クーポンカードを描画する関数
   const renderItem = (item: MenuItem) => (
     <Card key={item.id} className="mb-4">
       <CardContent className="p-0 overflow-hidden">
         <div className="flex flex-col md:flex-row">
+          {/* 画像部分 */}
           <div className="relative w-full md:w-1/3 h-48 md:h-auto bg-gray-100">
             {item.image_url ? (
               <Image
@@ -89,6 +132,7 @@ export default function MenuSelection({ onSelectMenu, userId }: MenuSelectionPro
               </div>
             )}
           </div>
+          {/* テキスト部分 */}
           <div className="flex flex-col justify-between p-4 md:w-2/3">
             <div>
               <h3 className="text-lg font-semibold mb-2">{item.name}</h3>
@@ -98,11 +142,13 @@ export default function MenuSelection({ onSelectMenu, userId }: MenuSelectionPro
                 <span>想定所要時間: {item.duration}分</span>
               </div>
             </div>
+            {/* 価格・選択ボタン */}
             <div className="flex justify-between items-center mt-2">
               <p className="text-lg font-bold">
                 ¥{item.price.toLocaleString()}
               </p>
               <div className="flex items-center">
+                {/* クーポンならタグ表示 */}
                 {item.isCoupon && (
                   <span className="inline-flex items-center px-2 py-1 mr-2 text-xs font-medium text-blue-700 bg-blue-100 rounded-full">
                     <Tag className="w-3 h-3 mr-1" />
@@ -129,6 +175,7 @@ export default function MenuSelection({ onSelectMenu, userId }: MenuSelectionPro
       <h2 className="text-2xl font-bold mb-4">
         クーポン・メニューを選択してください
       </h2>
+      {/* 検索入力 */}
       <div className="mb-4">
         <Input
           type="text"
@@ -138,13 +185,31 @@ export default function MenuSelection({ onSelectMenu, userId }: MenuSelectionPro
           className="w-full"
         />
       </div>
+
+      {/* タブ表示 */}
       <Tabs defaultValue="all" onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid grid-cols-4 w-full mb-4">
-          <TabsTrigger value="all" className="text-xs py-2 px-1 md:text-sm">すべて</TabsTrigger>
-          <TabsTrigger value="firstVisit" className="text-xs py-2 px-1 md:text-sm">初来店</TabsTrigger>
-          <TabsTrigger value="repeater" className="text-xs py-2 px-1 md:text-sm">2回目以降</TabsTrigger>
-          <TabsTrigger value="menu" className="text-xs py-2 px-1 md:text-sm">メニュー</TabsTrigger>
+          <TabsTrigger value="all" className="text-xs py-2 px-1 md:text-sm">
+            すべて
+          </TabsTrigger>
+          <TabsTrigger
+            value="firstVisit"
+            className="text-xs py-2 px-1 md:text-sm"
+          >
+            初来店
+          </TabsTrigger>
+          <TabsTrigger
+            value="repeater"
+            className="text-xs py-2 px-1 md:text-sm"
+          >
+            2回目以降
+          </TabsTrigger>
+          <TabsTrigger value="menu" className="text-xs py-2 px-1 md:text-sm">
+            メニュー
+          </TabsTrigger>
         </TabsList>
+
+        {/* タブのコンテンツ */}
         <TabsContent value="all" className="mt-2 md:mt-4">
           {filteredItems.map(renderItem)}
         </TabsContent>

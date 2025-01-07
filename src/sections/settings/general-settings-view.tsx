@@ -31,6 +31,7 @@ interface ReservationMessage {
 
 const BasicInfoSettingsView: React.FC = () => {
   const { user } = useAuth();
+
   const [reservationUrl, setReservationUrl] = useState("");
   const [isCustomDomainEnabled, setIsCustomDomainEnabled] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
@@ -43,6 +44,15 @@ const BasicInfoSettingsView: React.FC = () => {
 
   // キャンセルポリシー取得後、「既にフェッチ済みかどうか」をstateで管理します。
   const [hasFetchedPolicies, setHasFetchedPolicies] = useState(false);
+
+  // --------------------------------------------------------------------------
+  // 追加: ログインしているユーザーの予約URLをステートにセットする
+  // --------------------------------------------------------------------------
+  useEffect(() => {
+    if (user?.id) {
+      setReservationUrl(`https://harotalo.com/reservation-user/${user.id}`);
+    }
+  }, [user]);
 
   // 入力変更時にlocalStorageにも保存
   useEffect(() => {
@@ -386,6 +396,7 @@ const BasicInfoSettingsView: React.FC = () => {
             </div>
           </CardContent>
         </Card>
+
         <Card className="mb-6">
           <CardHeader>
             <CardTitle className="text-lg">予約者へのメッセージ設定</CardTitle>
