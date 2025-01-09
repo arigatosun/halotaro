@@ -13,11 +13,11 @@ import { useToast } from "@/components/ui/use-toast";
 /**
  * アカウント設定ページ全体を表示するコンポーネント
  */
-const AccountSettingsPage: React.FC = () => {
+export default function AccountSettingsPage() {
   const { user, loading: authLoading, refreshAuthState } = useAuth();
   const [retryCount, setRetryCount] = useState(0);
 
-  // ログインが確定しない場合に再取得をリトライ (任意ロジック)
+  // ログインが確定しない場合に再取得をリトライ
   useEffect(() => {
     if (!authLoading && !user && retryCount < 3) {
       refreshAuthState();
@@ -47,24 +47,27 @@ const AccountSettingsPage: React.FC = () => {
   return (
     <AuthenticatedAccountSettings userId={user.id} userEmail={user.email} />
   );
-};
-
-export default AccountSettingsPage;
+}
 
 /**
  * ログインユーザーが確定している状態で表示するアカウント設定フォーム
  */
-const AuthenticatedAccountSettings: React.FC<{
+function AuthenticatedAccountSettings({
+  userId,
+  userEmail,
+}: {
   userId: string;
   userEmail?: string;
-}> = ({ userId, userEmail }) => {
+}) {
   const { toast } = useToast();
 
   // 入力フォーム用のstate
   const [newEmail, setNewEmail] = useState(userEmail ?? "");
   const [newPassword, setNewPassword] = useState("");
 
-  // メール & パスワードをアップデートする関数
+  /**
+   * メール & パスワードをアップデートする関数
+   */
   const handleUpdateAccount = async () => {
     try {
       // 変更があるかどうかチェック
@@ -166,4 +169,4 @@ const AuthenticatedAccountSettings: React.FC<{
       </Card>
     </div>
   );
-};
+}
