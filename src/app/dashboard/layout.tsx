@@ -8,8 +8,9 @@ import Footer from "@/components/layout/footer";
 import ScrollToTopButton from "@/components/layout/scroll-to-top";
 import PrivateRoute from "@/components/Auth/PrivateRoute";
 import { AuthProvider } from "@/contexts/authcontext";
-import { ThemeProvider, createTheme } from '@mui/material/styles';
-import CssBaseline from '@mui/material/CssBaseline';
+import { ThemeProvider, createTheme } from "@mui/material/styles";
+import CssBaseline from "@mui/material/CssBaseline";
+import { Toaster } from "@/components/ui/toaster";
 
 const notoSansJP = Noto_Sans_JP({
   subsets: ["latin"],
@@ -47,6 +48,7 @@ export default function DashboardLayout({
                 }
               >
                 {children}
+                <Toaster />
               </div>
             </main>
             <ScrollToTopButton />

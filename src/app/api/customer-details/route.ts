@@ -76,7 +76,13 @@ export async function GET(request: Request) {
             status,
             total_price,
             staff:staff!fk_staff ( name ),
-            menu_item:menu_items!fk_menu_item ( id, name, price, category ),
+            menu_item: menu_items!fk_menu_item (
+              id,
+              name,
+              price,
+              category_id,
+              categories:categories!fk_category ( id, name )
+            ),
             coupon:coupons!fk_coupon_id ( id, name, price, category, description ),
             accounting_information:accounting_information!accounting_information_reservation_fkey (
               items,

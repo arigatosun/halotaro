@@ -282,6 +282,7 @@ const SubHeader: React.FC<{ pathname: string }> = ({ pathname }) => {
       { href: "/dashboard/settings", label: "基本設定" },
       { href: "/dashboard/settings/notification", label: "通知設定" },
       { href: "/dashboard/settings/salonboard", label: "サロンボード連携" },
+      { href: "/dashboard/settings/account", label: "アカウント設定" },
     ],
   };
 
