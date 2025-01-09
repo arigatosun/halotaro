@@ -13,12 +13,12 @@ import { useToast } from "@/components/ui/use-toast";
 /**
  * アカウント設定ページ全体を表示するコンポーネント
  */
-export default function AccountSettingsPage() {
+export function AccountSettingView() {
   const { user, loading: authLoading, refreshAuthState } = useAuth();
   const [retryCount, setRetryCount] = useState(0);
 
-  // ログインが確定しない場合に再取得をリトライ
   useEffect(() => {
+    // ログイン状況をリトライする例
     if (!authLoading && !user && retryCount < 3) {
       refreshAuthState();
       setRetryCount((prev) => prev + 1);
@@ -45,7 +45,10 @@ export default function AccountSettingsPage() {
 
   // ログイン中のユーザーが取得できた場合にアカウント設定フォームを表示
   return (
-    <AuthenticatedAccountSettings userId={user.id} userEmail={user.email} />
+    <AuthenticatedAccountSettings
+      userId={user.id}
+      userEmail={user.email ?? ""}
+    />
   );
 }
 
@@ -57,12 +60,12 @@ function AuthenticatedAccountSettings({
   userEmail,
 }: {
   userId: string;
-  userEmail?: string;
+  userEmail: string;
 }) {
   const { toast } = useToast();
 
-  // 入力フォーム用のstate
-  const [newEmail, setNewEmail] = useState(userEmail ?? "");
+  // 入力フォーム用の state
+  const [newEmail, setNewEmail] = useState(userEmail);
   const [newPassword, setNewPassword] = useState("");
 
   /**
@@ -92,11 +95,11 @@ function AuthenticatedAccountSettings({
         return;
       }
 
-      // Supabase Auth で更新を行う
+      // Supabase Auth による更新
       const { data, error } = await supabase.auth.updateUser(updatePayload);
 
-      // 失敗したときはトーストでエラーを表示
       if (error) {
+        // 失敗したときはトーストでエラーを表示
         toast({
           title: "エラー",
           description: error.message || "アカウント更新に失敗しました。",
@@ -114,8 +117,7 @@ function AuthenticatedAccountSettings({
       // パスワード欄をクリア
       setNewPassword("");
 
-      // メールアドレスを変更した場合は、メール確認などが必要になる可能性があります
-      // ここはSupabaseプロジェクトのAuth設定による
+      // メールアドレスを変更した場合、メール確認を求められる可能性あり
     } catch (err: any) {
       console.error("Error updating account info:", err);
       // 失敗トースト
