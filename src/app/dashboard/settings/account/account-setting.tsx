@@ -69,9 +69,13 @@ const AuthenticatedAccountSettings: React.FC<{
     try {
       // 変更があるかどうかチェック
       const updatePayload: { email?: string; password?: string } = {};
+
+      // メールアドレスが変更されている場合のみセット
       if (newEmail && newEmail !== userEmail) {
         updatePayload.email = newEmail;
       }
+
+      // パスワードが入力されている場合のみセット
       if (newPassword.trim() !== "") {
         updatePayload.password = newPassword;
       }
@@ -85,10 +89,11 @@ const AuthenticatedAccountSettings: React.FC<{
         return;
       }
 
-      // Supabase Authで更新を行う
+      // Supabase Auth で更新を行う
       const { data, error } = await supabase.auth.updateUser(updatePayload);
+
+      // 失敗したときはトーストでエラーを表示
       if (error) {
-        // 失敗したときはトーストでエラーを表示
         toast({
           title: "エラー",
           description: error.message || "アカウント更新に失敗しました。",
@@ -106,7 +111,7 @@ const AuthenticatedAccountSettings: React.FC<{
       // パスワード欄をクリア
       setNewPassword("");
 
-      // メールアドレスを変更した場合は、メール確認などが必要になることがあります
+      // メールアドレスを変更した場合は、メール確認などが必要になる可能性があります
       // ここはSupabaseプロジェクトのAuth設定による
     } catch (err: any) {
       console.error("Error updating account info:", err);
@@ -141,6 +146,7 @@ const AuthenticatedAccountSettings: React.FC<{
               メールアドレスのみ変更する場合はパスワードを空のままにしてください
             </p>
           </div>
+
           <div>
             <Label htmlFor="newPassword">パスワード</Label>
             <Input
