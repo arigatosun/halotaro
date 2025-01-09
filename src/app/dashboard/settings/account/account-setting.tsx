@@ -10,11 +10,13 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/components/ui/use-toast";
 
-export default function AccountSettingsPage() {
+/**
+ * アカウント設定ページ全体を表示するコンポーネント
+ */
+export function AccountSettingView() {
   const { user, loading: authLoading, refreshAuthState } = useAuth();
   const [retryCount, setRetryCount] = useState(0);
 
-  // ログインが確定しない場合に再取得をリトライ
   useEffect(() => {
     if (!authLoading && !user && retryCount < 3) {
       refreshAuthState();
@@ -57,12 +59,12 @@ function AuthenticatedAccountSettings({
   userEmail: string;
 }) {
   const { toast } = useToast();
+
   const [newEmail, setNewEmail] = useState(userEmail);
   const [newPassword, setNewPassword] = useState("");
 
-  const handleUpdateAccount = async () => {
+  async function handleUpdateAccount() {
     try {
-      // 変更があるかどうかチェック
       const updatePayload: { email?: string; password?: string } = {};
 
       if (newEmail && newEmail !== userEmail) {
@@ -81,6 +83,7 @@ function AuthenticatedAccountSettings({
       }
 
       const { data, error } = await supabase.auth.updateUser(updatePayload);
+
       if (error) {
         toast({
           title: "エラー",
@@ -97,7 +100,6 @@ function AuthenticatedAccountSettings({
 
       setNewPassword("");
     } catch (err: any) {
-      console.error("Error updating account info:", err);
       toast({
         title: "エラー",
         description:
@@ -106,7 +108,7 @@ function AuthenticatedAccountSettings({
         variant: "destructive",
       });
     }
-  };
+  }
 
   return (
     <div className="p-4 max-w-2xl mx-auto">
@@ -124,9 +126,6 @@ function AuthenticatedAccountSettings({
               onChange={(e) => setNewEmail(e.target.value)}
               placeholder="新しいメールアドレス"
             />
-            <p className="text-sm text-gray-500 mt-1">
-              メールアドレスのみ変更する場合はパスワードを空のままにしてください
-            </p>
           </div>
 
           <div>
@@ -138,9 +137,6 @@ function AuthenticatedAccountSettings({
               onChange={(e) => setNewPassword(e.target.value)}
               placeholder="新しいパスワード"
             />
-            <p className="text-sm text-gray-500 mt-1">
-              パスワードのみ変更する場合はメールアドレスをそのままにしてください
-            </p>
           </div>
 
           <Button onClick={handleUpdateAccount}>アカウント情報を更新</Button>
