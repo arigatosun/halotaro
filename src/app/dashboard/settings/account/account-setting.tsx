@@ -3,22 +3,19 @@
 import React, { useState, useEffect } from "react";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "@/contexts/authcontext";
-import { supabase } from "@/lib/supabaseClient"; // Supabaseクライアント
+import { supabase } from "@/lib/supabaseClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/components/ui/use-toast";
 
-/**
- * アカウント設定ページ全体を表示するコンポーネント
- */
-export function AccountSettingView() {
+export default function AccountSettingsPage() {
   const { user, loading: authLoading, refreshAuthState } = useAuth();
   const [retryCount, setRetryCount] = useState(0);
 
+  // ログインが確定しない場合に再取得をリトライ
   useEffect(() => {
-    // ログイン状況をリトライする例
     if (!authLoading && !user && retryCount < 3) {
       refreshAuthState();
       setRetryCount((prev) => prev + 1);
@@ -52,9 +49,6 @@ export function AccountSettingView() {
   );
 }
 
-/**
- * ログインユーザーが確定している状態で表示するアカウント設定フォーム
- */
 function AuthenticatedAccountSettings({
   userId,
   userEmail,
@@ -63,30 +57,21 @@ function AuthenticatedAccountSettings({
   userEmail: string;
 }) {
   const { toast } = useToast();
-
-  // 入力フォーム用の state
   const [newEmail, setNewEmail] = useState(userEmail);
   const [newPassword, setNewPassword] = useState("");
 
-  /**
-   * メール & パスワードをアップデートする関数
-   */
   const handleUpdateAccount = async () => {
     try {
       // 変更があるかどうかチェック
       const updatePayload: { email?: string; password?: string } = {};
 
-      // メールアドレスが変更されている場合のみセット
       if (newEmail && newEmail !== userEmail) {
         updatePayload.email = newEmail;
       }
-
-      // パスワードが入力されている場合のみセット
       if (newPassword.trim() !== "") {
         updatePayload.password = newPassword;
       }
 
-      // 変更なしの場合はスキップ
       if (Object.keys(updatePayload).length === 0) {
         toast({
           title: "変更なし",
@@ -95,11 +80,8 @@ function AuthenticatedAccountSettings({
         return;
       }
 
-      // Supabase Auth による更新
       const { data, error } = await supabase.auth.updateUser(updatePayload);
-
       if (error) {
-        // 失敗したときはトーストでエラーを表示
         toast({
           title: "エラー",
           description: error.message || "アカウント更新に失敗しました。",
@@ -108,19 +90,14 @@ function AuthenticatedAccountSettings({
         return;
       }
 
-      // 成功トースト
       toast({
         title: "アカウント情報を更新しました",
         description: "メールアドレスまたはパスワードが正しく変更されました。",
       });
 
-      // パスワード欄をクリア
       setNewPassword("");
-
-      // メールアドレスを変更した場合、メール確認を求められる可能性あり
     } catch (err: any) {
       console.error("Error updating account info:", err);
-      // 失敗トースト
       toast({
         title: "エラー",
         description:
