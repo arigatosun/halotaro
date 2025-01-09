@@ -13,7 +13,7 @@ import { useToast } from "@/components/ui/use-toast";
 /**
  * アカウント設定ページ全体を表示するコンポーネント
  */
-export function AccountSettingView() {
+export default function AccountSettingView() {
   const { user, loading: authLoading, refreshAuthState } = useAuth();
   const [retryCount, setRetryCount] = useState(0);
 
