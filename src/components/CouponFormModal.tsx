@@ -19,17 +19,23 @@ import {
 } from "@/components/ui/select";
 import { Coupon } from "@/types/coupon";
 
+/**
+ * フォームで扱う型を新規定義:
+ * - "id" / "created_at" / "updated_at" / "is_reservable" は不要
+ * - "coupon_id" はオプションにする
+ */
+export type CouponFormData = Omit<
+  Coupon,
+  "id" | "created_at" | "updated_at" | "is_reservable"
+> & {
+  coupon_id?: string;
+};
+
 interface CouponFormModalProps {
   isOpen: boolean;
   onClose: () => void;
   coupon: Coupon | null;
-  onSubmit: (
-    couponData: Omit<
-      Coupon,
-      "id" | "created_at" | "updated_at" | "is_reservable"
-    >,
-    imageFile: File | null
-  ) => void;
+  onSubmit: (couponData: CouponFormData, imageFile: File | null) => void;
   userId: string;
 }
 
@@ -40,6 +46,7 @@ const CouponFormModal: React.FC<CouponFormModalProps> = ({
   onSubmit,
   userId,
 }) => {
+  // フォーム状態管理
   const [name, setName] = useState(coupon?.name || "");
   const [category, setCategory] = useState(coupon?.category || "");
   const [description, setDescription] = useState(coupon?.description || "");
@@ -59,7 +66,7 @@ const CouponFormModal: React.FC<CouponFormModalProps> = ({
     duration: "例: 60",
   };
 
-  // クーポンが変わるたびにフォームの値を初期化
+  // couponが変わるたびに初期値をセット
   useEffect(() => {
     if (coupon) {
       setName(coupon.name);
@@ -82,11 +89,12 @@ const CouponFormModal: React.FC<CouponFormModalProps> = ({
   // フォーム送信
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const couponData: Omit<
-      Coupon,
-      "id" | "created_at" | "updated_at" | "is_reservable"
-    > = {
+
+    // フォーム送信用データ
+    const couponData: CouponFormData = {
       user_id: userId,
+      // 新規作成時: coupon_id は undefined のまま
+      // 編集時: 既存の coupon_id を渡すなら、(coupon && coupon.coupon_id) とかでもよい
       coupon_id: coupon?.coupon_id || "",
       name,
       category,
@@ -95,6 +103,7 @@ const CouponFormModal: React.FC<CouponFormModalProps> = ({
       duration: duration ? parseInt(duration) : null,
       image_url: coupon?.image_url || null, // 既存があれば残す
     };
+
     onSubmit(couponData, imageFile);
   };
 
@@ -109,7 +118,7 @@ const CouponFormModal: React.FC<CouponFormModalProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      {/* 画面からはみ出た場合にスクロールできるように */}
+      {/* はみ出し対応 */}
       <DialogContent className="max-h-[80vh] overflow-y-auto sm:max-w-[600px]">
         <DialogHeader>
           <DialogTitle>

@@ -19,10 +19,9 @@ import { Coupon } from "@/types/coupon";
 import { useAuth } from "@/contexts/authcontext";
 import { Chip } from "@/components/ui/chip";
 
-// ★ 追加: Supabaseクライアントをクライアントサイドで生成
+// ★ Supabaseクライアントをクライアントサイドで生成
 import { createClient } from "@supabase/supabase-js";
 
-// ★ こちらは「Anon Key」を使用。NEXT_PUBLIC_... で環境変数を設定しておく
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -61,14 +60,14 @@ const CouponManagement: React.FC = () => {
   // 予約可能スイッチをクリックしたときの押下中ID (連打防止, UI制御用などに使う)
   const [updatingCouponId, setUpdatingCouponId] = useState<string | null>(null);
 
-  // --------------------------------------------
+  // ----------------------------------------------------------------
   // クーポン一覧を Supabase から直接取得
-  // --------------------------------------------
+  // ----------------------------------------------------------------
   const fetchCoupons = async () => {
     if (!user) return;
     try {
       setIsLoading(true);
-      // 「coupons」テーブルから、user_id = ログインユーザー だけ取得
+
       const { data, error: supaError } = await supabase
         .from("coupons")
         .select("*")
@@ -159,7 +158,7 @@ const CouponManagement: React.FC = () => {
     setUpdatingCouponId(couponId);
 
     // 楽観的UIのため、先にローカルステートを更新
-    const oldCoupons = [...coupons]; // ロールバック用
+    const oldCoupons = [...coupons];
     setCoupons((prevCoupons) =>
       prevCoupons.map((coupon) =>
         coupon.id === couponId
@@ -209,9 +208,7 @@ const CouponManagement: React.FC = () => {
   };
 
   /**
-   * フォーム送信（追加 or 更新）: CouponFormModal から呼ばれる
-   *  - 画像ファイルがあれば Supabase Storage にアップロード → publicUrl を取得
-   *  - テーブルに insert or update
+   * フォーム送信（追加 or 更新）
    */
   const handleSubmit = async (
     couponData: Omit<
@@ -223,15 +220,12 @@ const CouponManagement: React.FC = () => {
     try {
       // 1. 画像アップロード (あれば)
       let uploadedImageUrl: string | null = editingCoupon?.image_url || null;
-
       if (imageFile) {
-        // ファイル名を一意に
         const fileExt = imageFile.name.split(".").pop();
         const fileName = `${crypto.randomUUID()}.${fileExt}`;
 
-        // Storage にアップロード
-        const { data: uploadData, error: uploadError } = await supabase.storage
-          .from("coupon-images") // バケット名: coupon-images
+        const { error: uploadError } = await supabase.storage
+          .from("coupon-images")
           .upload(fileName, imageFile);
 
         if (uploadError) {
@@ -239,29 +233,27 @@ const CouponManagement: React.FC = () => {
             uploadError.message || "クーポン画像のアップロードに失敗しました"
           );
         }
-
-        // アップロードしたファイルの公開URLを取得
+        // 公開URLを取得
         const { data: publicUrlData } = supabase.storage
           .from("coupon-images")
           .getPublicUrl(fileName);
-
         uploadedImageUrl = publicUrlData?.publicUrl || null;
       }
 
-      // 2. 新規作成 or 更新
+      // 2. 新規 or 更新
       if (editingCoupon) {
         // --- 更新 ---
         const { data: updateRes, error: updateError } = await supabase
           .from("coupons")
           .update({
             user_id: couponData.user_id,
+            coupon_id: editingCoupon.coupon_id, // 既存のcoupon_idを使用
             name: couponData.name,
             category: couponData.category,
             description: couponData.description,
             price: couponData.price,
             duration: couponData.duration,
             image_url: uploadedImageUrl,
-            // updated_at を更新するなら
             updated_at: new Date().toISOString(),
           })
           .eq("id", editingCoupon.id)
@@ -285,17 +277,20 @@ const CouponManagement: React.FC = () => {
         });
       } else {
         // --- 新規追加 ---
+        // coupon_id が NOT NULL のため、ここで必ず値を生成する
+        const newCouponId = crypto.randomUUID();
+
         const { data: insertRes, error: insertError } = await supabase
           .from("coupons")
           .insert({
             user_id: couponData.user_id,
+            coupon_id: newCouponId, // ← ここで必ずセット
             name: couponData.name,
             category: couponData.category,
             description: couponData.description,
             price: couponData.price,
             duration: couponData.duration,
             image_url: uploadedImageUrl,
-            // 初期値
             is_reservable: true,
             created_at: new Date().toISOString(),
           })
