@@ -1,4 +1,4 @@
-'use client'
+"use client";
 
 import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
@@ -19,15 +19,30 @@ import { Coupon } from "@/types/coupon";
 import { useAuth } from "@/contexts/authcontext";
 import { Chip } from "@/components/ui/chip";
 
-const getCategoryDisplay = (category: string | null): { text: string; variant: "default" | "success" | "warning" } => {
-  if (category === null) return { text: '未分類', variant: "default" };
+// ★ 追加: Supabaseクライアントをクライアントサイドで生成
+import { createClient } from "@supabase/supabase-js";
+
+// ★ こちらは「Anon Key」を使用。NEXT_PUBLIC_... で環境変数を設定しておく
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
+
+/**
+ * カテゴリの表示設定サンプル
+ * 例: 'new' => "新規" (緑), 'repeat' => "再来" (オレンジ), 'all' => "全員" (グレー), null => "未分類"
+ */
+const getCategoryDisplay = (
+  category: string | null
+): { text: string; variant: "default" | "success" | "warning" } => {
+  if (category === null) return { text: "未分類", variant: "default" };
   switch (category) {
-    case 'new':
-      return { text: '新規', variant: "success" };
-    case 'repeat':
-      return { text: '再来', variant: "warning" };
-    case 'all':
-      return { text: '全員', variant: "default" };
+    case "new":
+      return { text: "新規", variant: "success" };
+    case "repeat":
+      return { text: "再来", variant: "warning" };
+    case "all":
+      return { text: "全員", variant: "default" };
     default:
       return { text: category, variant: "default" };
   }
@@ -38,102 +53,129 @@ const CouponManagement: React.FC = () => {
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // フォームモーダルの開閉管理
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCoupon, setEditingCoupon] = useState<Coupon | null>(null);
+
+  // 予約可能スイッチをクリックしたときの押下中ID (連打防止, UI制御用などに使う)
   const [updatingCouponId, setUpdatingCouponId] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchCoupons();
-  }, []);
-
+  // --------------------------------------------
+  // クーポン一覧を Supabase から直接取得
+  // --------------------------------------------
   const fetchCoupons = async () => {
     if (!user) return;
     try {
       setIsLoading(true);
-      const response = await fetch("/api/get-coupons", {
-        method: "GET",
-        headers: {
-          "user-id": user.id,
-        },
-      });
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Failed to fetch coupons");
+      // 「coupons」テーブルから、user_id = ログインユーザー だけ取得
+      const { data, error: supaError } = await supabase
+        .from("coupons")
+        .select("*")
+        .eq("user_id", user.id);
+
+      if (supaError) {
+        throw new Error(supaError.message || "Failed to fetch coupons");
       }
-      const data = await response.json();
-      setCoupons(data);
-    } catch (error) {
-      console.error("Error fetching coupons:", error);
+
+      setCoupons(data || []);
+    } catch (err) {
+      console.error("Error fetching coupons:", err);
       setError(
-        error instanceof Error ? error.message : "Failed to fetch coupons"
+        err instanceof Error ? err.message : "クーポンの取得に失敗しました"
       );
     } finally {
       setIsLoading(false);
     }
   };
 
+  // 初回＆ユーザー認証完了後にクーポン一覧を読み込み
+  useEffect(() => {
+    if (user) {
+      fetchCoupons();
+    }
+  }, [user]);
+
+  /**
+   * 新規追加ボタン
+   */
+  const handleAddNew = () => {
+    setEditingCoupon(null);
+    setIsModalOpen(true);
+  };
+
+  /**
+   * 編集ボタン
+   */
   const handleEdit = (coupon: Coupon) => {
     setEditingCoupon(coupon);
     setIsModalOpen(true);
   };
 
+  /**
+   * 削除 (Supabase の coupons テーブルを直接操作)
+   */
   const handleDelete = async (couponId: string) => {
-    if (window.confirm("このクーポンを削除してもよろしいですか？")) {
-      try {
-        const response = await fetch("/api/delete-coupon", {
-          method: "DELETE",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ couponId }),
-        });
-  
-        const data = await response.json();
-  
-        if (!response.ok) {
-          throw new Error(data.message || "クーポンの削除中にエラーが発生しました。");
-        }
-  
-        // 成功した場合、ローカルの状態を更新
-        setCoupons(coupons.filter((coupon) => coupon.id !== couponId));
-  
-        toast({
-          title: "削除成功",
-          description: data.message || `クーポンID: ${couponId} が削除されました`,
-        });
-      } catch (error) {
-        console.error("Error deleting coupon:", error);
-        toast({
-          title: "削除エラー",
-          description: error instanceof Error ? error.message : "クーポンの削除中にエラーが発生しました。",
-          variant: "destructive",
-        });
+    if (!window.confirm("このクーポンを削除してもよろしいですか？")) return;
+    try {
+      const { error: deleteError } = await supabase
+        .from("coupons")
+        .delete()
+        .eq("id", couponId);
+
+      if (deleteError) {
+        throw new Error(
+          deleteError.message || "クーポンの削除中にエラーが発生しました"
+        );
       }
+
+      // 成功した場合、ローカルの状態を更新
+      setCoupons((prev) => prev.filter((coupon) => coupon.id !== couponId));
+
+      toast({
+        title: "削除成功",
+        description: `クーポンID: ${couponId} が削除されました`,
+      });
+    } catch (error) {
+      console.error("Error deleting coupon:", error);
+      toast({
+        title: "削除エラー",
+        description:
+          error instanceof Error
+            ? error.message
+            : "クーポンの削除中にエラーが発生しました。",
+        variant: "destructive",
+      });
     }
   };
-  
+
+  /**
+   * 予約可能トグル (Supabase 直接更新)
+   */
   const handleToggleReservable = async (
     couponId: string,
     isReservable: boolean
   ) => {
     setUpdatingCouponId(couponId);
+
+    // 楽観的UIのため、先にローカルステートを更新
+    const oldCoupons = [...coupons]; // ロールバック用
     setCoupons((prevCoupons) =>
       prevCoupons.map((coupon) =>
-        coupon.id === couponId ? { ...coupon, is_reservable: isReservable } : coupon
+        coupon.id === couponId
+          ? { ...coupon, is_reservable: isReservable }
+          : coupon
       )
     );
 
     try {
-      const response = await fetch("/api/update-coupon-reservable", {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ couponId, isReservable }),
-      });
+      const { error: updateError } = await supabase
+        .from("coupons")
+        .update({ is_reservable: isReservable })
+        .eq("id", couponId);
 
-      if (!response.ok) {
-        throw new Error("Failed to update coupon reservable status");
+      if (updateError) {
+        throw new Error(updateError.message || "Failed to update coupon");
       }
 
       toast({
@@ -144,12 +186,9 @@ const CouponManagement: React.FC = () => {
       });
     } catch (error) {
       console.error("Error updating coupon reservable status:", error);
-      
-      setCoupons((prevCoupons) =>
-        prevCoupons.map((coupon) =>
-          coupon.id === couponId ? { ...coupon, is_reservable: !isReservable } : coupon
-        )
-      );
+
+      // エラー時はロールバック
+      setCoupons(oldCoupons);
 
       toast({
         title: "エラー",
@@ -161,71 +200,141 @@ const CouponManagement: React.FC = () => {
     }
   };
 
-  const handleAddNew = () => {
-    setEditingCoupon(null);
-    setIsModalOpen(true);
-  };
-
+  /**
+   * モーダルを閉じる
+   */
   const handleModalClose = () => {
     setIsModalOpen(false);
     setEditingCoupon(null);
   };
 
+  /**
+   * フォーム送信（追加 or 更新）: CouponFormModal から呼ばれる
+   *  - 画像ファイルがあれば Supabase Storage にアップロード → publicUrl を取得
+   *  - テーブルに insert or update
+   */
   const handleSubmit = async (
-    couponData: Omit<Coupon, "id" | "created_at" | "updated_at" | "is_reservable">,
+    couponData: Omit<
+      Coupon,
+      "id" | "created_at" | "updated_at" | "is_reservable"
+    >,
     imageFile: File | null
   ) => {
     try {
-      const formData = new FormData();
-      Object.entries(couponData).forEach(([key, value]) => {
-        if (value !== null) {
-          formData.append(key, value.toString());
-        }
-      });
+      // 1. 画像アップロード (あれば)
+      let uploadedImageUrl: string | null = editingCoupon?.image_url || null;
+
       if (imageFile) {
-        formData.append("image", imageFile);
+        // ファイル名を一意に
+        const fileExt = imageFile.name.split(".").pop();
+        const fileName = `${crypto.randomUUID()}.${fileExt}`;
+
+        // Storage にアップロード
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from("coupon-images") // バケット名: coupon-images
+          .upload(fileName, imageFile);
+
+        if (uploadError) {
+          throw new Error(
+            uploadError.message || "クーポン画像のアップロードに失敗しました"
+          );
+        }
+
+        // アップロードしたファイルの公開URLを取得
+        const { data: publicUrlData } = supabase.storage
+          .from("coupon-images")
+          .getPublicUrl(fileName);
+
+        uploadedImageUrl = publicUrlData?.publicUrl || null;
       }
-  
-      const url = editingCoupon
-        ? `/api/update-coupon-reservable`
-        : "/api/post-coupons";
-      const method = editingCoupon ? "PATCH" : "POST";
-  
+
+      // 2. 新規作成 or 更新
       if (editingCoupon) {
-        formData.append("id", editingCoupon.id);
-      }
-  
-      const response = await fetch(url, {
-        method,
-        body: formData,
-      });
-  
-      if (!response.ok) {
-        throw new Error(editingCoupon ? "クーポンの更新に失敗しました" : "クーポンの追加に失敗しました");
-      }
-  
-      const updatedCoupon = await response.json();
-  
-      toast({
-        title: editingCoupon ? "更新成功" : "追加成功",
-        description: `クーポンが${editingCoupon ? "更新" : "追加"}されました`,
-      });
-      setIsModalOpen(false);
-      
-      if (editingCoupon) {
-        setCoupons(coupons.map(c => c.id === updatedCoupon.id ? updatedCoupon : c));
+        // --- 更新 ---
+        const { data: updateRes, error: updateError } = await supabase
+          .from("coupons")
+          .update({
+            user_id: couponData.user_id,
+            name: couponData.name,
+            category: couponData.category,
+            description: couponData.description,
+            price: couponData.price,
+            duration: couponData.duration,
+            image_url: uploadedImageUrl,
+            // updated_at を更新するなら
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", editingCoupon.id)
+          .select("*")
+          .single();
+
+        if (updateError || !updateRes) {
+          throw new Error(
+            updateError?.message || "クーポンの更新に失敗しました"
+          );
+        }
+
+        // ローカルステート置き換え
+        setCoupons((prev) =>
+          prev.map((c) => (c.id === editingCoupon.id ? updateRes : c))
+        );
+
+        toast({
+          title: "更新成功",
+          description: `クーポン「${updateRes.name}」が更新されました`,
+        });
       } else {
-        setCoupons([...coupons, updatedCoupon]);
+        // --- 新規追加 ---
+        const { data: insertRes, error: insertError } = await supabase
+          .from("coupons")
+          .insert({
+            user_id: couponData.user_id,
+            name: couponData.name,
+            category: couponData.category,
+            description: couponData.description,
+            price: couponData.price,
+            duration: couponData.duration,
+            image_url: uploadedImageUrl,
+            // 初期値
+            is_reservable: true,
+            created_at: new Date().toISOString(),
+          })
+          .select("*")
+          .single();
+
+        if (insertError || !insertRes) {
+          throw new Error(
+            insertError?.message || "クーポンの追加に失敗しました"
+          );
+        }
+
+        // 先頭に追加
+        setCoupons((prev) => [insertRes, ...prev]);
+
+        toast({
+          title: "追加成功",
+          description: `クーポン「${insertRes.name}」が追加されました`,
+        });
       }
     } catch (err) {
+      console.error(err);
       toast({
         title: editingCoupon ? "更新エラー" : "追加エラー",
-        description: err instanceof Error ? err.message : "エラーが発生しました",
+        description:
+          err instanceof Error
+            ? err.message
+            : "クーポンの操作中にエラーが発生しました",
         variant: "destructive",
       });
+    } finally {
+      setIsModalOpen(false);
+      setEditingCoupon(null);
     }
   };
 
+  // --------------------------------------------
+  // レンダリング
+  // --------------------------------------------
   if (isLoading) {
     return (
       <div className="flex justify-center items-center h-screen">
@@ -247,6 +356,7 @@ const CouponManagement: React.FC = () => {
           クーポン新規追加
         </Button>
       </div>
+
       <Table>
         <TableHeader>
           <TableRow>
@@ -324,13 +434,16 @@ const CouponManagement: React.FC = () => {
           ))}
         </TableBody>
       </Table>
+
+      {/* クーポン作成/編集モーダル */}
       <CouponFormModal
         isOpen={isModalOpen}
         onClose={handleModalClose}
         coupon={editingCoupon}
         onSubmit={handleSubmit}
-        userId={user?.id || ''}
+        userId={user?.id || ""}
       />
+
       <Toaster />
     </div>
   );

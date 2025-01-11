@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import Image from 'next/image';
+import Image from "next/image";
 import {
   Dialog,
   DialogContent,
@@ -24,7 +24,10 @@ interface CouponFormModalProps {
   onClose: () => void;
   coupon: Coupon | null;
   onSubmit: (
-    coupon: Omit<Coupon, "id" | "created_at" | "updated_at" | "is_reservable">,
+    couponData: Omit<
+      Coupon,
+      "id" | "created_at" | "updated_at" | "is_reservable"
+    >,
     imageFile: File | null
   ) => void;
   userId: string;
@@ -43,16 +46,20 @@ const CouponFormModal: React.FC<CouponFormModalProps> = ({
   const [price, setPrice] = useState(coupon?.price?.toString() || "");
   const [duration, setDuration] = useState(coupon?.duration?.toString() || "");
   const [imageFile, setImageFile] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(coupon?.image_url || null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(
+    coupon?.image_url || null
+  );
 
-  // プレースホルダー用のテキスト
+  // プレースホルダー用のテキスト例
   const placeholders = {
     name: "例: 驚きの実感☆育毛促進プレミアムヘッドスパ",
-    description: "例: 今話題の「プロセルセラピーズ」と「育毛促進ヘッドスパ」の欲張りWメニュー☆他店ではマネできない圧倒的な専門技術♪数に限りがあるため定員になり次第受付終了☆",
+    description:
+      "例: 今話題の「プロセルセラピーズ」と「育毛促進ヘッドスパ」のWメニュー♪",
     price: "例: 5000",
     duration: "例: 60",
   };
 
+  // クーポンが変わるたびにフォームの値を初期化
   useEffect(() => {
     if (coupon) {
       setName(coupon.name);
@@ -72,9 +79,13 @@ const CouponFormModal: React.FC<CouponFormModalProps> = ({
     setImageFile(null);
   }, [coupon]);
 
+  // フォーム送信
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const couponData: Omit<Coupon, "id" | "created_at" | "updated_at" | "is_reservable"> = {
+    const couponData: Omit<
+      Coupon,
+      "id" | "created_at" | "updated_at" | "is_reservable"
+    > = {
       user_id: userId,
       coupon_id: coupon?.coupon_id || "",
       name,
@@ -82,11 +93,12 @@ const CouponFormModal: React.FC<CouponFormModalProps> = ({
       description,
       price: price ? parseInt(price) : null,
       duration: duration ? parseInt(duration) : null,
-      image_url: coupon?.image_url || null,
+      image_url: coupon?.image_url || null, // 既存があれば残す
     };
     onSubmit(couponData, imageFile);
   };
 
+  // 画像選択
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
@@ -97,11 +109,16 @@ const CouponFormModal: React.FC<CouponFormModalProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[600px]">
+      {/* 画面からはみ出た場合にスクロールできるように */}
+      <DialogContent className="max-h-[80vh] overflow-y-auto sm:max-w-[600px]">
         <DialogHeader>
-          <DialogTitle>{coupon ? "クーポン編集" : "クーポン新規追加"}</DialogTitle>
+          <DialogTitle>
+            {coupon ? "クーポン編集" : "クーポン新規追加"}
+          </DialogTitle>
         </DialogHeader>
+
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* カテゴリ */}
           <div>
             <Label htmlFor="category">カテゴリ</Label>
             <Select value={category} onValueChange={setCategory}>
@@ -114,8 +131,12 @@ const CouponFormModal: React.FC<CouponFormModalProps> = ({
                 <SelectItem value="repeat">再来</SelectItem>
               </SelectContent>
             </Select>
-            <p className="text-sm text-gray-500 mt-1">対象となる顧客カテゴリを選択してください</p>
+            <p className="text-sm text-gray-500 mt-1">
+              対象となる顧客カテゴリを選択してください
+            </p>
           </div>
+
+          {/* クーポン名 */}
           <div>
             <Label htmlFor="name">クーポン名</Label>
             <Input
@@ -126,6 +147,8 @@ const CouponFormModal: React.FC<CouponFormModalProps> = ({
               required
             />
           </div>
+
+          {/* 説明 */}
           <div>
             <Label htmlFor="description">説明</Label>
             <Textarea
@@ -135,6 +158,8 @@ const CouponFormModal: React.FC<CouponFormModalProps> = ({
               placeholder={placeholders.description}
             />
           </div>
+
+          {/* 価格 */}
           <div>
             <Label htmlFor="price">価格（円）</Label>
             <Input
@@ -146,6 +171,8 @@ const CouponFormModal: React.FC<CouponFormModalProps> = ({
               required
             />
           </div>
+
+          {/* 所要時間 */}
           <div>
             <Label htmlFor="duration">所要時間（分）</Label>
             <Input
@@ -157,6 +184,8 @@ const CouponFormModal: React.FC<CouponFormModalProps> = ({
               required
             />
           </div>
+
+          {/* 画像アップロード */}
           <div>
             <Label htmlFor="image">クーポン画像</Label>
             <Input
@@ -175,14 +204,16 @@ const CouponFormModal: React.FC<CouponFormModalProps> = ({
                   alt="クーポン画像プレビュー"
                   width={100}
                   height={100}
-                  objectFit="cover"
-                  className="rounded-md"
+                  className="rounded-md object-cover"
                 />
               </div>
             ) : (
-              <p className="text-sm text-gray-500 mt-1">クーポンを視覚的に魅力的にする画像をアップロードしてください</p>
+              <p className="text-sm text-gray-500 mt-1">
+                クーポンを魅力的に見せる画像をアップロードしてください
+              </p>
             )}
           </div>
+
           <div className="flex justify-end space-x-2">
             <Button type="button" variant="outline" onClick={onClose}>
               キャンセル
