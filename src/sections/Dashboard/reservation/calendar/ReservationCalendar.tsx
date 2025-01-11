@@ -736,28 +736,6 @@ const ReservationCalendar: React.FC = () => {
         </Box>
       )}
 
-      {/* モバイル時のスタッフ選択ドロップダウン */}
-      {isMobile && (
-        <Box sx={{ mb: 2 }}>
-          <FormControl fullWidth>
-            <InputLabel id="staff-select-label">スタッフ選択</InputLabel>
-            <Select
-              labelId="staff-select-label"
-              value={selectedStaffId}
-              onChange={handleStaffChange}
-              label="スタッフ選択"
-            >
-              <MenuItem value="all">全スタッフ</MenuItem>
-              {sortedStaffList.map((staff) => (
-                <MenuItem key={staff.id} value={staff.id}>
-                  {staff.name}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        </Box>
-      )}
-
       {/* 日付ナビゲーション + ボタン */}
       <NavigationControls
         currentDate={currentDate}
