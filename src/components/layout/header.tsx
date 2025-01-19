@@ -1,8 +1,8 @@
 "use client";
+
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { usePathname } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   Calendar,
@@ -16,25 +16,60 @@ import {
   List,
 } from "lucide-react";
 import Image from "next/image";
+
 import { supabase } from "@/lib/supabaseClient";
 
 const Header = () => {
-  const pathname = usePathname();
   const router = useRouter();
+  const pathname = usePathname();
+
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
 
+  // ★ サロン名を取得するためのState
+  const [salonName, setSalonName] = useState("");
+
+  // ユーザーIDの取得例: 実際は useAuth() や session.user.id を使う想定
+  const userId = "422f1a9d-83be-468e-ad6a-bf9b524128f8";
+
+  // ---------------------------
+  // サロン情報を取得
+  // ---------------------------
+  useEffect(() => {
+    if (!userId) return;
+    (async () => {
+      const { data, error } = await supabase
+        .from("salons")
+        .select("*")
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      if (error) {
+        console.error("Error fetching salon data:", error);
+      } else {
+        console.log("Fetched salon data:", data); // デバッグ用ログ
+        if (data?.salon_name) {
+          setSalonName(data.salon_name);
+        }
+      }
+    })();
+  }, [userId]);
+
+  // ---------------------------
+  // 画面幅を監視
+  // ---------------------------
   useEffect(() => {
     const handleResize = () => {
       setIsMobile(window.innerWidth < 768);
     };
-
     handleResize();
     window.addEventListener("resize", handleResize);
-
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
+  // ---------------------------
+  // アクティブ状態判定
+  // ---------------------------
   const isActive = (path: string) => {
     if (path === "/dashboard") {
       return pathname === "/dashboard";
@@ -42,6 +77,9 @@ const Header = () => {
     return pathname.startsWith(path) && pathname !== "/dashboard";
   };
 
+  // ---------------------------
+  // ログアウト
+  // ---------------------------
   const handleLogout = async () => {
     try {
       const { error } = await supabase.auth.signOut();
@@ -56,10 +94,16 @@ const Header = () => {
     }
   };
 
+  // ---------------------------
+  // メニュー開閉
+  // ---------------------------
   const toggleMenu = () => {
     setIsMenuOpen(!isMenuOpen);
   };
 
+  // ---------------------------
+  // メニュー項目
+  // ---------------------------
   const mobileNavItems = [
     {
       href: "/dashboard",
@@ -113,9 +157,22 @@ const Header = () => {
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50">
-      <div className="bg-white">
+      {/* 
+        ★ ここを白背景 & container で幅をそろえる 
+        salonName を右端に表示
+      */}
+      <div className="bg-white w-full">
+        <div className="container mx-auto flex justify-end items-center p-2">
+          {salonName && (
+            <span className="mr-4 text-sm font-semibold text-gray-700">
+              {salonName}
+            </span>
+          )}
+        </div>
+        {/* ---- メインナビ ---- */}
         <nav className="w-full p-4 shadow-lg header-main">
           <div className="container mx-auto flex items-center justify-between">
+            {/* ロゴ */}
             <Image
               src="/images/logo-tag.png"
               alt="ハロタロ"
@@ -248,6 +305,9 @@ const NavItem: React.FC<NavItemProps> = ({
   }
 };
 
+// ------------------------------------
+// SubHeader コンポーネント
+// ------------------------------------
 const SubHeader: React.FC<{ pathname: string }> = ({ pathname }) => {
   const subPages = {
     "/dashboard/reservations": [
