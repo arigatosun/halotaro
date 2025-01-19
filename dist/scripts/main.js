@@ -152,25 +152,40 @@ async function loginWithManualCaptcha(page, userId, password) {
 }
 
 // サロンボードの予約情報を同期する
+// サロンボードの予約情報を同期する
 async function syncReservations(
   haloTaroUserId,
   salonboardUserId,
   password,
-  context
+  context,
+  salonType // 追加: サロンタイプを受け取る
 ) {
   logger_1.logger.log("予約情報同期の開始 user_id:", haloTaroUserId);
   logger_1.logger.log(new Date().toISOString());
   const page = await context.newPage();
   try {
+    // サロンタイプに応じて予約リストのURLを設定
+    const reservationListUrls = {
+      hair: "https://salonboard.com/CLP/bt/reserve/reserveList/init",
+      kirei: "https://salonboard.com/KLP/reserve/reserveList/init",
+    };
+    const reservationListUrl = reservationListUrls[salonType];
+    if (!reservationListUrl) {
+      throw new Error("予約リストのURLが見つかりません。");
+    }
+
     await loginAndNavigate(
       page,
       context,
       haloTaroUserId,
       salonboardUserId,
       password,
-      "https://salonboard.com/KLP/reserve/reserveList/init"
+      reservationListUrl
     );
+
+    // 以降の処理は同じ
     await page.waitForSelector("#reserveList", { timeout: 10000 });
+
     const { data: lastSyncLog } = await supabase
       .from("salonboard_sync_logs")
       .select("last_sync_time, last_reservation_id")
@@ -198,7 +213,8 @@ async function syncReservations(
       startDate,
       endDate,
       lastSyncTime,
-      lastReservationId
+      lastReservationId,
+      salonType
     );
     console.log("予約を取得しました");
     console.log("予約:", reservations);
@@ -212,7 +228,8 @@ async function syncReservations(
       startDate,
       endDate,
       dataHash,
-      newLastReservationId
+      newLastReservationId,
+      salonType
     );
     console.log("予約情報の保存が完了しました");
     return `Successfully processed ${reservations.length} reservations`;
@@ -225,19 +242,19 @@ async function syncReservations(
 }
 
 // サロンボードのメニュー情報を同期する
-async function syncMenus(haloTaroUserId, salonboardUserId, password, context) {
+async function syncMenus(
+  haloTaroUserId,
+  salonboardUserId,
+  password,
+  context,
+  page
+) {
   logger_1.logger.log("メニューの同期: user_id", haloTaroUserId);
   logger_1.logger.log(new Date().toISOString());
-  const page = await context.newPage();
   try {
-    await loginAndNavigate(
-      page,
-      context,
-      haloTaroUserId,
-      salonboardUserId,
-      password,
-      "https://salonboard.com/CNK/draft/menuEdit/"
-    );
+    await page.waitForTimeout(10000);
+    await page.goto("https://salonboard.com/CNB/draft/menuEdit/");
+
     await page.waitForSelector("#menuEditForm", { timeout: 5000 });
     console.log("メニューを取得中...");
     const { menus, dataHash } = await (0, scrapeMenus_1.scrapeMenus)(page);
@@ -599,17 +616,26 @@ async function syncAllData(haloTaroUserId) {
     }
 
     // サロンタイプ別のトップページに遷移
-    await page.goto(topPageUrl, { waitUntil: "networkidle" });
+    await page.goto(topPageUrl, { waitUntil: "load" });
 
     // 以下、サロンタイプに応じた同期処理
     if (currentSalonType === "hair") {
-      // ヘアサロンの場合
-      await syncStaffData(
+      // メニュー情報の同期
+      // await syncMenus(
+      //   haloTaroUserId,
+      //   salonboardUserId,
+      //   password,
+      //   context,
+      //   page
+      // );
+
+      // 予約情報の同期
+      await syncReservations(
         haloTaroUserId,
         salonboardUserId,
         password,
         context,
-        currentSalonType
+        currentSalonType // 追加：salonTypeを渡す
       );
     } else if (currentSalonType === "kirei") {
       // キレイサロンの場合
@@ -617,17 +643,19 @@ async function syncAllData(haloTaroUserId) {
         haloTaroUserId,
         salonboardUserId,
         password,
-        context
-      );
-      await syncMenus(haloTaroUserId, salonboardUserId, password, context);
-      await syncStaffData(
-        haloTaroUserId,
-        salonboardUserId,
-        password,
         context,
-        currentSalonType
+        currentSalonType // 追加：salonTypeを渡す
       );
-      await syncCoupons(haloTaroUserId, salonboardUserId, password, context);
+
+      // await syncMenus(haloTaroUserId, salonboardUserId, password, context);
+      // await syncStaffData(
+      //   haloTaroUserId,
+      //   salonboardUserId,
+      //   password,
+      //   context,
+      //   currentSalonType
+      // );
+      // await syncCoupons(haloTaroUserId, salonboardUserId, password, context);
     } else {
       throw new Error("未知のサロンタイプです。");
     }

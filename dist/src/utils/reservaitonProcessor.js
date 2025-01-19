@@ -1,12 +1,14 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.processReservation = processReservation;
-const supabase_js_1 = require("@supabase/supabase-js");
-const date_fns_1 = require("date-fns");
+const { createClient } = require("@supabase/supabase-js");
+const { addMinutes, format } = require("date-fns");
 const { zonedTimeToUtc } = require("date-fns-tz");
+
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-const supabase = (0, supabase_js_1.createClient)(supabaseUrl, supabaseKey);
+const supabase = createClient(supabaseUrl, supabaseKey);
+
 function parseDateTime(dateString) {
   // dateString は "MM/DDHH:mm" 形式（例: "10/2014:00"）
   const dateTimeRegex = /^(\d{1,2})\/(\d{1,2})(\d{1,2}):(\d{2})$/;
@@ -32,20 +34,32 @@ function parseDateTime(dateString) {
   return date;
 }
 
-async function processReservation(raw, userId) {
-  // カスタムの parseDateTime 関数を使用して日時をパース
-  const startTime = parseDateTime(raw.date);
+async function processReservation(raw, userId, salonType) {
+  // dateとtimeを結合してパース
+  const dateStr = raw.date.replace(/\s/g, "");
+  const timeStr = raw.time.replace(/\s/g, "");
+  const dateTimeStr = dateStr + timeStr;
+  const startTime = parseDateTime(dateTimeStr);
 
   // 所要時間が分かっている場合は、startTime から endTime を計算
   const durationMinutes = raw.duration || 90; // デフォルトで90分
-  const endTime = (0, date_fns_1.addMinutes)(startTime, durationMinutes);
+  const endTime = addMinutes(startTime, durationMinutes);
 
-  // 以下の処理は変更せず
+  // メニューIDを取得
   const menuId = await getMenuId(raw.menu, userId);
   const finalMenuId = menuId === null ? 0 : menuId;
+
+  // スタッフIDを取得
   const staffId = await getStaffId(raw.staff, userId);
+
+  // 金額を抽出
   const total_price = extractPrice(raw.amount);
+
+  // ステータスをクリーンアップ
   const cleanStatus = raw.status.replace(/\(未読\)$/, "").trim();
+
+  // サロンタイプに基づいてフラグを設定
+  const isHairSync = salonType === "hair";
 
   return {
     user_id: userId,
@@ -53,12 +67,13 @@ async function processReservation(raw, userId) {
     staff_id: staffId,
     status: mapStatus(cleanStatus),
     total_price: total_price,
-    start_time: (0, date_fns_1.format)(startTime, "yyyy-MM-dd'T'HH:mm:ssXXX"),
-    end_time: (0, date_fns_1.format)(endTime, "yyyy-MM-dd'T'HH:mm:ssXXX"),
-    created_at: (0, date_fns_1.format)(new Date(), "yyyy-MM-dd'T'HH:mm:ssXXX"),
-    updated_at: (0, date_fns_1.format)(new Date(), "yyyy-MM-dd'T'HH:mm:ssXXX"),
+    start_time: format(startTime, "yyyy-MM-dd'T'HH:mm:ssXXX"),
+    end_time: format(endTime, "yyyy-MM-dd'T'HH:mm:ssXXX"),
+    created_at: format(new Date(), "yyyy-MM-dd'T'HH:mm:ssXXX"),
+    updated_at: format(new Date(), "yyyy-MM-dd'T'HH:mm:ssXXX"),
     scraped_customer: raw.customerName,
     scraped_menu: raw.menu,
+    is_hair_sync: isHairSync, // 追加：is_hair_syncフラグを追加
   };
 }
 
@@ -83,32 +98,55 @@ function extractPrice(amountString) {
   }
   return 0;
 }
-async function getMenuId(menuName) {
+
+async function getMenuId(menuName, userId) {
   const { data, error } = await supabase
     .from("menu_items")
     .select("id")
+    .eq("user_id", userId) // ユーザーIDでフィルタリング
     .ilike("name", `%${menuName}%`)
     .limit(1);
+
   if (error) {
     console.error("Error fetching menu ID:", error);
     return 0; // エラー時のデフォルト値
   }
+
   return data && data.length > 0 ? data[0].id : 0;
 }
+
 async function getStaffId(staffName, userId) {
+  // "(指)" を削除
   const cleanedStaffName = staffName.replace(/（指）|\(指\)/g, "").trim();
+
+  // 不可視文字（ゼロ幅スペースなど）を削除
+  const cleanedStaffNameWithoutInvisibleChars = cleanedStaffName.replace(
+    /[\u200B-\u200D\uFEFF]/g,
+    ""
+  );
+
+  // 文字列を正規化（NFC 形式）
+  const normalizedStaffName =
+    cleanedStaffNameWithoutInvisibleChars.normalize("NFC");
+
+  // デバッグ用ログ
+  console.log(`Normalized staff name: "${normalizedStaffName}"`);
+
   const { data, error } = await supabase
     .from("staff")
     .select("id")
-    .eq("user_id", userId)
-    .ilike("name", `%${cleanedStaffName}%`)
+    .eq("user_id", userId) // ユーザーIDでフィルタリング
+    .ilike("name", `%${normalizedStaffName}%`)
     .single();
+
   if (error) {
     console.error("Error fetching staff ID:", error);
     return null;
   }
+
   return data?.id || null;
 }
+
 function mapStatus(status) {
   // ステータスのマッピングを実装
   const statusMap = {

@@ -29,7 +29,7 @@ export async function processReservation(
   // メニューが見つからない場合は0を設定
   const finalMenuId = menuId === null ? 0 : menuId;
 
-  const staffId = await getStaffId(raw.staff);
+  const staffId = await getStaffId(raw.staff, userId);
 
   // 金額の処理を修正
   const total_price = extractPrice(raw.amount);
@@ -92,13 +92,18 @@ async function getMenuId(menuName: string): Promise<number> {
   return data && data.length > 0 ? data[0].id : 0;
 }
 
-async function getStaffId(staffName: string): Promise<string | null> {
+// getStaffId 関数
+async function getStaffId(
+  staffName: string,
+  userId: string
+): Promise<string | null> {
   // "(指)" を削除
   const cleanedStaffName = staffName.replace(/（指）|\(指\)/g, "").trim();
 
   const { data, error } = await supabase
     .from("staff")
     .select("id")
+    .eq("user_id", userId) // ユーザーIDでフィルタリング
     .ilike("name", `%${cleanedStaffName}%`)
     .single();
 
