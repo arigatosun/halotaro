@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
     } = await request.json();
 
     const FASTAPI_ENDPOINT =
-      "https://f356-34-97-99-223.ngrok-free.app/run-automation";
+      "https://4e37-34-97-99-223.ngrok-free.app/run-automation";
 
     //const apiUrl = process.env.FASTAPI_URL || "https://1ee6-34-97-99-223.ngrok-free.app";
 

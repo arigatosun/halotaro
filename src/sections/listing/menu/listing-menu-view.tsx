@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, FormEvent } from "react";
 import { useAuth } from "@/contexts/authcontext";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -33,7 +33,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { toast } from "@/components/ui/use-toast";
 import { PlusCircle, Pencil, Trash2, Loader2, ImageOff } from "lucide-react";
 
-import { MenuItem } from "@/types/menuItem"; // id, name, description, price, duration, is_reservable, etc.
+import { MenuItem } from "@/types/menuItem"; // id, name, description, price, duration, ...
 import { useStaffManagement } from "@/hooks/useStaffManagement"; // スタッフ一覧を取得するカスタムフック想定
 
 import { createClient } from "@supabase/supabase-js";
@@ -45,12 +45,18 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
+interface Category {
+  id: number;
+  name: string;
+  user_id?: string;
+}
+
 const MenuSettingsPage: React.FC = () => {
   const { user, session, loading: authLoading, refreshAuthState } = useAuth();
   const [retryCount, setRetryCount] = useState(0);
 
+  // ログイン再試行
   useEffect(() => {
-    // ログイン状態をリトライして取得
     if (!authLoading && !user && retryCount < 3) {
       refreshAuthState();
       setRetryCount((prev) => prev + 1);
@@ -79,9 +85,7 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
   const [error, setError] = useState<Error | null>(null);
 
   // カテゴリ一覧
-  const [categories, setCategories] = useState<{ id: number; name: string }[]>(
-    []
-  );
+  const [categories, setCategories] = useState<Category[]>([]);
   // カテゴリ追加用
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
@@ -100,13 +104,15 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
   const [unavailableStaffIds, setUnavailableStaffIds] = useState<string[]>([]);
 
   // ------------------------------------
-  // カテゴリ一覧を取得 (Supabase直接)
+  // カテゴリ一覧を取得
+  // user_id で絞り込む！
   // ------------------------------------
   const fetchCategories = async () => {
     try {
       const { data, error: catError } = await supabase
         .from("categories")
         .select("*")
+        .eq("user_id", session.user.id) // <= ログインユーザーのカテゴリのみ
         .order("id", { ascending: true });
 
       if (catError) throw catError;
@@ -117,18 +123,16 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
   };
 
   // ------------------------------------
-  // メニュー一覧を取得 (Supabase直接)
-  // ログインユーザーのメニューだけを取得したい => user_id = session.user.id で絞り込む
-  // categoriesテーブルをJOINしてカテゴリ名も取得
+  // メニュー一覧を取得
+  // user_id で絞り込む
   // ------------------------------------
   const fetchMenuItems = async () => {
     try {
       setLoading(true);
       const { data, error: menuError } = await supabase
         .from("menu_items")
-        // メニューはログインユーザーのものだけに限定
         .select(`*, categories(name)`)
-        .eq("user_id", session.user.id) // <= ここで自分のuser_idのメニューだけ取得
+        .eq("user_id", session.user.id) // <= ログインユーザーのメニューだけ
         .order("id", { ascending: true });
 
       if (menuError) throw menuError;
@@ -150,7 +154,8 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
   }, []);
 
   // ------------------------------------
-  // カテゴリ削除処理 (Supabase直接)
+  // カテゴリ削除
+  // (user_id で安全策)
   // ------------------------------------
   const handleDeleteCategory = async (categoryId: number) => {
     if (!window.confirm("このカテゴリを削除しますか？")) return;
@@ -158,7 +163,8 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
       const { error } = await supabase
         .from("categories")
         .delete()
-        .eq("id", categoryId);
+        .eq("id", categoryId)
+        .eq("user_id", session.user.id);
 
       if (error) {
         throw new Error(error.message || "カテゴリ削除に失敗しました");
@@ -188,8 +194,8 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
     setIsModalOpen(true);
   };
 
-  // 編集メニューが変わったら、そのメニューのunavailableStaffを取得
   useEffect(() => {
+    // unavailable staff の取得
     const fetchUnavailableStaff = async (menuId: number) => {
       const { data, error } = await supabase
         .from("menu_item_unavailable_staff")
@@ -220,29 +226,28 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
   };
 
   // ------------------------------------
-  // メニュー削除 (Supabase直接)
+  // メニュー削除
   // ------------------------------------
   const handleDelete = async (menuItemId: number | string) => {
-    if (!window.confirm("このメニューを削除してもよろしいですか？")) return;
+    if (!window.confirm("このメニューを削除してよろしいですか？")) return;
     try {
-      // 1. menu_item_unavailable_staff から該当メニューのレコード削除（外部キー制約で自動deleteにしてもOK）
+      // 1. 対応不可スタッフテーブルを削除
       await supabase
         .from("menu_item_unavailable_staff")
         .delete()
         .eq("menu_item_id", menuItemId);
 
-      // 2. menu_itemsテーブルから削除
+      // 2. メニュー本体を削除
       const { error, data } = await supabase
         .from("menu_items")
         .delete()
         .eq("id", menuItemId)
-        // 安全策: ログインユーザーのものだけ削除
-        .eq("user_id", session.user.id)
+        .eq("user_id", session.user.id) // セキュリティ
         .select("*");
 
       if (error) {
         throw new Error(
-          error.message || "メニューの削除中にエラーが発生しました。"
+          error.message || "メニューの削除中にエラーが発生しました"
         );
       }
 
@@ -252,10 +257,7 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
 
       toast({
         title: "削除成功",
-        description:
-          data && data.length > 0
-            ? `メニューID: ${data[0].id} が削除されました`
-            : `メニューID: ${menuItemId} が削除されました`,
+        description: `メニューID: ${menuItemId} が削除されました`,
       });
     } catch (error: any) {
       console.error("Error deleting menu item:", error);
@@ -264,20 +266,20 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
         description:
           error instanceof Error
             ? error.message
-            : "メニューの削除中にエラーが発生しました。",
+            : "メニューの削除中にエラーが発生しました",
         variant: "destructive",
       });
     }
   };
 
   // ------------------------------------
-  // 予約可能ステータス 切り替え (Supabase直接 + 楽観的UI)
+  // 予約可能ステータス 切り替え
   // ------------------------------------
   const handleToggleReservable = async (
     menuItemId: number | string,
     isReservable: boolean
   ) => {
-    // 1. まずはローカルステートを先行して更新 (楽観的UI)
+    // 楽観的UI
     const oldItems = [...menuItems];
     setMenuItems((prevItems) =>
       prevItems.map((item) =>
@@ -286,12 +288,10 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
     );
 
     try {
-      // 2. Supabaseで更新
       const { data, error } = await supabase
         .from("menu_items")
         .update({ is_reservable: isReservable })
         .eq("id", menuItemId)
-        // 安全策: ログインユーザーのメニューだけ
         .eq("user_id", session.user.id)
         .select(`*, categories(name)`)
         .single();
@@ -302,21 +302,19 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
         );
       }
 
-      // 3. 返却された最新データでローカルを再上書き
       setMenuItems((prev) =>
         prev.map((item) => (item.id === data.id ? data : item))
       );
 
       toast({
         title: "予約可能状態変更",
-        description: `メニュー名: ${data.name} の予約可能状態が ${
-          isReservable ? "可能" : "不可能"
-        } に変更されました`,
+        description: `メニュー名: ${data.name} が ${
+          isReservable ? "予約可能" : "予約不可"
+        }に切り替わりました。`,
       });
     } catch (err: any) {
       console.error("Error updating menu item reservable status:", err);
-
-      // 4. エラー時はロールバック
+      // ロールバック
       setMenuItems(oldItems);
 
       toast({
@@ -329,11 +327,8 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
 
   // ------------------------------------
   // メニュー追加/編集フォーム送信
-  // Supabase直接: menu_items に insert もしくは update
-  // 画像アップロードがある場合は先にStorageへアップロードし、image_urlをセット
-  // menu_item_unavailable_staff も更新
   // ------------------------------------
-  const handleModalSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+  const handleModalSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
 
@@ -343,17 +338,15 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
     const duration = Number(formData.get("duration"));
     const categoryId = Number(formData.get("category_id")) || null;
 
-    // 画像ファイルをSupabase Storageにアップする(例)
+    // 画像があればStorageアップロード
     let uploadedImageUrl: string | null = editingMenu?.image_url || null;
     if (imageFile) {
-      // 1. 一意のファイル名
       const fileExt = imageFile.name.split(".").pop();
       const fileName = `${uuidv4()}.${fileExt}`;
       const filePath = `menu-images/${fileName}`;
 
-      // 2. Storage にアップロード
       const { error: uploadError } = await supabase.storage
-        .from("menu-images") // バケット名: "menu-images"
+        .from("menu-images")
         .upload(filePath, imageFile, {
           cacheControl: "3600",
           upsert: false,
@@ -368,11 +361,9 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
         return;
       }
 
-      // 3. 公開URLを取得
       const { data: publicUrlData } = supabase.storage
         .from("menu-images")
         .getPublicUrl(filePath);
-
       uploadedImageUrl = publicUrlData?.publicUrl || null;
     }
 
@@ -380,8 +371,7 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
       let newOrUpdatedItem: MenuItem | null = null;
 
       if (editingMenu) {
-        // --- Update ---
-        // 安全策: user_id も条件に入れることで、他人のメニューを更新できないようにする
+        // update
         const { data, error } = await supabase
           .from("menu_items")
           .update({
@@ -403,7 +393,7 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
         }
         newOrUpdatedItem = data as MenuItem;
 
-        // unavailableStaffIdsの更新(一旦削除→再登録)
+        // unavailableスタッフテーブル更新
         await supabase
           .from("menu_item_unavailable_staff")
           .delete()
@@ -417,11 +407,11 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
           await supabase.from("menu_item_unavailable_staff").insert(insertData);
         }
       } else {
-        // --- Insert ---
+        // insert
         const { data, error } = await supabase
           .from("menu_items")
           .insert({
-            user_id: session.user.id, // 必要に応じて user_id をセット
+            user_id: session.user.id,
             name,
             description,
             price,
@@ -430,7 +420,7 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
             category_id: categoryId,
             created_at: new Date().toISOString(),
           })
-          .select(`*, categories(name)`) // 新規作成後もカテゴリ名がほしい場合はJOIN
+          .select(`*, categories(name)`)
           .single();
 
         if (error || !data) {
@@ -438,7 +428,6 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
         }
         newOrUpdatedItem = data as MenuItem;
 
-        // unavailableStaffIdsの登録
         if (unavailableStaffIds.length > 0) {
           const insertData = unavailableStaffIds.map((staffId) => ({
             menu_item_id: data.id,
@@ -452,15 +441,13 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
         throw new Error("No item returned after insert/update");
       }
 
-      // ローカルステートを更新
+      // ローカル更新
       setMenuItems((prevItems) =>
         editingMenu
-          ? // 更新の場合
-            prevItems.map((item) =>
+          ? prevItems.map((item) =>
               item.id === newOrUpdatedItem!.id ? newOrUpdatedItem! : item
             )
-          : // 新規追加の場合
-            [newOrUpdatedItem, ...prevItems]
+          : [newOrUpdatedItem, ...prevItems]
       );
 
       setIsModalOpen(false);
@@ -481,14 +468,12 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
     }
   };
 
-  // 画像ファイル選択ハンドラ
-  const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (event.target.files && event.target.files[0]) {
-      setImageFile(event.target.files[0]);
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setImageFile(e.target.files[0]);
     }
   };
 
-  // 対応不可スタッフのチェックボックス
   const handleStaffCheckboxChange = (staffId: string) => {
     setUnavailableStaffIds((prev) =>
       prev.includes(staffId)
@@ -497,13 +482,16 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
     );
   };
 
+  // ------------------------------------
   // カテゴリ新規作成
+  // user_id もセット
+  // ------------------------------------
   const handleCreateCategory = async () => {
     if (!newCategoryName.trim()) return;
     try {
       const { data, error } = await supabase
         .from("categories")
-        .insert({ name: newCategoryName })
+        .insert({ name: newCategoryName, user_id: session.user.id })
         .select("*");
 
       if (error) throw error;

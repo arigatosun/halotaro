@@ -233,6 +233,58 @@ const ReservationCalendar: React.FC = () => {
     setIsStaffScheduleFormOpen(true);
   };
 
+  // スタッフスケジュールを FastAPI に送信するための関数
+  async function sendStaffScheduleToAutomation(staffSchedule: Reservation) {
+    try {
+      // まず日付や時間などのデータを整形
+      const startTime = moment(staffSchedule.start_time);
+      const endTime = moment(staffSchedule.end_time);
+
+      // 例として、"run_staff_automation"エンドポイントへ送る構造を作成
+      // どのようなフィールドが必要かは FastAPI の `run_staff_automation` に合わせてください
+      const automationData = {
+        user_id: staffSchedule.user_id, // あるいは別途指定
+        date: startTime.format("YYYYMMDD"),
+        rsv_hour: startTime.format("H"), // 例: 10
+        rsv_minute: startTime.format("mm"), // 例: 30
+        staff_name: staffSchedule.staff_name, // あるいは staffSchedule.staff?.name
+        rsv_term_hour: "1", // 例: シフトの合計時間を時間で
+        rsv_term_minute: "0",
+        is_no_appointment: false, // 指名なしフラグがあれば
+        event: staffSchedule.event, // 予定の内容(メモなど)
+      };
+
+      // FastAPI 側の @app.post("/staff-run-automation") エンドポイント
+      const FASTAPI_ENDPOINT =
+        "https://4e37-34-97-99-223.ngrok-free.app/staff-run-automation";
+
+      const automationResponse = await fetch(FASTAPI_ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(automationData),
+      });
+
+      const automationResponseData = await automationResponse.json();
+
+      if (!automationResponse.ok) {
+        const errorMessage =
+          automationResponseData.detail ||
+          automationResponseData.error ||
+          "Staff automation failed";
+        console.error("Staff automation sync failed:", errorMessage);
+        // 必要に応じてエラー処理
+      } else {
+        console.log(
+          "Staff automation sync successful:",
+          automationResponseData
+        );
+      }
+    } catch (error) {
+      console.error("Error in sendStaffScheduleToAutomation:", error);
+      // 必要に応じてエラー処理
+    }
+  }
+
   // ------------------------------------
   // イベントのドラッグ＆ドロップ
   // ------------------------------------
@@ -530,6 +582,7 @@ const ReservationCalendar: React.FC = () => {
         total_price: 0,
       };
 
+      // スタッフスケジュールを作成/更新
       const response = await fetch("/api/calendar-data", {
         method,
         headers: {
@@ -542,13 +595,15 @@ const ReservationCalendar: React.FC = () => {
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(
-          `スタッフスケジュールの${isNew ? "作成" : "更新"}に失敗しました: ${
+          `スタッフスケジュールの${isNew ? "作成" : "更新"}に失敗: ${
             errorData.error
           }`
         );
       }
 
       const newSchedule = await response.json();
+
+      // ローカル state 更新など
       setReservations((prev) =>
         isNew
           ? [...prev, newSchedule]
@@ -558,15 +613,17 @@ const ReservationCalendar: React.FC = () => {
       );
 
       setIsStaffScheduleFormOpen(false);
-      setSelectedStaffSchedule(null);
-      setIsNewStaffSchedule(false);
       setSnackbar({
         message: `スタッフスケジュールが${isNew ? "作成" : "更新"}されました`,
         severity: "success",
       });
 
-      // 新規作成時のみ自動同期などしたい場合はここ
-      // if (isNew) { await sendStaffScheduleToAutomation(newSchedule); }
+      // ★ ここで外部連携を呼ぶ
+      if (isNew) {
+        console.log("新規作成のときだけ送りたい場合");
+        // 新規作成のときだけ送りたい場合
+        await sendStaffScheduleToAutomation(newSchedule);
+      }
     } catch (error) {
       console.error("handleStaffScheduleFormSubmitエラー:", error);
       setSnackbar({
