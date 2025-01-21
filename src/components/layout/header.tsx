@@ -17,11 +17,52 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 
+// ★ useAuth を使ってログインユーザー情報を取得
+import { useAuth } from "@/contexts/authcontext";
+
+// Supabaseクライアント
 import { supabase } from "@/lib/supabaseClient";
 
 const Header = () => {
   const router = useRouter();
   const pathname = usePathname();
+
+  // ---------------------------
+  // 認証情報を取得
+  // ---------------------------
+  const { user, session, loading: authLoading, refreshAuthState } = useAuth();
+
+  // 再試行用のカウンタ
+  const [retryCount, setRetryCount] = useState(0);
+
+  useEffect(() => {
+    // ユーザーが取得できなかった場合、数回リトライさせるサンプル（必要に応じて削除 or ロジック変更）
+    if (!authLoading && !user && retryCount < 3) {
+      refreshAuthState();
+      setRetryCount((prev) => prev + 1);
+    }
+  }, [user, authLoading, refreshAuthState, retryCount]);
+
+  // ローディング中や未認証の処理
+  if (authLoading) {
+    return (
+      <div className="w-full h-16 flex items-center justify-center bg-white">
+        <p>認証情報を確認中です...</p>
+      </div>
+    );
+  }
+  if (!user || !session) {
+    return (
+      <div className="w-full h-16 flex items-center justify-center bg-red-100 text-red-500">
+        <p>認証に失敗しました。リロードしてください。</p>
+      </div>
+    );
+  }
+
+  // ---------------------------
+  // ユーザーIDを取得 (認証成功時)
+  // ---------------------------
+  const userId = user.id;
 
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -29,28 +70,29 @@ const Header = () => {
   // ★ サロン名を取得するためのState
   const [salonName, setSalonName] = useState("");
 
-  // ユーザーIDの取得例: 実際は useAuth() や session.user.id を使う想定
-  const userId = "422f1a9d-83be-468e-ad6a-bf9b524128f8";
-
   // ---------------------------
   // サロン情報を取得
   // ---------------------------
   useEffect(() => {
     if (!userId) return;
-    (async () => {
-      const { data, error } = await supabase
-        .from("salons")
-        .select("*")
-        .eq("user_id", userId)
-        .maybeSingle();
 
-      if (error) {
-        console.error("Error fetching salon data:", error);
-      } else {
-        console.log("Fetched salon data:", data); // デバッグ用ログ
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from("salons")
+          .select("*")
+          .eq("user_id", userId)
+          .maybeSingle();
+
+        if (error) {
+          console.error("Error fetching salon data:", error);
+          return;
+        }
         if (data?.salon_name) {
           setSalonName(data.salon_name);
         }
+      } catch (err) {
+        console.error("サロン情報取得時にエラーが発生しました:", err);
       }
     })();
   }, [userId]);
@@ -247,6 +289,7 @@ const Header = () => {
           </nav>
         </div>
       )}
+      {/* サブナビはPC表示のみ */}
       {!isMobile && <SubHeader pathname={pathname} />}
     </header>
   );

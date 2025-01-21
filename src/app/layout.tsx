@@ -3,6 +3,10 @@ import { Noto_Sans_JP } from "next/font/google";
 import "./globals.css";
 import { ConfigProvider } from "antd";
 
+// AuthProvider を「クライアントコンポーネント」としてインポート
+// (AuthProvider内部では "use client" が宣言されているはず)
+import { AuthProvider } from "@/contexts/authcontext";
+
 const notoSansJP = Noto_Sans_JP({
   weight: ["400", "700"],
   subsets: ["latin"],
@@ -16,13 +20,20 @@ export const metadata: Metadata = {
 
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode;
-}>) {
+}) {
   return (
     <html lang="en">
       <body className={notoSansJP.className}>
-        <ConfigProvider>{children}</ConfigProvider>
+        <ConfigProvider>
+          {/* 
+            layout.tsx はサーバーコンポーネントだが、
+            クライアントコンポーネントである AuthProvider を
+            直接ネストしても問題ありません 
+          */}
+          <AuthProvider>{children}</AuthProvider>
+        </ConfigProvider>
       </body>
     </html>
   );
