@@ -571,7 +571,7 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
   return (
     <>
       <Dialog open={true} onOpenChange={onClose}>
-        <DialogContent className="sm:max-w-[700px]">
+        <DialogContent className="sm:max-w-[700px] max-h-[80vh] overflow-y-auto">
           {" "}
           {/* ダイアログの幅を適切に設定 */}
           <DialogHeader>
