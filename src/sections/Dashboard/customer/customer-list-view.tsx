@@ -38,7 +38,7 @@ import {
 } from "@/components/ui/pagination";
 import Link from "next/link";
 import { DateRange } from "react-day-picker";
-import { useAuth } from "@/contexts/authcontext";
+import { useAuth } from "@/lib/authContext";
 import { isWithinInterval, addMonths, subMonths } from "date-fns";
 import * as Tooltip from "@radix-ui/react-tooltip";
 import {

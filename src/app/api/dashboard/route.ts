@@ -13,8 +13,10 @@ dayjs.tz.setDefault("Asia/Tokyo");
 
 // 環境変数の取得
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-const supabase: SupabaseClient = createClient(supabaseUrl, supabaseServiceKey);
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+
+// ① まずは anon key でクライアント生成
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 // インターフェースの定義
 interface AccountingInformationRecord {

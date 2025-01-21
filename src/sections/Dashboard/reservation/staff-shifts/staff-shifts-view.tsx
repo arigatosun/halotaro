@@ -38,7 +38,7 @@ import {
   getSalonBusinessHours,
 } from "@/lib/api";
 import { Staff, ShiftData, DBStaffShift } from "./types";
-import { useAuth } from "@/contexts/authcontext";
+import { useAuth } from "@/lib/authContext";
 import { supabase } from "@/lib/supabaseClient";
 
 moment.locale("ja");

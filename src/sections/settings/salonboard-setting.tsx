@@ -14,7 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Info, Loader2, Lock, Shield } from "lucide-react";
-import { useAuth } from "@/contexts/authcontext";
+import { useAuth } from "@/lib/authContext";
 
 const SalonBoardIntegrationView: React.FC = () => {
   const [isIntegrationEnabled, setIsIntegrationEnabled] = useState(false);

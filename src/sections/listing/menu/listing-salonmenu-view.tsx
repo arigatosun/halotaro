@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useEffect } from "react";
-import { useAuth } from "@/contexts/authcontext";
+import { useAuth } from "@/lib/authContext";
 import { Button } from "@/components/ui/button";
 import {
   Table,

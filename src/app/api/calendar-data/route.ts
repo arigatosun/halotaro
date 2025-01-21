@@ -1,8 +1,6 @@
 // app/api/calendar-data/route.ts
 
 import { NextResponse } from "next/server";
-import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
-import { cookies } from "next/headers";
 import {
   Reservation,
   Staff,
@@ -12,15 +10,14 @@ import {
 import moment from "moment-timezone";
 import { createClient } from "@supabase/supabase-js";
 
-// Supabase サービスクライアントの初期化
-const supabaseService = createClient(
+// anon key で作ったクライアントを使う
+const supabaseAnon = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY! // サービスロールキーを使用
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
-
 // 認証チェック関数
 async function checkAuth(request: Request) {
-  const supabase = createRouteHandlerClient({ cookies });
+  // createRouteHandlerClient({ cookies }) は使わない
   const authHeader = request.headers.get("Authorization");
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
     return { error: "Missing or invalid authorization header", status: 401 };
@@ -30,7 +27,8 @@ async function checkAuth(request: Request) {
   const {
     data: { user },
     error,
-  } = await supabase.auth.getUser(token);
+  } = await supabaseAnon.auth.getUser(token);
+  // ↑ anon クライアントで token 検証
 
   if (error || !user) {
     console.error("Authentication error:", error);
@@ -71,7 +69,7 @@ export async function GET(request: Request) {
       );
     }
 
-    const supabase = createRouteHandlerClient({ cookies });
+    const supabase = supabaseAnon;
     const userId = authResult.user.id;
 
     const { searchParams } = new URL(request.url);
@@ -270,7 +268,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const supabase = createRouteHandlerClient({ cookies });
+    const supabase = supabaseAnon;
     const data = await request.json();
     console.log("Received data:", data);
 
@@ -397,7 +395,7 @@ export async function POST(request: Request) {
 
         // create_staff_reservation 関数を呼び出す
         const { data: reservationData, error: reservationError } =
-          await supabaseService.rpc("create_staff_reservation", rpcParams);
+          await supabase.rpc("create_staff_reservation", rpcParams);
 
         if (reservationError) {
           console.error("Error creating staff reservation:", reservationError);
@@ -481,7 +479,7 @@ export async function PUT(request: Request) {
       );
     }
 
-    const supabase = createRouteHandlerClient({ cookies });
+    const supabase = supabaseAnon;
     const data = await request.json();
     console.log("Received data for update:", data);
 
@@ -658,7 +656,7 @@ export async function DELETE(request: Request) {
       );
     }
 
-    const supabase = createRouteHandlerClient({ cookies });
+    const supabase = supabaseAnon;
     const { searchParams } = new URL(request.url);
     const reservationId = searchParams.get("id");
 

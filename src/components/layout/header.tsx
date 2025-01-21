@@ -18,7 +18,7 @@ import {
 import Image from "next/image";
 
 // ★ useAuth を使ってログインユーザー情報を取得
-import { useAuth } from "@/contexts/authcontext";
+import { useAuth } from "@/lib/authContext";
 
 // Supabaseクライアント
 import { supabase } from "@/lib/supabaseClient";

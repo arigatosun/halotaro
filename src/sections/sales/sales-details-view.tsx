@@ -34,7 +34,7 @@ import axios from "axios";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
-import { useAuth } from "@/contexts/authcontext";
+import { useAuth } from "@/lib/authContext";
 import { supabase } from "@/lib/supabaseClient";
 
 // dayjsプラグインの設定
@@ -43,7 +43,9 @@ dayjs.extend(timezone);
 dayjs.tz.setDefault("Asia/Tokyo");
 
 // 単日選択時に `to` を `from` と同日にそろえるための関数
-const normalizeDateRange = (range: DateRange | undefined): DateRange | undefined => {
+const normalizeDateRange = (
+  range: DateRange | undefined
+): DateRange | undefined => {
   if (!range) return undefined;
   // from があるのに to が無い場合は、単日の選択とみなして同一日にそろえる
   if (range.from && !range.to) {
@@ -75,9 +77,12 @@ const SalesDetailView: React.FC = () => {
   const [menuList, setMenuList] = useState<any[]>([]);
 
   // タイムゾーンを考慮した ISOString を返す関数
-  const convertToTimezoneDateString = (date: Date | undefined, isEndDate: boolean = false): string => {
+  const convertToTimezoneDateString = (
+    date: Date | undefined,
+    isEndDate: boolean = false
+  ): string => {
     if (!date) return "";
-    
+
     const d = dayjs(date).tz("Asia/Tokyo");
     if (isEndDate) {
       // 終了日の場合は 23:59:59.999 に設定
@@ -308,7 +313,9 @@ const SalesDetailView: React.FC = () => {
             ? dayjs(dateRange.from).tz("Asia/Tokyo").format("YYYY年MM月DD日")
             : ""}
           {dateRange?.to
-            ? ` 〜 ${dayjs(dateRange.to).tz("Asia/Tokyo").format("YYYY年MM月DD日")}`
+            ? ` 〜 ${dayjs(dateRange.to)
+                .tz("Asia/Tokyo")
+                .format("YYYY年MM月DD日")}`
             : ""}{" "}
           ({searchTarget === "visitDate" ? "来店日" : "レジ締め日"})
         </p>
@@ -383,7 +390,9 @@ const SalesDetailView: React.FC = () => {
           <PaginationItem>
             <PaginationPrevious
               onClick={() => paginate(currentPage - 1)}
-              className={currentPage === 1 ? "pointer-events-none opacity-50" : ""}
+              className={
+                currentPage === 1 ? "pointer-events-none opacity-50" : ""
+              }
             />
           </PaginationItem>
           {[...Array(Math.ceil(totalItems / itemsPerPage))].map((_, index) => (

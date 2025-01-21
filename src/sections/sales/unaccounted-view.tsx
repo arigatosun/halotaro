@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { useAuth } from "@/contexts/authcontext";
+import { useAuth } from "@/lib/authContext";
 import axios from "axios";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -74,8 +74,12 @@ const CompactRegisterClosingUI: React.FC = () => {
   const router = useRouter();
   const [staffList, setStaffList] = useState<any[]>([]);
   const [selectedStaff, setSelectedStaff] = useState<string>(""); // 初期値を空文字に設定
-  const [accountingList, setAccountingList] = useState<AccountingInformation[]>([]);
-  const [totalByPaymentMethod, setTotalByPaymentMethod] = useState<{ [key: string]: number }>({});
+  const [accountingList, setAccountingList] = useState<AccountingInformation[]>(
+    []
+  );
+  const [totalByPaymentMethod, setTotalByPaymentMethod] = useState<{
+    [key: string]: number;
+  }>({});
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [preparedCash, setPreparedCash] = useState<number>(0);
@@ -86,7 +90,9 @@ const CompactRegisterClosingUI: React.FC = () => {
   const [latestClosingDate, setLatestClosingDate] = useState<string>("");
 
   // 未会計予約のステート
-  const [unaccountedReservations, setUnaccountedReservations] = useState<Reservation[]>([]);
+  const [unaccountedReservations, setUnaccountedReservations] = useState<
+    Reservation[]
+  >([]);
   const [loadingUnaccounted, setLoadingUnaccounted] = useState<boolean>(false);
   const [errorUnaccounted, setErrorUnaccounted] = useState<Error | null>(null);
 
@@ -96,11 +102,20 @@ const CompactRegisterClosingUI: React.FC = () => {
   };
 
   // 定義された支払い方法
-  const PAYMENT_METHODS = ["現金", "クレジットカード", "電子マネー", "ギフト券", "ポイント", "スマート支払い"];
+  const PAYMENT_METHODS = [
+    "現金",
+    "クレジットカード",
+    "電子マネー",
+    "ギフト券",
+    "ポイント",
+    "スマート支払い",
+  ];
 
   // ヘルパー関数の追加
   const formatAmount = (amount: number): string => {
-    return amount < 0 ? `-${Math.abs(amount).toLocaleString()}` : amount.toLocaleString();
+    return amount < 0
+      ? `-${Math.abs(amount).toLocaleString()}`
+      : amount.toLocaleString();
   };
 
   // スタッフデータの取得
@@ -205,7 +220,9 @@ const CompactRegisterClosingUI: React.FC = () => {
       const { closing_date } = response.data;
       if (closing_date) {
         // 日本時間でフォーマット
-        const formattedDateTime = dayjs(closing_date).tz("Asia/Tokyo").format("YYYY-MM-DD HH:mm:ss");
+        const formattedDateTime = dayjs(closing_date)
+          .tz("Asia/Tokyo")
+          .format("YYYY-MM-DD HH:mm:ss");
         setLatestClosingDate(`${formattedDateTime} ～`);
       } else {
         setLatestClosingDate("未締め");
@@ -316,7 +333,8 @@ const CompactRegisterClosingUI: React.FC = () => {
                     <TableRow key={method}>
                       <TableCell className="py-1">{method}</TableCell>
                       <TableCell className="text-right py-1">
-                        {totalByPaymentMethod[method]?.toLocaleString() || "0"} 円
+                        {totalByPaymentMethod[method]?.toLocaleString() || "0"}{" "}
+                        円
                       </TableCell>
                     </TableRow>
                   ))}
@@ -326,7 +344,9 @@ const CompactRegisterClosingUI: React.FC = () => {
 
             {/* 会計以外のレジ金情報 */}
             <div>
-              <h3 className="font-semibold mb-2 text-sm">会計以外のレジ金情報</h3>
+              <h3 className="font-semibold mb-2 text-sm">
+                会計以外のレジ金情報
+              </h3>
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between items-center">
                   <Label htmlFor="preparedCash" className="text-sm">
@@ -338,7 +358,9 @@ const CompactRegisterClosingUI: React.FC = () => {
                       type="number"
                       className="w-24 text-right text-sm h-8"
                       value={preparedCash}
-                      onChange={(e) => setPreparedCash(parseInt(e.target.value) || 0)}
+                      onChange={(e) =>
+                        setPreparedCash(parseInt(e.target.value) || 0)
+                      }
                     />
                     <span className="ml-1">円</span>
                   </div>
@@ -355,9 +377,15 @@ const CompactRegisterClosingUI: React.FC = () => {
                       type="number"
                       className="w-24 text-right text-sm h-8"
                       value={cashOut}
-                      onChange={(e) => setCashOut(parseInt(e.target.value) || 0)}
+                      onChange={(e) =>
+                        setCashOut(parseInt(e.target.value) || 0)
+                      }
                     />
-                    <span className={`ml-1 ${cashOut < 0 ? "text-red-500" : "text-green-500"}`}>
+                    <span
+                      className={`ml-1 ${
+                        cashOut < 0 ? "text-red-500" : "text-green-500"
+                      }`}
+                    >
                       {cashOut < 0 ? "-" : ""}
                       {Math.abs(cashOut).toLocaleString()} 円
                     </span>
@@ -373,12 +401,21 @@ const CompactRegisterClosingUI: React.FC = () => {
                 <div className="flex justify-between items-center">
                   <span>想定のレジ金</span>
                   <span className="font-bold">
-                    {((totalByPaymentMethod["現金"] || 0) + preparedCash).toLocaleString()} 円
+                    {(
+                      (totalByPaymentMethod["現金"] || 0) + preparedCash
+                    ).toLocaleString()}{" "}
+                    円
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span>レジ過不足金額</span>
-                  <span className={`font-bold ${calculateDifference() < 0 ? "text-red-500" : "text-green-500"}`}>
+                  <span
+                    className={`font-bold ${
+                      calculateDifference() < 0
+                        ? "text-red-500"
+                        : "text-green-500"
+                    }`}
+                  >
                     {formatAmount(calculateDifference())} 円
                   </span>
                 </div>
@@ -392,7 +429,9 @@ const CompactRegisterClosingUI: React.FC = () => {
                       type="number"
                       className="text-right text-sm h-8"
                       value={actualCash}
-                      onChange={(e) => setActualCash(parseInt(e.target.value) || 0)}
+                      onChange={(e) =>
+                        setActualCash(parseInt(e.target.value) || 0)
+                      }
                     />
                     <span className="ml-1">円</span>
                   </div>
@@ -419,7 +458,10 @@ const CompactRegisterClosingUI: React.FC = () => {
                 const selectedDate = e.target.value;
                 if (selectedDate) {
                   const now = dayjs().tz("Asia/Tokyo");
-                  const selectedDateTime = dayjs(`${selectedDate} ${now.format("HH:mm:ss")}`, "YYYY-MM-DD HH:mm:ss")
+                  const selectedDateTime = dayjs(
+                    `${selectedDate} ${now.format("HH:mm:ss")}`,
+                    "YYYY-MM-DD HH:mm:ss"
+                  )
                     .tz("Asia/Tokyo")
                     .utc()
                     .toISOString();
@@ -440,13 +482,21 @@ const CompactRegisterClosingUI: React.FC = () => {
         </div>
         <div>
           <Label className="text-sm">レジ締め対象日</Label>
-          <Input value={latestClosingDate || "取得中..."} readOnly className="mt-1 bg-gray-100 h-8 text-sm" />
+          <Input
+            value={latestClosingDate || "取得中..."}
+            readOnly
+            className="mt-1 bg-gray-100 h-8 text-sm"
+          />
         </div>
         <div>
           <Label htmlFor="closingStaff" className="text-sm">
             レジ締め担当者
           </Label>
-          <Select value={selectedStaff} onValueChange={(value) => setSelectedStaff(value)} required>
+          <Select
+            value={selectedStaff}
+            onValueChange={(value) => setSelectedStaff(value)}
+            required
+          >
             <SelectTrigger id="closingStaff" className="mt-1 h-8 text-sm">
               <SelectValue placeholder="レジ締め担当者" />
             </SelectTrigger>
@@ -526,15 +576,33 @@ const CompactRegisterClosingUI: React.FC = () => {
                 {unaccountedReservations.map((reservation) => (
                   <TableRow key={reservation.id}>
                     <TableCell>
-                      {dayjs(reservation.start_time).tz("Asia/Tokyo").format("YYYY-MM-DD HH:mm")}
+                      {dayjs(reservation.start_time)
+                        .tz("Asia/Tokyo")
+                        .format("YYYY-MM-DD HH:mm")}
                     </TableCell>
-                    <TableCell>{statusMapping[reservation.status] || reservation.status}</TableCell>
-                    <TableCell>{reservation.customer?.name || reservation.customer?.name_kana || reservation.scraped_customer || "不明"}</TableCell>
-                    <TableCell>{reservation.menu_item?.name || reservation.scraped_menu || "不明"}</TableCell>
-                    <TableCell>{reservation.staff?.name || "未割当"}</TableCell>
-                    <TableCell>{reservation.total_price?.toLocaleString()} 円</TableCell>
                     <TableCell>
-                      <Button size="sm" onClick={() => handleReservationAction(reservation.id)}>
+                      {statusMapping[reservation.status] || reservation.status}
+                    </TableCell>
+                    <TableCell>
+                      {reservation.customer?.name ||
+                        reservation.customer?.name_kana ||
+                        reservation.scraped_customer ||
+                        "不明"}
+                    </TableCell>
+                    <TableCell>
+                      {reservation.menu_item?.name ||
+                        reservation.scraped_menu ||
+                        "不明"}
+                    </TableCell>
+                    <TableCell>{reservation.staff?.name || "未割当"}</TableCell>
+                    <TableCell>
+                      {reservation.total_price?.toLocaleString()} 円
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        size="sm"
+                        onClick={() => handleReservationAction(reservation.id)}
+                      >
                         会計
                       </Button>
                     </TableCell>
@@ -578,17 +646,28 @@ const CompactRegisterClosingUI: React.FC = () => {
                   <TableRow key={item.id}>
                     {/* 来店日時を日時含む形式で表示 */}
                     <TableCell>
-                      {dayjs(item.reservations.start_time).tz("Asia/Tokyo").format("YYYY-MM-DD HH:mm:ss")}
+                      {dayjs(item.reservations.start_time)
+                        .tz("Asia/Tokyo")
+                        .format("YYYY-MM-DD HH:mm:ss")}
                     </TableCell>
                     <TableCell>{item.customer_name}</TableCell>
                     <TableCell>{item.staff_name}</TableCell>
                     <TableCell>
-                      {item.items.map((service: any) => service.name).join(", ")}
+                      {item.items
+                        .map((service: any) => service.name)
+                        .join(", ")}
                     </TableCell>
-                    <TableCell>{item.total_price.toLocaleString()} 円</TableCell>
+                    <TableCell>
+                      {item.total_price.toLocaleString()} 円
+                    </TableCell>
                     <TableCell>
                       {item.payment_methods
-                        .map((method: any) => `${method.method}: ¥${method.amount.toLocaleString()}`)
+                        .map(
+                          (method: any) =>
+                            `${
+                              method.method
+                            }: ¥${method.amount.toLocaleString()}`
+                        )
                         .join(", ")}
                     </TableCell>
                   </TableRow>

@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
-import { useAuth } from "@/contexts/authcontext";
+import { useAuth } from "@/lib/authContext";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -137,7 +137,9 @@ const AuthenticatedStaffManagement: React.FC<{ userId: string }> = ({
 
       const updatedStaff: Staff = await response.json();
       setStaffList((prev) =>
-        prev.map((staff) => (staff.id === updatedStaff.id ? updatedStaff : staff))
+        prev.map((staff) =>
+          staff.id === updatedStaff.id ? updatedStaff : staff
+        )
       );
 
       toast({
@@ -159,23 +161,27 @@ const AuthenticatedStaffManagement: React.FC<{ userId: string }> = ({
         const response = await fetch(`/api/salonstaff?id=${id}`, {
           method: "DELETE",
         });
-  
+
         if (!response.ok) {
           const errorData = await response.json();
           // 外部キー制約違反のエラーコードをチェック
-          if (errorData.code === '23503' && errorData.message.includes('reservations')) {
+          if (
+            errorData.code === "23503" &&
+            errorData.message.includes("reservations")
+          ) {
             toast({
               variant: "destructive",
               title: "削除エラー",
-              description: "関連する予約が残っている為このスタッフを削除できません。",
+              description:
+                "関連する予約が残っている為このスタッフを削除できません。",
             });
             return;
           }
           throw new Error(errorData.message || "Failed to delete staff");
         }
-  
+
         setStaffList((prev) => prev.filter((staff) => staff.id !== id));
-  
+
         toast({
           title: "成功",
           description: "スタッフを削除しました",
@@ -410,7 +416,8 @@ const AuthenticatedStaffManagement: React.FC<{ userId: string }> = ({
             <TableHead>スタッフ写真</TableHead>
             <TableHead>氏名/職種/施術歴</TableHead>
             <TableHead>キャッチ</TableHead>
-            <TableHead>スケジュール表示順</TableHead> {/* 新しく追加したヘッダー */}
+            <TableHead>スケジュール表示順</TableHead>{" "}
+            {/* 新しく追加したヘッダー */}
             <TableHead>詳細</TableHead>
             <TableHead>掲載/非掲載</TableHead>
             <TableHead>削除</TableHead>
@@ -432,7 +439,8 @@ const AuthenticatedStaffManagement: React.FC<{ userId: string }> = ({
                 <div>{staff.experience}</div>
               </TableCell>
               <TableCell>{staff.description}</TableCell>
-              <TableCell>{staff.schedule_order}</TableCell> {/* 新しく追加したセル */}
+              <TableCell>{staff.schedule_order}</TableCell>{" "}
+              {/* 新しく追加したセル */}
               <TableCell>
                 <Button
                   variant="outline"

@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/button";
 import axios from "axios";
 import dayjs from "dayjs";
 import "dayjs/locale/ja";
-import { useAuth } from "@/contexts/authcontext";
+import { useAuth } from "@/lib/authContext";
 
 dayjs.locale("ja");
 
@@ -34,7 +34,9 @@ interface DailySales {
 
 const SalesManagement: React.FC = () => {
   const [selectedYear, setSelectedYear] = useState<number>(dayjs().year());
-  const [selectedMonth, setSelectedMonth] = useState<number>(dayjs().month() + 1); // 1-12
+  const [selectedMonth, setSelectedMonth] = useState<number>(
+    dayjs().month() + 1
+  ); // 1-12
   const [salesSummary, setSalesSummary] = useState<SalesSummary>({
     totalSales: 0,
     averageSalesPerDay: 0,
@@ -71,8 +73,10 @@ const SalesManagement: React.FC = () => {
       const prevYear = date.getFullYear();
 
       // 先月のデータを取得
-      let previousSummary: { totalSales: number; averageSalesPerDay: number } | null =
-        null;
+      let previousSummary: {
+        totalSales: number;
+        averageSalesPerDay: number;
+      } | null = null;
       try {
         const responsePrev = await axios.get("/api/sales-summary", {
           headers: {
@@ -86,9 +90,7 @@ const SalesManagement: React.FC = () => {
 
         previousSummary = responsePrev.data.salesSummary;
       } catch (error) {
-        console.warn(
-          "先月の売上データが存在しないか取得できませんでした。"
-        );
+        console.warn("先月の売上データが存在しないか取得できませんでした。");
       }
 
       // 状態を更新（現在と先月のデータ）
@@ -171,10 +173,7 @@ const SalesManagement: React.FC = () => {
     setSelectedMonth(Number(event.target.value));
   };
 
-  const getPercentageChange = (
-    current: number,
-    previous?: number
-  ) => {
+  const getPercentageChange = (current: number, previous?: number) => {
     if (previous === undefined || previous === 0) {
       return "---";
     }
@@ -254,14 +253,15 @@ const SalesManagement: React.FC = () => {
       <div className="bg-white p-4 rounded-lg shadow mb-6">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-semibold">
-            売上推移（{dayjs(`${selectedYear}-${selectedMonth}-01`).format("YYYY年M月")}）
+            売上推移（
+            {dayjs(`${selectedYear}-${selectedMonth}-01`).format("YYYY年M月")}）
           </h2>
         </div>
         <ResponsiveContainer width="100%" height={300}>
           <LineChart data={dailySales}>
             <CartesianGrid strokeDasharray="3 3" />
-            <XAxis 
-              dataKey="date" 
+            <XAxis
+              dataKey="date"
               tickFormatter={(date) => dayjs(date).format("D")}
               interval="preserveStartEnd"
             />
@@ -281,7 +281,8 @@ const SalesManagement: React.FC = () => {
       <div className="bg-white p-4 rounded-lg shadow mb-6">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-semibold">
-            売上詳細（{dayjs(`${selectedYear}-${selectedMonth}-01`).format("YYYY年M月")}）
+            売上詳細（
+            {dayjs(`${selectedYear}-${selectedMonth}-01`).format("YYYY年M月")}）
           </h2>
           {/* 一旦非表示
           <Button variant={"outline"}>
@@ -329,12 +330,7 @@ interface SalesCardProps {
   trend: string;
 }
 
-const SalesCard: React.FC<SalesCardProps> = ({
-  title,
-  value,
-  icon,
-  trend,
-}) => (
+const SalesCard: React.FC<SalesCardProps> = ({ title, value, icon, trend }) => (
   <div className="bg-white p-4 rounded-lg shadow">
     <div className="flex justify-between items-center mb-2">
       <h3 className="text-lg font-semibold text-gray-700">{title}</h3>

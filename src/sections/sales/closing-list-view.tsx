@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useEffect } from "react";
-import { useAuth } from "@/contexts/authcontext";
+import { useAuth } from "@/lib/authContext";
 import axios from "axios";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -40,7 +40,7 @@ const RegisterClosingList: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await axios.get('/api/register-closings', {
+      const response = await axios.get("/api/register-closings", {
         headers: {
           Authorization: `Bearer ${session.access_token}`,
         },
@@ -51,8 +51,8 @@ const RegisterClosingList: React.FC = () => {
       });
       setClosingData(response.data.data);
     } catch (err) {
-      console.error('レジ締めデータの取得エラー:', err);
-      setError('データの取得に失敗しました。');
+      console.error("レジ締めデータの取得エラー:", err);
+      setError("データの取得に失敗しました。");
     } finally {
       setLoading(false);
     }
@@ -70,7 +70,7 @@ const RegisterClosingList: React.FC = () => {
 
   // 日本時間で昨日と今日の日付を取得する関数
   const getJapaneseDateString = (daysOffset: number = 0) => {
-    return dayjs().tz("Asia/Tokyo").add(daysOffset, 'day').format("YYYY-MM-DD");
+    return dayjs().tz("Asia/Tokyo").add(daysOffset, "day").format("YYYY-MM-DD");
   };
 
   return (
@@ -176,9 +176,15 @@ const RegisterClosingList: React.FC = () => {
                       <br />
                       (レジ締め実施日時)
                     </TableHead>
-                    <TableHead className="w-[25%] text-center">レジ過不足金</TableHead>
-                    <TableHead className="w-[25%] text-center">レジ締め担当者</TableHead>
-                    <TableHead className="w-[25%] text-center">レジ締めメモ</TableHead>
+                    <TableHead className="w-[25%] text-center">
+                      レジ過不足金
+                    </TableHead>
+                    <TableHead className="w-[25%] text-center">
+                      レジ締め担当者
+                    </TableHead>
+                    <TableHead className="w-[25%] text-center">
+                      レジ締めメモ
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -191,16 +197,26 @@ const RegisterClosingList: React.FC = () => {
                         >
                           {dayjs(item.closing_date).format("YYYY/MM/DD")}
                         </Link>
-                        <br />
-                        ({dayjs(item.closing_date).format("YYYY/MM/DD HH:mm")})
+                        <br />(
+                        {dayjs(item.closing_date).format("YYYY/MM/DD HH:mm")})
                       </TableCell>
                       <TableCell className="text-center">
-                        <span className={item.cash_difference < 0 ? "text-red-500" : "text-green-500"}>
+                        <span
+                          className={
+                            item.cash_difference < 0
+                              ? "text-red-500"
+                              : "text-green-500"
+                          }
+                        >
                           {item.cash_difference.toLocaleString()} 円
                         </span>
                       </TableCell>
-                      <TableCell className="text-center">{item.closing_staff?.name || '-'}</TableCell>
-                      <TableCell className="text-center">{item.closing_memo || '-'}</TableCell>
+                      <TableCell className="text-center">
+                        {item.closing_staff?.name || "-"}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {item.closing_memo || "-"}
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

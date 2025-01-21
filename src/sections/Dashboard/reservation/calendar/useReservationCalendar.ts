@@ -7,7 +7,7 @@ import {
   MenuItem,
   BusinessHour,
 } from "@/types/reservation";
-import { useAuth } from "@/contexts/authcontext";
+import { useAuth } from "@/lib/authContext";
 import moment from "moment";
 
 // スタッフシフトの型定義を追加

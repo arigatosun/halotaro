@@ -14,7 +14,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
-import { useAuth } from "@/contexts/authcontext";
+import { useAuth } from "@/lib/authContext";
 
 interface CancellationData {
   date: string;
@@ -26,7 +26,9 @@ interface CancellationData {
 const CancellationCard: React.FC = () => {
   const { user, session, loading: authLoading } = useAuth();
 
-  const [activeTab, setActiveTab] = useState<"daily" | "weekly" | "monthly">("daily");
+  const [activeTab, setActiveTab] = useState<"daily" | "weekly" | "monthly">(
+    "daily"
+  );
   const [dailyData, setDailyData] = useState<CancellationData[]>([]);
   const [weeklyData, setWeeklyData] = useState<CancellationData[]>([]);
   const [monthlyData, setMonthlyData] = useState<CancellationData[]>([]);
@@ -48,9 +50,9 @@ const CancellationCard: React.FC = () => {
     };
 
     handleResize();
-    window.addEventListener('resize', handleResize);
+    window.addEventListener("resize", handleResize);
 
-    return () => window.removeEventListener('resize', handleResize);
+    return () => window.removeEventListener("resize", handleResize);
   }, []);
 
   useEffect(() => {
@@ -78,7 +80,9 @@ const CancellationCard: React.FC = () => {
 
         if (!response.ok) {
           const errorData = await response.json();
-          throw new Error(errorData.error || "キャンセルデータの取得に失敗しました");
+          throw new Error(
+            errorData.error || "キャンセルデータの取得に失敗しました"
+          );
         }
 
         const data = await response.json();
@@ -141,14 +145,16 @@ const CancellationCard: React.FC = () => {
     const totalCancellations = getTotalCancellations();
     const totalReservations = getTotalReservations();
     if (totalReservations === 0) return 0;
-    return parseFloat(((totalCancellations / totalReservations) * 100).toFixed(1));
+    return parseFloat(
+      ((totalCancellations / totalReservations) * 100).toFixed(1)
+    );
   };
 
   const formatWeekLabel = (date: string) => {
     if (isMobile) {
       // dateが「13-19」の形式の場合、開始日の「13」を取得
-      const startDateString = date.split('-')[0];
-      return startDateString + '～';
+      const startDateString = date.split("-")[0];
+      return startDateString + "～";
     }
     return date;
   };
@@ -177,7 +183,9 @@ const CancellationCard: React.FC = () => {
     <Card className="bg-white border-none shadow-lg mt-4 md:mt-10">
       <CardContent>
         <div className="mb-4">
-          <h2 className="text-lg font-semibold">キャンセル状況 ({periodDescriptions[activeTab]})</h2>
+          <h2 className="text-lg font-semibold">
+            キャンセル状況 ({periodDescriptions[activeTab]})
+          </h2>
         </div>
         <div className="grid grid-cols-2 gap-4 md:gap-8 mb-6">
           <div className="text-center">
@@ -185,14 +193,20 @@ const CancellationCard: React.FC = () => {
             <p className="text-2xl font-bold">{getTotalCancellations()}</p>
           </div>
           <div className="text-center">
-            <h3 className="text-sm font-medium text-gray-600">平均キャンセル率</h3>
+            <h3 className="text-sm font-medium text-gray-600">
+              平均キャンセル率
+            </h3>
             <p className="text-2xl font-bold">{getAverageRate()}%</p>
           </div>
         </div>
         <Tabs
           value={activeTab}
           onValueChange={(value) => {
-            if (value === "daily" || value === "weekly" || value === "monthly") {
+            if (
+              value === "daily" ||
+              value === "weekly" ||
+              value === "monthly"
+            ) {
               setActiveTab(value);
             }
           }}
@@ -226,7 +240,7 @@ const CancellationCard: React.FC = () => {
                   <XAxis
                     dataKey="date"
                     tickFormatter={(value) => {
-                      if (activeTab === 'weekly' && isMobile) {
+                      if (activeTab === "weekly" && isMobile) {
                         return formatWeekLabel(value);
                       }
                       return value;

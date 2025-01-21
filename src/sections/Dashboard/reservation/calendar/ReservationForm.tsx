@@ -26,7 +26,7 @@ import {
   MagnifyingGlassIcon,
 } from "@heroicons/react/20/solid";
 import debounce from "lodash/debounce";
-import { useAuth } from "@/contexts/authcontext";
+import { useAuth } from "@/lib/authContext";
 
 // 型定義
 interface Customer {

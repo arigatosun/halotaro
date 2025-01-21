@@ -4,7 +4,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
-import { useAuth } from "@/contexts/authcontext";
+import { useAuth } from "@/lib/authContext";
 import axios from "axios";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -68,7 +68,9 @@ const RegisterClosingDetail: React.FC = () => {
   const id = params.id as string;
   const { session, user } = useAuth();
 
-  const [closingData, setClosingData] = useState<RegisterClosingData | null>(null);
+  const [closingData, setClosingData] = useState<RegisterClosingData | null>(
+    null
+  );
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
@@ -95,7 +97,10 @@ const RegisterClosingDetail: React.FC = () => {
       });
       setClosingData(response.data.data);
     } catch (err: any) {
-      console.error("レジ締めデータの取得エラー:", err.response?.data || err.message);
+      console.error(
+        "レジ締めデータの取得エラー:",
+        err.response?.data || err.message
+      );
       setError("データの取得に失敗しました。");
     } finally {
       setLoading(false);
@@ -265,7 +270,7 @@ const RegisterClosingDetail: React.FC = () => {
         <h1 className="text-2xl font-bold">レジ締め詳細</h1>
         <Dialog open={isPrintModalOpen} onOpenChange={setIsPrintModalOpen}>
           <DialogTrigger asChild>
-           {/* <Button variant="outline">
+            {/* <Button variant="outline">
               <Printer className="mr-2 h-4 w-4" />
               ジャーナル印刷
             </Button>*/}
@@ -402,33 +407,39 @@ const RegisterClosingDetail: React.FC = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {closingData.accounting_information.map((item: AccountingItem) => (
-                <TableRow key={item.id}>
-                  <TableCell>
-                    {new Date(item.created_at).toLocaleString("ja-JP", {
-                      year: "numeric",
-                      month: "numeric",
-                      day: "numeric",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </TableCell>
-                  <TableCell>{item.customer_name}</TableCell>
-                  <TableCell>{item.staff_name}</TableCell>
-                  <TableCell>
-                    {item.items.map((service) => service.name).join(", ")}
-                  </TableCell>
-                  <TableCell>{item.total_price.toLocaleString()} 円</TableCell>
-                  <TableCell>
-                    {item.payment_methods
-                      .map(
-                        (method) =>
-                          `${method.method}: ¥${method.amount.toLocaleString()}`
-                      )
-                      .join(", ")}
-                  </TableCell>
-                </TableRow>
-              ))}
+              {closingData.accounting_information.map(
+                (item: AccountingItem) => (
+                  <TableRow key={item.id}>
+                    <TableCell>
+                      {new Date(item.created_at).toLocaleString("ja-JP", {
+                        year: "numeric",
+                        month: "numeric",
+                        day: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </TableCell>
+                    <TableCell>{item.customer_name}</TableCell>
+                    <TableCell>{item.staff_name}</TableCell>
+                    <TableCell>
+                      {item.items.map((service) => service.name).join(", ")}
+                    </TableCell>
+                    <TableCell>
+                      {item.total_price.toLocaleString()} 円
+                    </TableCell>
+                    <TableCell>
+                      {item.payment_methods
+                        .map(
+                          (method) =>
+                            `${
+                              method.method
+                            }: ¥${method.amount.toLocaleString()}`
+                        )
+                        .join(", ")}
+                    </TableCell>
+                  </TableRow>
+                )
+              )}
             </TableBody>
           </Table>
         </CardContent>

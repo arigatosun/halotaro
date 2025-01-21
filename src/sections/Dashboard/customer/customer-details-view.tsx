@@ -35,7 +35,7 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import truncateText from "@/utils/truncate-text";
-import { useAuth } from "@/contexts/authcontext";
+import { useAuth } from "@/lib/authContext";
 
 // 年の選択肢（例として1900年〜2050年まで）
 const YEARS = Array.from({ length: 151 }, (_, i) => {

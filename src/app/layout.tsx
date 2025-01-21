@@ -5,7 +5,7 @@ import { ConfigProvider } from "antd";
 
 // AuthProvider を「クライアントコンポーネント」としてインポート
 // (AuthProvider内部では "use client" が宣言されているはず)
-import { AuthProvider } from "@/contexts/authcontext";
+import { AuthProvider } from "@/lib/authContext";
 
 const notoSansJP = Noto_Sans_JP({
   weight: ["400", "700"],

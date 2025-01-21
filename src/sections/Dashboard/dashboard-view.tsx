@@ -5,7 +5,7 @@ import { Calendar, DollarSign, Clock, LucideIcon } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import Link from "next/link";
 import CancellationCard from "@/components/CancellationCard";
-import { useAuth } from "@/contexts/authcontext";
+import { useAuth } from "@/lib/authContext";
 import dayjs from "dayjs";
 
 interface AnimatedNumberProps {

@@ -16,7 +16,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { PlusCircle, Pencil, Trash2, Loader2 } from "lucide-react";
 import CouponFormModal from "@/components/CouponFormModal";
 import { Coupon } from "@/types/coupon";
-import { useAuth } from "@/contexts/authcontext";
+import { useAuth } from "@/lib/authContext";
 import { Chip } from "@/components/ui/chip";
 
 // ★ Supabaseクライアントをクライアントサイドで生成

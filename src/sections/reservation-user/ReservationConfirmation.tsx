@@ -8,7 +8,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { useReservation } from "@/contexts/reservationcontext";
-import { useAuth } from "@/contexts/authcontext";
+import { useAuth } from "@/lib/authContext";
 import { Separator } from "@/components/ui/separator";
 import {
   CalendarIcon,

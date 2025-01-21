@@ -20,7 +20,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { useAuth } from "@/contexts/authcontext";
+import { useAuth } from "@/lib/authContext";
 import { PlusIcon, MinusIcon, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Label } from "@/components/ui/label";
@@ -33,7 +33,7 @@ interface Item {
   category: string; // 「施術」 or 「店販」 or 「割引」など
   name: string;
   staff: string;
-  price: number;   // 割引ならマイナス金額
+  price: number; // 割引ならマイナス金額
   quantity: number;
   // 以下を追加: discount_type, discount_value など
   discount_type?: "fixed" | "fraction" | "percent";
@@ -66,7 +66,7 @@ interface DBSalesMenuItem {
   id: number;
   user_id: string;
   name: string;
-  category: string;  // 店販は category カラムを直接使う
+  category: string; // 店販は category カラムを直接使う
   price: number;
   description: string | null;
   created_at: string;
@@ -163,7 +163,10 @@ function groupMenuItemsByCategory(
 // 端数計算関数 (fraction)
 // --------------------------
 // 例えば "1円の桁を0にする" → (subtotal % 10) を引く など
-function calcFractionDiscount(subtotal: number, fractionType: "1" | "10" | "100"): number {
+function calcFractionDiscount(
+  subtotal: number,
+  fractionType: "1" | "10" | "100"
+): number {
   if (fractionType === "1") {
     // 1円桁を 0 にする
     return subtotal % 10;
@@ -200,9 +203,9 @@ export const AccountingPage: React.FC<AccountingPageProps> = ({
   >([]);
   const [showCalculator, setShowCalculator] = useState(false);
   const [calculatorInput, setCalculatorInput] = useState("");
-  const [currentPaymentMethod, setCurrentPaymentMethod] = useState<string | null>(
-    null
-  );
+  const [currentPaymentMethod, setCurrentPaymentMethod] = useState<
+    string | null
+  >(null);
   const [showPaymentMethodModal, setShowPaymentMethodModal] = useState(false);
 
   // 施術メニュー
@@ -223,7 +226,9 @@ export const AccountingPage: React.FC<AccountingPageProps> = ({
   // 割引 新規作成用
   const [discountName, setDiscountName] = useState("");
   const [discountValue, setDiscountValue] = useState(0);
-  const [discountType, setDiscountType] = useState<"fixed"|"fraction"|"percent">("fixed");
+  const [discountType, setDiscountType] = useState<
+    "fixed" | "fraction" | "percent"
+  >("fixed");
 
   // 予約・スタッフ関連
   const [reservation, setReservation] = useState<Reservation | null>(null);
@@ -551,59 +556,58 @@ export const AccountingPage: React.FC<AccountingPageProps> = ({
     setTotal(newTotal);
   }, [items]);
 
-// ------------------------------------
-// 10-A&B) 割引を「パーセント→端数」の順で再計算
-// ------------------------------------
-useEffect(() => {
-  // 1) 割引アイテムを抜き出す
-  const discountItemsInCart = items.filter((it) => it.category === "割引");
-  if (discountItemsInCart.length === 0) return;
+  // ------------------------------------
+  // 10-A&B) 割引を「パーセント→端数」の順で再計算
+  // ------------------------------------
+  useEffect(() => {
+    // 1) 割引アイテムを抜き出す
+    const discountItemsInCart = items.filter((it) => it.category === "割引");
+    if (discountItemsInCart.length === 0) return;
 
-  // 2) パーセント割引・端数割引 を分類
-  const percentItems = discountItemsInCart.filter(
-    (it) => it.discount_type === "percent"
-  );
-  const fractionItems = discountItemsInCart.filter(
-    (it) => it.discount_type === "fraction"
-  );
-  // 他の割引 (fixedなど) もある場合はここで分類してもOK
+    // 2) パーセント割引・端数割引 を分類
+    const percentItems = discountItemsInCart.filter(
+      (it) => it.discount_type === "percent"
+    );
+    const fractionItems = discountItemsInCart.filter(
+      (it) => it.discount_type === "fraction"
+    );
+    // 他の割引 (fixedなど) もある場合はここで分類してもOK
 
-  // 3) まず「パーセント割引」を順次適用
-  //    パーセント割引を除くアイテムたちの小計
-  let currentSubtotal = items
-    .filter((it) => !percentItems.includes(it) && !fractionItems.includes(it))
-    .reduce((sum, it) => sum + it.price * it.quantity, 0);
+    // 3) まず「パーセント割引」を順次適用
+    //    パーセント割引を除くアイテムたちの小計
+    let currentSubtotal = items
+      .filter((it) => !percentItems.includes(it) && !fractionItems.includes(it))
+      .reduce((sum, it) => sum + it.price * it.quantity, 0);
 
-  percentItems.forEach((pItem) => {
-    const pct = pItem.discount_value ?? 0;
-    const discountAmount = Math.floor(currentSubtotal * (pct / 100));
-    const newPrice = -discountAmount;
-    if (pItem.price !== newPrice) {
-      setItems((prev) =>
-        prev.map((x) => (x.id === pItem.id ? { ...x, price: newPrice } : x))
-      );
-    }
-    currentSubtotal -= discountAmount;
-  });
+    percentItems.forEach((pItem) => {
+      const pct = pItem.discount_value ?? 0;
+      const discountAmount = Math.floor(currentSubtotal * (pct / 100));
+      const newPrice = -discountAmount;
+      if (pItem.price !== newPrice) {
+        setItems((prev) =>
+          prev.map((x) => (x.id === pItem.id ? { ...x, price: newPrice } : x))
+        );
+      }
+      currentSubtotal -= discountAmount;
+    });
 
-  // 4) 続いて「端数割引」を適用
-  fractionItems.forEach((fItem) => {
-    // 端数の種類を決める
-    let fractionType: "1" | "10" | "100" = "1";
-    if (fItem.name.includes("10円")) fractionType = "10";
-    if (fItem.name.includes("100円")) fractionType = "100";
+    // 4) 続いて「端数割引」を適用
+    fractionItems.forEach((fItem) => {
+      // 端数の種類を決める
+      let fractionType: "1" | "10" | "100" = "1";
+      if (fItem.name.includes("10円")) fractionType = "10";
+      if (fItem.name.includes("100円")) fractionType = "100";
 
-    const fracValue = calcFractionDiscount(currentSubtotal, fractionType);
-    const newPrice = -fracValue;
-    if (fItem.price !== newPrice) {
-      setItems((prev) =>
-        prev.map((x) => (x.id === fItem.id ? { ...x, price: newPrice } : x))
-      );
-    }
-    currentSubtotal -= fracValue;
-  });
-}, [items]);
-
+      const fracValue = calcFractionDiscount(currentSubtotal, fractionType);
+      const newPrice = -fracValue;
+      if (fItem.price !== newPrice) {
+        setItems((prev) =>
+          prev.map((x) => (x.id === fItem.id ? { ...x, price: newPrice } : x))
+        );
+      }
+      currentSubtotal -= fracValue;
+    });
+  }, [items]);
 
   // ------------------------------------
   // 11) アイテム操作系
@@ -638,9 +642,9 @@ useEffect(() => {
       category: "割引",
       name: discount.name,
       staff: "",
-      discount_type: discount.discount_type,     // ← 追加
-      discount_value: discount.discount_value,   // ← 追加
-      price: -discount.discount_value,           // "fixed" の場合はこのまま
+      discount_type: discount.discount_type, // ← 追加
+      discount_value: discount.discount_value, // ← 追加
+      price: -discount.discount_value, // "fixed" の場合はこのまま
       quantity: 1,
     };
     setItems((prev) => [...prev, newItem]);
@@ -681,7 +685,10 @@ useEffect(() => {
   // ------------------------------------
   const handleAccounting = async () => {
     try {
-      const totalPayment = paymentMethods.reduce((sum, pm) => sum + pm.amount, 0);
+      const totalPayment = paymentMethods.reduce(
+        (sum, pm) => sum + pm.amount,
+        0
+      );
       if (totalPayment !== total) {
         alert("支払い金額の合計が現計と一致しません");
         return;
@@ -891,18 +898,22 @@ useEffect(() => {
       <CardContent className="bg-white p-6 rounded-lg">
         <h2 className="text-2xl font-bold mb-4">支払方法選択</h2>
         <div className="space-y-2">
-          {["クレジットカード", "電子マネー", "ギフト券", "ポイント", "スマート支払い"].map(
-            (method) => (
-              <Button
-                key={method}
-                className="w-full justify-start"
-                variant="outline"
-                onClick={() => handleCardPaymentMethodSelect(method)}
-              >
-                {method}
-              </Button>
-            )
-          )}
+          {[
+            "クレジットカード",
+            "電子マネー",
+            "ギフト券",
+            "ポイント",
+            "スマート支払い",
+          ].map((method) => (
+            <Button
+              key={method}
+              className="w-full justify-start"
+              variant="outline"
+              onClick={() => handleCardPaymentMethodSelect(method)}
+            >
+              {method}
+            </Button>
+          ))}
         </div>
         <Button
           className="w-full mt-4"
@@ -922,7 +933,10 @@ useEffect(() => {
         <Input value={calculatorInput} readOnly className="mb-4" />
         <div className="grid grid-cols-3 gap-2">
           {[7, 8, 9, 4, 5, 6, 1, 2, 3, 0].map((num) => (
-            <Button key={num} onClick={() => handleCalculatorInput(num.toString())}>
+            <Button
+              key={num}
+              onClick={() => handleCalculatorInput(num.toString())}
+            >
               {num}
             </Button>
           ))}
@@ -930,7 +944,10 @@ useEffect(() => {
           <Button onClick={() => handleCalculatorInput("clear")}>C</Button>
           <Button onClick={() => handleCalculatorInput("backspace")}>←</Button>
         </div>
-        <Button className="w-full mt-4" onClick={() => handleCalculatorInput("total")}>
+        <Button
+          className="w-full mt-4"
+          onClick={() => handleCalculatorInput("total")}
+        >
           {total.toLocaleString()}
         </Button>
         <Button className="w-full mt-2" onClick={handleCalculatorConfirm}>
@@ -986,10 +1003,16 @@ useEffect(() => {
             </div>
 
             <div className="grid grid-cols-2 gap-2">
-              <Button variant="outline" onClick={() => handlePaymentMethodClick("現金")}>
+              <Button
+                variant="outline"
+                onClick={() => handlePaymentMethodClick("現金")}
+              >
                 現金
               </Button>
-              <Button variant="outline" onClick={() => handlePaymentMethodClick("カード・その他")}>
+              <Button
+                variant="outline"
+                onClick={() => handlePaymentMethodClick("カード・その他")}
+              >
                 カード・その他
               </Button>
             </div>
@@ -998,7 +1021,9 @@ useEffect(() => {
               <div className="space-y-2">
                 <div className="flex justify-between">
                   <span>支払い合計:</span>
-                  <span className="font-bold">{totalPayment.toLocaleString()}円</span>
+                  <span className="font-bold">
+                    {totalPayment.toLocaleString()}円
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span>お釣り:</span>
@@ -1050,7 +1075,10 @@ useEffect(() => {
                   <Label htmlFor="selectedStaff" className="mb-1">
                     指名スタッフ
                   </Label>
-                  <Select value={selectedStaff} onValueChange={setSelectedStaff}>
+                  <Select
+                    value={selectedStaff}
+                    onValueChange={setSelectedStaff}
+                  >
                     <SelectTrigger id="selectedStaff" className="w-[200px]">
                       <SelectValue placeholder="選択してください" />
                     </SelectTrigger>
@@ -1068,7 +1096,10 @@ useEffect(() => {
                   <Label htmlFor="selectedCashier" className="mb-1">
                     レジ担当者
                   </Label>
-                  <Select value={selectedCashier} onValueChange={setSelectedCashier}>
+                  <Select
+                    value={selectedCashier}
+                    onValueChange={setSelectedCashier}
+                  >
                     <SelectTrigger className="w-[200px]">
                       <SelectValue placeholder="選択してください" />
                     </SelectTrigger>
@@ -1090,9 +1121,15 @@ useEffect(() => {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="text-black font-bold">カテゴリ</TableHead>
-                  <TableHead className="text-black font-bold">メニュー・店販・割引</TableHead>
-                  <TableHead className="text-black font-bold">スタッフ</TableHead>
+                  <TableHead className="text-black font-bold">
+                    カテゴリ
+                  </TableHead>
+                  <TableHead className="text-black font-bold">
+                    メニュー・店販・割引
+                  </TableHead>
+                  <TableHead className="text-black font-bold">
+                    スタッフ
+                  </TableHead>
                   <TableHead className="text-black font-bold">単価</TableHead>
                   <TableHead className="text-black font-bold">個数</TableHead>
                   <TableHead className="text-black font-bold">金額</TableHead>
@@ -1109,7 +1146,9 @@ useEffect(() => {
                       <Input
                         type="number"
                         value={item.price}
-                        onChange={(e) => updateItem(item.id, "price", Number(e.target.value))}
+                        onChange={(e) =>
+                          updateItem(item.id, "price", Number(e.target.value))
+                        }
                         className="w-24"
                       />
                     </TableCell>
@@ -1118,14 +1157,24 @@ useEffect(() => {
                         type="number"
                         value={item.quantity}
                         onChange={(e) =>
-                          updateItem(item.id, "quantity", Number(e.target.value))
+                          updateItem(
+                            item.id,
+                            "quantity",
+                            Number(e.target.value)
+                          )
                         }
                         className="w-24"
                       />
                     </TableCell>
-                    <TableCell>{(item.price * item.quantity).toLocaleString()}円</TableCell>
                     <TableCell>
-                      <Button variant="ghost" size="sm" onClick={() => removeItem(item.id)}>
+                      {(item.price * item.quantity).toLocaleString()}円
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeItem(item.id)}
+                      >
                         <MinusIcon className="h-4 w-4" />
                       </Button>
                     </TableCell>
@@ -1178,7 +1227,11 @@ useEffect(() => {
                         {treatmentCategories.map((catName) => (
                           <Button
                             key={catName}
-                            variant={catName === selectedCategory ? "default" : "outline"}
+                            variant={
+                              catName === selectedCategory
+                                ? "default"
+                                : "outline"
+                            }
                             onClick={() => setSelectedCategory(catName)}
                             className={
                               catName === selectedCategory
@@ -1192,17 +1245,19 @@ useEffect(() => {
                       </div>
                       {/* カテゴリに紐づく施術メニュー一覧 */}
                       <div className="space-y-2">
-                        {treatmentItemsByCategory[selectedCategory]?.map((m) => (
-                          <Button
-                            key={m.id}
-                            variant="outline"
-                            className="w-full justify-start"
-                            onClick={() => addItem("施術", m.name, m.price)}
-                          >
-                            <PlusIcon className="mr-2 h-4 w-4" />
-                            {m.name} （{m.price}円）
-                          </Button>
-                        ))}
+                        {treatmentItemsByCategory[selectedCategory]?.map(
+                          (m) => (
+                            <Button
+                              key={m.id}
+                              variant="outline"
+                              className="w-full justify-start"
+                              onClick={() => addItem("施術", m.name, m.price)}
+                            >
+                              <PlusIcon className="mr-2 h-4 w-4" />
+                              {m.name} （{m.price}円）
+                            </Button>
+                          )
+                        )}
                       </div>
                     </div>
                   </TabsContent>
@@ -1214,7 +1269,11 @@ useEffect(() => {
                         {retailCategories.map((catName) => (
                           <Button
                             key={catName}
-                            variant={catName === selectedCategory ? "default" : "outline"}
+                            variant={
+                              catName === selectedCategory
+                                ? "default"
+                                : "outline"
+                            }
                             onClick={() => setSelectedCategory(catName)}
                             className={
                               catName === selectedCategory
@@ -1257,17 +1316,26 @@ useEffect(() => {
                           type="number"
                           className="w-24"
                           value={discountValue}
-                          onChange={(e) => setDiscountValue(Number(e.target.value))}
+                          onChange={(e) =>
+                            setDiscountValue(Number(e.target.value))
+                          }
                         />
 
                         {/* 割引タイプを選択: fixed / fraction / percent */}
-                        <Select value={discountType} onValueChange={(val) => setDiscountType(val as "fixed"|"fraction"|"percent")}>
+                        <Select
+                          value={discountType}
+                          onValueChange={(val) =>
+                            setDiscountType(
+                              val as "fixed" | "fraction" | "percent"
+                            )
+                          }
+                        >
                           <SelectTrigger className="w-[250px]">
                             <SelectValue placeholder="種類" />
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="fixed">固定割引</SelectItem>
-                            
+
                             <SelectItem value="percent">％割引</SelectItem>
                           </SelectContent>
                         </Select>
@@ -1278,7 +1346,10 @@ useEffect(() => {
                       {/* 登録済み割引一覧 */}
                       <div className="space-y-2">
                         {discountItems.map((d) => (
-                          <div key={d.id} className="flex items-center space-x-2">
+                          <div
+                            key={d.id}
+                            className="flex items-center space-x-2"
+                          >
                             {/* 割引アイテム追加ボタン */}
                             <Button
                               variant="outline"
@@ -1286,13 +1357,12 @@ useEffect(() => {
                               onClick={() => addDiscountItem(d)}
                             >
                               <PlusIcon className="mr-2 h-4 w-4" />
-                              {d.name} 
+                              {d.name}
                               {d.discount_type === "percent"
                                 ? `（${d.discount_value}%割引）`
                                 : d.discount_type === "fraction"
                                 ? ``
-                                : `（ -${d.discount_value}円 ）`
-                              }
+                                : `（ -${d.discount_value}円 ）`}
                             </Button>
 
                             {/* 削除ボタン */}

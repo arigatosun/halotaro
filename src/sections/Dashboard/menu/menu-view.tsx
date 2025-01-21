@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import { Scissors, Clock, DollarSign, Edit, Trash2, Plus } from "lucide-react";
 
 import { message } from "antd";
-import { useAuth } from "@/contexts/authcontext";
+import { useAuth } from "@/lib/authContext";
 import { supabase } from "@/lib/supabaseClient";
 
 interface MenuItem {
