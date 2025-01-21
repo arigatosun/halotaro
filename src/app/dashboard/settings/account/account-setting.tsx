@@ -34,20 +34,27 @@ export default function AccountSettingView() {
 
   if (!user) {
     return (
-      <div className="text-red-500 text-center mt-4">
-        ログイン情報の取得に失敗しました。
-        <br />
-        再度ログインしてからお試しください。
+      // 全体をカードなどで包みたい場合はさらに構造を足してもOKです
+      <div className="p-8 max-w-4xl mx-auto">
+        <h2 className="text-2xl font-bold mb-6">アカウント設定</h2>
+        <div className="text-red-500 text-center">
+          ログイン情報の取得に失敗しました。
+          <br />
+          再度ログインしてからお試しください。
+        </div>
       </div>
     );
   }
 
   // ログイン中のユーザーが取得できた場合にアカウント設定フォームを表示
   return (
-    <AuthenticatedAccountSettings
-      userId={user.id}
-      userEmail={user.email ?? ""}
-    />
+    <div className="p-8 max-w-4xl mx-auto">
+      <h2 className="text-2xl font-bold mb-6">アカウント設定</h2>
+      <AuthenticatedAccountSettings
+        userId={user.id}
+        userEmail={user.email ?? ""}
+      />
+    </div>
   );
 }
 
@@ -111,37 +118,35 @@ function AuthenticatedAccountSettings({
   }
 
   return (
-    <div className="p-4 max-w-2xl mx-auto">
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">アカウント設定</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div>
-            <Label htmlFor="newEmail">メールアドレス</Label>
-            <Input
-              id="newEmail"
-              type="email"
-              value={newEmail}
-              onChange={(e) => setNewEmail(e.target.value)}
-              placeholder="新しいメールアドレス"
-            />
-          </div>
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-lg">アカウント設定</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div>
+          <Label htmlFor="newEmail">メールアドレス</Label>
+          <Input
+            id="newEmail"
+            type="email"
+            value={newEmail}
+            onChange={(e) => setNewEmail(e.target.value)}
+            placeholder="新しいメールアドレス"
+          />
+        </div>
 
-          <div>
-            <Label htmlFor="newPassword">パスワード</Label>
-            <Input
-              id="newPassword"
-              type="password"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              placeholder="新しいパスワード"
-            />
-          </div>
+        <div>
+          <Label htmlFor="newPassword">パスワード</Label>
+          <Input
+            id="newPassword"
+            type="password"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            placeholder="新しいパスワード"
+          />
+        </div>
 
-          <Button onClick={handleUpdateAccount}>アカウント情報を更新</Button>
-        </CardContent>
-      </Card>
-    </div>
+        <Button onClick={handleUpdateAccount}>アカウント情報を更新</Button>
+      </CardContent>
+    </Card>
   );
 }

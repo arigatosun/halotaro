@@ -1,12 +1,12 @@
-'use client';
+"use client";
 
-import React, { useEffect, useState, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import { Card, CardHeader, CardContent } from '@/components/ui/card';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Skeleton } from '@/components/ui/skeleton';
-import { CheckCircle, XCircle } from 'lucide-react';
+import React, { useEffect, useState, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+import { Card, CardHeader, CardContent } from "@/components/ui/card";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Skeleton } from "@/components/ui/skeleton";
+import { CheckCircle, XCircle } from "lucide-react";
 
 interface Reservation {
   id: string;
@@ -15,7 +15,11 @@ interface Reservation {
   total_price: number;
 }
 
-const CancelConfirmationContent = ({ reservationId }: { reservationId: string }) => {
+const CancelConfirmationContent = ({
+  reservationId,
+}: {
+  reservationId: string;
+}) => {
   const [reservation, setReservation] = useState<Reservation | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -25,23 +29,23 @@ const CancelConfirmationContent = ({ reservationId }: { reservationId: string })
   useEffect(() => {
     const fetchReservation = async () => {
       if (!reservationId) {
-        setError('予約IDが見つかりません。');
+        setError("予約IDが見つかりません。");
         setIsLoading(false);
         return;
       }
 
       try {
         const { data, error } = await supabase
-          .from('reservations')
-          .select('*')
-          .eq('id', reservationId)
+          .from("reservations")
+          .select("*")
+          .eq("id", reservationId)
           .single();
 
         if (error) throw error;
         setReservation(data);
       } catch (error) {
-        console.error('Error fetching reservation:', error);
-        setError('予約情報の取得に失敗しました。');
+        console.error("Error fetching reservation:", error);
+        setError("予約情報の取得に失敗しました。");
       } finally {
         setIsLoading(false);
       }
@@ -89,7 +93,10 @@ const CancelConfirmationContent = ({ reservationId }: { reservationId: string })
         <CardContent className="space-y-4">
           <p className="text-center">以下の予約がキャンセルされました：</p>
           <div className="text-center">
-            <p>予約日時: {new Date(reservation!.start_time).toLocaleString('ja-JP')}</p>
+            <p>
+              予約日時:{" "}
+              {new Date(reservation!.start_time).toLocaleString("ja-JP")}
+            </p>
             <p>サービス: {reservation!.scraped_menu}</p>
             <p>料金: ¥{reservation!.total_price.toLocaleString()}</p>
           </div>
@@ -112,7 +119,7 @@ const CancelConfirmationPage = () => {
 
 const ReservationIdWrapper = () => {
   const searchParams = useSearchParams();
-  const reservationId = searchParams.get('id') || '';
+  const reservationId = searchParams.get("id") || "";
   return <CancelConfirmationContent reservationId={reservationId} />;
 };
 

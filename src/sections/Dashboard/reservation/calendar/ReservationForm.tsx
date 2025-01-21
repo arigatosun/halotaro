@@ -189,8 +189,8 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
     setSearchValue(customer.name);
     setIsCustomerSelected(true); // 顧客が選択されたので true にする
 
-    const nameParts = customer.name.split(" ");
-    const nameKanaParts = customer.name_kana.split(" ");
+    const nameParts = customer.name.trim().split(/[ 　]+/);
+    const nameKanaParts = customer.name_kana.trim().split(/[ 　]+/);
 
     setFormData((prevFormData) => {
       const updatedFormData = {
@@ -222,11 +222,15 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
   useEffect(() => {
     if (reservation && !isCreatingFromButton) {
       // フルネームを姓と名に分割
-      const nameParts = (reservation.customer_name || "").split(" ");
+      const nameParts = (reservation.customer_name || "")
+        .trim()
+        .split(/[ 　]+/);
       const lastName = nameParts[0] || "";
       const firstName = nameParts[1] || "";
 
-      const nameKanaParts = (reservation.customer_name_kana || "").split(" ");
+      const nameKanaParts = (reservation.customer_name_kana || "")
+        .trim()
+        .split(/[ 　]+/);
       const lastNameKana = nameKanaParts[0] || "";
       const firstNameKana = nameKanaParts[1] || "";
 
