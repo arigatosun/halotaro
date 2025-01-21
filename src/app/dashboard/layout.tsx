@@ -43,7 +43,7 @@ export default function DashboardLayout({
         <div className={`flex flex-col min-h-screen ${notoSansJP.className}`}>
           <Header />
 
-          <main className="flex-grow pt-[calc(var(--main-header-height)+var(--sub-header-height)+1rem)] p-0 overflow-auto">
+          <main className="flex-grow pt-[calc(var(--main-header-height)+var(--sub-header-height)+1rem)] p-0 overflow-auto mt-3">
             <div
               className={
                 isReservationPage ? "w-full h-full" : "max-w-7xl mx-auto"
