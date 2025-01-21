@@ -31,7 +31,7 @@ import useReservationCalendar from "./useReservationCalendar";
 import { EventClickArg, EventDropArg, DateSelectArg } from "@fullcalendar/core";
 import { DateClickArg } from "@fullcalendar/interaction";
 import { Reservation } from "@/types/reservation";
-import { useAuth } from "@/contexts/authcontext";
+import { useAuth } from "@/lib/authContext";
 import FullCalendar from "@fullcalendar/react";
 import { useMediaQuery } from "react-responsive";
 import { AdapterMoment } from "@mui/x-date-pickers/AdapterMoment";

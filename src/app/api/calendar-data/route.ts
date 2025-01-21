@@ -9,6 +9,7 @@ import {
 } from "@/types/reservation";
 import moment from "moment-timezone";
 import { createClient } from "@supabase/supabase-js";
+import { sendReservationEmails } from "@/app/service/reservationService";
 
 // anon key で作ったクライアントを使う
 const supabaseAnon = createClient(
@@ -452,6 +453,46 @@ export async function POST(request: Request) {
 
         // フォーマット処理
         const formattedReservation = formatReservation(newReservation);
+
+        // もしメールアドレスがあればメール送信する
+        if (customer_email) {
+          try {
+            // 予約開始・終了日時などを取り出し
+            const startTime = data.start_time;
+            const endTime = data.end_time;
+            const staffName = formattedReservation.staff_name || "";
+            const serviceName = formattedReservation.menu_name || "";
+            const totalPrice = data.total_price || 0;
+
+            // 送信用パラメータを組み立て
+            await sendReservationEmails({
+              reservationId,
+              customerInfo: {
+                firstNameKanji: data.customer_first_name || "",
+                lastNameKanji: data.customer_last_name || "",
+                firstNameKana: data.customer_first_name_kana || "",
+                lastNameKana: data.customer_last_name_kana || "",
+                email: customer_email,
+                phone: customer_phone || "",
+              },
+              startTime,
+              endTime,
+              staffName,
+              serviceName,
+              totalPrice,
+              // スタッフやサロン運営者への通知メール先をどう取得するかは
+              // fetchRecipientEmails(userId) などで
+              recipientEmails: [],
+            });
+            console.log(
+              "Reservation confirmation email sent to:",
+              customer_email
+            );
+          } catch (err) {
+            console.error("Failed to send reservation email:", err);
+            // メール送信に失敗しても、予約自体は成功として扱うかどうかは要件次第
+          }
+        }
 
         // レスポンスを返す
         return NextResponse.json(formattedReservation);

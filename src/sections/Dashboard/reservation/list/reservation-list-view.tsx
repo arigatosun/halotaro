@@ -1,38 +1,38 @@
-'use client'
+"use client";
 
-import React, { useState, useEffect } from "react"
-import { Card, CardContent } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
+import React, { useState, useEffect } from "react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select"
-import { Checkbox } from "@/components/ui/checkbox"
-import { DatePickerWithRange } from "@/components/ui/date-picker-with-range"
-import ReservationTable from "@/components/ReservationTable"
-import { DateRange } from "react-day-picker"
-import { Search, X, ChevronDown } from "lucide-react"
-import { useReservations } from "@/hooks/useReservations"
-import { useAuth } from "@/contexts/authcontext"
-import { supabase } from "@/lib/supabaseClient"
-import { format, addDays, subDays } from "date-fns"
+} from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
+import { DatePickerWithRange } from "@/components/ui/date-picker-with-range";
+import ReservationTable from "@/components/ReservationTable";
+import { DateRange } from "react-day-picker";
+import { Search, X, ChevronDown } from "lucide-react";
+import { useReservations } from "@/hooks/useReservations";
+import { useAuth } from "@/lib/authContext";
+import { supabase } from "@/lib/supabaseClient";
+import { format, addDays, subDays } from "date-fns";
 
 interface FilterOptions {
-  dateRange: DateRange | undefined
-  statuses: string[]
-  customerName: string
-  menu: string
-  staff: string
-  reservationRoute: string
+  dateRange: DateRange | undefined;
+  statuses: string[];
+  customerName: string;
+  menu: string;
+  staff: string;
+  reservationRoute: string;
 }
 
 interface Staff {
-  id: string
-  name: string
+  id: string;
+  name: string;
 }
 
 const statusOptions = [
@@ -42,11 +42,11 @@ const statusOptions = [
   { value: "salon_cancelled", label: "サロンキャンセル" },
   { value: "same_day_cancelled", label: "当日キャンセル" },
   { value: "no_show", label: "無断キャンセル" },
-]
+];
 
 export default function ReservationListView() {
-  const { user } = useAuth()
-  const [staffList, setStaffList] = useState<Staff[]>([])
+  const { user } = useAuth();
+  const [staffList, setStaffList] = useState<Staff[]>([]);
   const [filterOptions, setFilterOptions] = useState<FilterOptions>({
     dateRange: { from: new Date(), to: new Date() },
     statuses: [],
@@ -54,17 +54,17 @@ export default function ReservationListView() {
     menu: "",
     staff: "all",
     reservationRoute: "all",
-  })
-  const [page, setPage] = useState(1)
-  const [isFilterOpen, setIsFilterOpen] = useState(false)
-  const limit = 10
+  });
+  const [page, setPage] = useState(1);
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const limit = 10;
 
   const { reservations, loading, error, totalCount } = useReservations(
     user?.id, // ここにuser?.idを追加
     filterOptions,
     page,
     limit
-  )
+  );
 
   useEffect(() => {
     if (user) {
@@ -72,23 +72,23 @@ export default function ReservationListView() {
         const { data, error } = await supabase
           .from("staff")
           .select("*")
-          .eq("user_id", user.id)
+          .eq("user_id", user.id);
 
         if (error) {
-          console.error("スタッフ情報の取得エラー:", error)
+          console.error("スタッフ情報の取得エラー:", error);
         } else if (data) {
-          setStaffList(data as Staff[])
+          setStaffList(data as Staff[]);
         }
-      }
+      };
 
-      fetchStaffData()
+      fetchStaffData();
     }
-  }, [user])
+  }, [user]);
 
   const handleDateRangeChange = (range: DateRange | undefined) => {
-    setFilterOptions((prev) => ({ ...prev, dateRange: range }))
-    setPage(1)
-  }
+    setFilterOptions((prev) => ({ ...prev, dateRange: range }));
+    setPage(1);
+  };
 
   const handleStatusChange = (status: string, checked: boolean) => {
     setFilterOptions((prev) => ({
@@ -96,25 +96,25 @@ export default function ReservationListView() {
       statuses: checked
         ? [...prev.statuses, status]
         : prev.statuses.filter((s) => s !== status),
-    }))
-    setPage(1)
-  }
+    }));
+    setPage(1);
+  };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target
-    setFilterOptions((prev) => ({ ...prev, [name]: value }))
-    setPage(1)
-  }
+    const { name, value } = e.target;
+    setFilterOptions((prev) => ({ ...prev, [name]: value }));
+    setPage(1);
+  };
 
   const handleSelectChange = (name: string, value: string) => {
-    setFilterOptions((prev) => ({ ...prev, [name]: value }))
-    setPage(1)
-  }
+    setFilterOptions((prev) => ({ ...prev, [name]: value }));
+    setPage(1);
+  };
 
   const handleSearch = () => {
-    setPage(1)
-    setIsFilterOpen(false)
-  }
+    setPage(1);
+    setIsFilterOpen(false);
+  };
 
   const handleClear = () => {
     setFilterOptions({
@@ -124,59 +124,70 @@ export default function ReservationListView() {
       menu: "",
       staff: "all",
       reservationRoute: "all",
-    })
-    setPage(1)
-  }
+    });
+    setPage(1);
+  };
 
   const handlePageChange = (newPage: number) => {
-    setPage(newPage)
-  }
+    setPage(newPage);
+  };
 
   const toggleFilter = () => {
-    setIsFilterOpen(!isFilterOpen)
-  }
+    setIsFilterOpen(!isFilterOpen);
+  };
 
-  const handleDateChange = (direction: 'previous' | 'today' | 'next') => {
-    const currentDate = filterOptions.dateRange?.from || new Date()
-    let newDate: Date
+  const handleDateChange = (direction: "previous" | "today" | "next") => {
+    const currentDate = filterOptions.dateRange?.from || new Date();
+    let newDate: Date;
 
     switch (direction) {
-      case 'previous':
-        newDate = subDays(currentDate, 1)
-        break
-      case 'today':
-        newDate = new Date()
-        break
-      case 'next':
-        newDate = addDays(currentDate, 1)
-        break
+      case "previous":
+        newDate = subDays(currentDate, 1);
+        break;
+      case "today":
+        newDate = new Date();
+        break;
+      case "next":
+        newDate = addDays(currentDate, 1);
+        break;
     }
 
     setFilterOptions((prev) => ({
       ...prev,
       dateRange: { from: newDate, to: newDate },
-    }))
-    setPage(1)
-  }
+    }));
+    setPage(1);
+  };
 
   return (
     <div className="p-4 md:p-8">
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-2xl md:text-3xl font-bold">予約一覧</h2>
         <div className="flex space-x-2">
-          <Button size="sm" onClick={() => handleDateChange('previous')}>前日</Button>
-          <Button size="sm" onClick={() => handleDateChange('today')}>本日</Button>
-          <Button size="sm" onClick={() => handleDateChange('next')}>翌日</Button>
+          <Button size="sm" onClick={() => handleDateChange("previous")}>
+            前日
+          </Button>
+          <Button size="sm" onClick={() => handleDateChange("today")}>
+            本日
+          </Button>
+          <Button size="sm" onClick={() => handleDateChange("next")}>
+            翌日
+          </Button>
         </div>
       </div>
 
       <div className="md:hidden mb-4">
         <Button onClick={toggleFilter} className="w-full justify-between">
-          絞り込み検索 <ChevronDown className={`ml-2 h-4 w-4 transition-transform ${isFilterOpen ? 'rotate-180' : ''}`} />
+          絞り込み検索{" "}
+          <ChevronDown
+            className={`ml-2 h-4 w-4 transition-transform ${
+              isFilterOpen ? "rotate-180" : ""
+            }`}
+          />
         </Button>
       </div>
 
-      <Card className={`mb-4 md:mb-8 ${isFilterOpen ? '' : 'hidden md:block'}`}>
+      <Card className={`mb-4 md:mb-8 ${isFilterOpen ? "" : "hidden md:block"}`}>
         <CardContent className="p-4 md:p-6">
           <div className="space-y-4">
             <DatePickerWithRange
@@ -276,5 +287,5 @@ export default function ReservationListView() {
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }
