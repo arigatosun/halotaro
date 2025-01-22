@@ -160,7 +160,7 @@ const ReservationCalendar: React.FC = () => {
     }
     const newReservation: Partial<Reservation> = {
       start_time: date.toISOString(),
-      end_time: moment(date).add(1, "hours").toISOString(),
+      end_time: date.toISOString(),
       staff_id: resource.id,
       is_staff_schedule: false,
     };

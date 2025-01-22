@@ -21,6 +21,8 @@ export interface Reservation {
   editable?: boolean; // この行を追加
   is_hair_sync?: boolean; // この行を追加
   customer_id?: string; // ここを追加
+  coupon_id?: string; // ここを追加
+  coupon_name?: string; // ここを追加
   // その他のフィールドがある場合はここに追加
 }
 

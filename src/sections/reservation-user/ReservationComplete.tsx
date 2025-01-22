@@ -107,16 +107,15 @@ export default function ReservationComplete({
         nm_mei_kana: customerInfo.firstNameKana,
         nm_sei: customerInfo.lastNameKanji,
         nm_mei: customerInfo.firstNameKanji,
-        rsv_term_hour: rsvTermHour,
-        rsv_term_minute: rsvTermMinute,
         is_no_appointment: isNoAppointment,
+        time_value: serviceType === "hair" ? duration.toString() : "",
       };
 
       console.log("Sending automation data:", automationData);
 
       // 例: ngrokで公開中のFastAPIエンドポイント
       const FASTAPI_ENDPOINT =
-        "https://4e37-xx-xx-xx.ngrok-free.app/run-automation";
+        "https://4e37-34-97-99-223.ngrok-free.app/run-automation";
 
       const automationResponse = await fetch(FASTAPI_ENDPOINT, {
         method: "POST",

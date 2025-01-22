@@ -65,10 +65,22 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: menuError.message }, { status: 500 });
     }
 
+    // クーポン
+    const { data: couponList, error: couponError } = await supabaseAnon
+      .from("coupons")
+      .select("*")
+      .eq("user_id", userId);
+
+    if (couponError) {
+      console.error("Error fetching coupon list:", couponError);
+      return NextResponse.json({ error: couponError.message }, { status: 500 });
+    }
+
     // 4) 結果返却
     return NextResponse.json({
       staffList,
       menuList,
+      couponList,
     });
   } catch (error) {
     console.error("Unexpected error in GET handler:", error);

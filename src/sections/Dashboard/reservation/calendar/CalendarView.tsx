@@ -159,28 +159,46 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
         },
       }));
 
-    // 通常予約・スタッフスケジュール・サロン休業日をまとめた events
+    // 予約 (通常 or スタッフスケジュール) + サロン休業日 + スタッフ休日 をまとめた events
     const events = [
       // 予約・スタッフスケジュール
       ...reservations
         .filter((r) => hasValidStartAndEnd(r) && hasStaffId(r))
-        .map((r) => ({
-          id: r.id,
-          resourceId: r.staff_id.toString(),
-          title: r.is_staff_schedule
-            ? r.event || ""
-            : `${r.customer_name || ""} - ${r.menu_name || ""}`,
-          start: r.start_time,
-          end: r.end_time,
-          classNames: r.is_staff_schedule
-            ? ["staff-schedule"]
-            : r.is_hair_sync
-            ? ["hair-reservation"]
-            : ["customer-reservation"],
-          editable: !r.is_closed_day && !r.is_hair_sync,
-          resourceEditable: !r.is_closed_day && !r.is_hair_sync,
-          extendedProps: r,
-        })),
+        .map((r) => {
+          // メニューorクーポンをタイトルに反映 (表示を調整したい場合はお好みで)
+          let displayedTitle = "";
+          if (r.is_staff_schedule) {
+            // スタッフスケジュール
+            displayedTitle = r.event || "";
+          } else {
+            // 通常予約 (メニュー or クーポン)
+            const customerDisplay =
+              r.customer_name || r.customer_name_kana || "Unknown";
+            // ここで、menu_id があれば menu_name、coupon_id があれば coupon_name を表示
+            const menuOrCouponName = r.menu_id
+              ? r.menu_name
+              : r.coupon_id
+              ? r.coupon_name
+              : "";
+            displayedTitle = `${customerDisplay} - ${menuOrCouponName || ""}`;
+          }
+
+          return {
+            id: r.id,
+            resourceId: r.staff_id.toString(),
+            title: displayedTitle,
+            start: r.start_time,
+            end: r.end_time,
+            classNames: r.is_staff_schedule
+              ? ["staff-schedule"]
+              : r.is_hair_sync
+              ? ["hair-reservation"]
+              : ["customer-reservation"],
+            editable: !r.is_closed_day && !r.is_hair_sync,
+            resourceEditable: !r.is_closed_day && !r.is_hair_sync,
+            extendedProps: r, // ← coupon_id, coupon_nameなどもここに含まれる
+          };
+        }),
 
       // サロン休業日
       ...businessHours
@@ -221,12 +239,14 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
           },
         ];
 
-    // 選択・移動制限
+    // 選択・移動制限のヘルパー
     const isDateAllowed = (date: Date, resourceId?: string) => {
       const dateStr = moment(date).format("YYYY-MM-DD");
+      // サロン休業日チェック
       const isHoliday = businessHours.some(
         (bh) => bh.date === dateStr && bh.is_holiday
       );
+      // スタッフ休日チェック
       const isStaffHoliday = staffShifts.some(
         (shift) =>
           shift.staff_id === resourceId &&
@@ -237,17 +257,14 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
     };
 
     return (
-      // カレンダー自体のラッパ
       <Box
         sx={{
-          // カレンダーが狭まりすぎないように最低幅を設定
           minWidth: 600,
           "& .fc": {
             minHeight: "100px",
             margin: 0,
             padding: 0,
           },
-          // 休業日・休日などのスタイル例
           "& .closed-day": {
             backgroundColor: "rgba(244, 67, 54, 0.1) !important",
             borderLeft: "4px solid #f44336",
@@ -274,7 +291,6 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
             margin: 0,
             padding: "2px 4px",
           },
-          // 以下は任意の調整
           "& .fc-timeline-slot": {
             height: "auto",
             margin: 0,
@@ -389,10 +405,14 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
           businessHours={businessHoursConfig}
           dateClick={onDateClick}
           locale="ja"
+          // --------------------------------
+          // イベントの見た目を独自に構築
+          // --------------------------------
           eventContent={(eventInfo) => {
             const reservation = eventInfo.event
               .extendedProps as CalendarEventProps;
-            // 休業日
+
+            // サロン休業日
             if (reservation.is_closed_day) {
               return {
                 html: `<div class="fc-event-title">サロン休業日</div>`,
@@ -404,41 +424,50 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
                 html: `<div class="fc-event-title">スタッフ休日</div>`,
               };
             }
-            // 通常 or スタッフスケジュール
-            const staffName = reservation.staff_id
-              ? staffList.find(
-                  (s) => s.id.toString() === reservation.staff_id?.toString()
-                )?.name || ""
-              : "";
+            // スタッフスケジュール
             if (reservation.is_staff_schedule) {
-              // スタッフスケジュール
+              const staffName = staffList.find(
+                (s) => s.id.toString() === reservation.staff_id?.toString()
+              )?.name;
               return {
                 html: isMobile
                   ? `
                     <div class="fc-event-title">
-                      <strong>${staffName}</strong><br>
+                      <strong>${staffName || ""}</strong><br>
                       ${reservation.event || ""}
                     </div>
                   `
-                  : `<div class="fc-event-title">${
-                      reservation.event || ""
-                    }</div>`,
+                  : `
+                    <div class="fc-event-title">
+                      ${reservation.event || ""}
+                    </div>
+                  `,
               };
             }
 
-            // 通常予約
+            // ----- 通常の予約イベント -----
+            const staffName = staffList.find(
+              (s) => s.id.toString() === reservation.staff_id?.toString()
+            )?.name;
             const customerName =
               reservation.customer_name ||
               reservation.customer_name_kana ||
               "Unknown";
 
+            // メニューかクーポンか判定してタイトルを作る
+            const menuOrCouponName = reservation.menu_id
+              ? reservation.menu_name // メニュー
+              : reservation.coupon_id
+              ? reservation.coupon_name // クーポン
+              : ""; // どちらも無ければ空
+
             if (isMobile) {
               return {
                 html: `
                   <div class="fc-event-title">
-                    <strong>${staffName}</strong><br>
+                    <strong>${staffName || ""}</strong><br>
                     ${customerName}<br>
-                    ${reservation.menu_name || ""}
+                    ${menuOrCouponName}
                   </div>
                 `,
               };
@@ -447,7 +476,7 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
                 html: `
                   <div class="fc-event-title">
                     ${customerName}<br>
-                    ${reservation.menu_name || ""}
+                    ${menuOrCouponName}
                   </div>
                 `,
               };

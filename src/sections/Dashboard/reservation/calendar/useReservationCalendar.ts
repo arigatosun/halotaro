@@ -21,10 +21,26 @@ interface StaffShift {
   memo?: string;
 }
 
+// +++ クーポンの型定義 +++
+interface Coupon {
+  id: string; // uuid
+  user_id: string;
+  coupon_id: string; // couponsテーブルにある固有の文字列
+  name: string;
+  category?: string;
+  description?: string;
+  price?: number;
+  duration?: number;
+  is_reservable?: boolean;
+  image_url?: string;
+  // ...etc
+}
+
 interface UseReservationCalendarReturn {
   reservations: Reservation[];
   staffList: Staff[];
   menuList: MenuItem[];
+  couponList: Coupon[];
   closedDays: string[];
   businessHours: BusinessHour[];
   staffShifts: StaffShift[]; // 追加
@@ -114,6 +130,7 @@ const useReservationCalendar = (): UseReservationCalendarReturn => {
   // その他の状態と関数
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const [menuList, setMenuList] = useState<MenuItem[]>([]);
+  const [couponList, setCouponList] = useState<Coupon[]>([]);
   const [snackbar, setSnackbar] = useState<{
     message: string;
     severity: "success" | "error";
@@ -155,6 +172,7 @@ const useReservationCalendar = (): UseReservationCalendarReturn => {
         const data = await response.json();
         setStaffList(data.staffList);
         setMenuList(data.menuList);
+        setCouponList(data.couponList);
       } catch (error) {
         console.error("Error in loadInitialData:", error);
         setSnackbar({
@@ -234,6 +252,7 @@ const useReservationCalendar = (): UseReservationCalendarReturn => {
     reservations,
     staffList,
     menuList,
+    couponList,
     closedDays,
     businessHours,
     staffShifts, // 追加

@@ -59,10 +59,7 @@ const ReservationDetails: React.FC<ReservationDetailsProps> = ({
 
   return (
     <Dialog open={true} onOpenChange={onClose}>
-      {/*
-          ここで "max-h-[80vh] overflow-y-auto" を追加して
-          画面が小さい時でもスクロール可能にします
-      */}
+      {/* 画面が小さい時でもスクロール可能に */}
       <DialogContent className="max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>予約詳細</DialogTitle>
@@ -75,9 +72,22 @@ const ReservationDetails: React.FC<ReservationDetailsProps> = ({
           <p>
             <strong>顧客名:</strong> {reservation.customer_name}
           </p>
+
+          {/* メニュー or クーポンの判定表示 */}
           <p>
-            <strong>メニュー:</strong> {reservation.menu_name}
+            <strong>メニュー/クーポン:</strong>{" "}
+            {/* 
+                - menu_id があれば reservation.menu_name を優先
+                - なければ coupon_name を表示
+                - いずれも無ければ "不明" 等
+            */}
+            {reservation.menu_id && reservation.menu_name
+              ? reservation.menu_name
+              : reservation.coupon_id && reservation.coupon_name
+              ? reservation.coupon_name
+              : "未設定 or 不明"}
           </p>
+
           <p>
             <strong>担当スタッフ:</strong> {reservation.staff_name}
           </p>
@@ -98,6 +108,7 @@ const ReservationDetails: React.FC<ReservationDetailsProps> = ({
               : "未定"}
           </p>
         </div>
+
         <div className="mt-4 flex justify-end space-x-2">
           <Button onClick={onEdit}>編集</Button>
           {showAccountingButton && (
