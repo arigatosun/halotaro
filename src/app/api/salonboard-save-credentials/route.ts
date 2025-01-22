@@ -1,6 +1,8 @@
+// /app/api/salonboard-save-credentials/route.ts
+
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { encrypt } from "@/utils/encryption";
+import { encrypt } from "@/utils/encryption"; // パスワード暗号化に利用
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -9,13 +11,18 @@ const supabase = createClient(
 
 export async function POST(request: Request) {
   try {
-    const { username, password, userId } = await request.json();
+    const { username, password, userId, serviceType } = await request.json();
+    console.log("Received salonboard credentials data:", {
+      username,
+      userId,
+      serviceType,
+    });
 
-    console.log("Received salonboard credentials data:", { username, userId });
-
-    // 必須フィールドの検証
     if (!username || !password || !userId) {
       throw new Error("Username, password, and userId are required");
+    }
+    if (!serviceType) {
+      throw new Error("serviceType is required ('hair' or 'spa')");
     }
 
     const encryptedPassword = encrypt(password);
@@ -35,12 +42,13 @@ export async function POST(request: Request) {
     let result;
 
     if (existingCredentials) {
-      // 既存の認証情報を更新
+      // 既存レコードの更新
       const { data, error: updateError } = await supabase
         .from("salonboard_credentials")
         .update({
           username,
           encrypted_password: encryptedPassword,
+          service_type: serviceType, // ★ service_typeを更新
           updated_at: new Date().toISOString(),
         })
         .eq("id", existingCredentials.id)
@@ -54,13 +62,14 @@ export async function POST(request: Request) {
 
       result = data;
     } else {
-      // 新しい認証情報を作成
+      // 新しくレコードを作成
       const { data, error: insertError } = await supabase
         .from("salonboard_credentials")
         .insert({
           user_id: userId,
           username,
           encrypted_password: encryptedPassword,
+          service_type: serviceType, // ★ 新規登録
         })
         .select()
         .single();

@@ -1,3 +1,5 @@
+// /app/api/salonboard-get-credentials/route.ts (または .js)
+
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
@@ -17,7 +19,7 @@ export async function GET(request: Request) {
   try {
     const { data, error } = await supabase
       .from("salonboard_credentials")
-      .select("username, updated_at")
+      .select("username, updated_at, service_type") // ★ service_typeを取得
       .eq("user_id", userId)
       .maybeSingle();
 
@@ -35,6 +37,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       username: data.username,
       lastUpdated: data.updated_at,
+      serviceType: data.service_type || null, // 返却
     });
   } catch (error: any) {
     console.error("Error fetching salonboard credentials:", error);

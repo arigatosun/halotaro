@@ -20,6 +20,7 @@ const SalonBoardIntegrationView: React.FC = () => {
   const [isIntegrationEnabled, setIsIntegrationEnabled] = useState(false);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [serviceType, setServiceType] = useState<"hair" | "spa">("spa"); // ★ 追加: ヘア or スパ
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const { user, loading: authLoading, refreshAuthState } = useAuth();
@@ -27,9 +28,9 @@ const SalonBoardIntegrationView: React.FC = () => {
   const [savedCredentials, setSavedCredentials] = useState<{
     username: string;
     lastUpdated: string;
+    serviceType?: string; // 追加: DB から取得する service_type
   } | null>(null);
 
-  // 同期状態を管理するための新しいステート
   const [syncStatus, setSyncStatus] = useState<string | null>(null);
   const [pollingIntervalId, setPollingIntervalId] =
     useState<NodeJS.Timeout | null>(null);
@@ -44,10 +45,8 @@ const SalonBoardIntegrationView: React.FC = () => {
   useEffect(() => {
     if (user) {
       fetchSavedCredentials();
-      // 追加: コンポーネントのマウント時に同期状態をチェック
       checkInitialSyncStatus();
     }
-    // クリーンアップ: コンポーネントのアンマウント時にポーリングを停止
     return () => {
       if (pollingIntervalId) {
         clearInterval(pollingIntervalId);
@@ -55,6 +54,7 @@ const SalonBoardIntegrationView: React.FC = () => {
     };
   }, [user]);
 
+  // 現在保存されている認証情報を取得し、username/password/serviceType などを反映
   const fetchSavedCredentials = async () => {
     try {
       const response = await fetch(
@@ -64,6 +64,10 @@ const SalonBoardIntegrationView: React.FC = () => {
         const data = await response.json();
         setSavedCredentials(data);
         setUsername(data.username || "");
+        // ★ もし既に serviceType が保存されていれば state に反映
+        if (data.serviceType === "hair" || data.serviceType === "spa") {
+          setServiceType(data.serviceType);
+        }
         setIsIntegrationEnabled(!!data.username);
       }
     } catch (error) {
@@ -71,7 +75,7 @@ const SalonBoardIntegrationView: React.FC = () => {
     }
   };
 
-  // 追加: 初期同期状態をチェックする関数
+  // 初期同期状態をチェック
   const checkInitialSyncStatus = async () => {
     try {
       const response = await fetch(
@@ -83,8 +87,7 @@ const SalonBoardIntegrationView: React.FC = () => {
         setIsLoading(true);
         setSyncStatus("in_progress");
         setResult("同期を再開しています...");
-        // ポーリングを再開
-        const intervalId = setInterval(checkSyncStatus, 5000); // 5秒ごとにチェック
+        const intervalId = setInterval(checkSyncStatus, 5000);
         setPollingIntervalId(intervalId);
       } else if (data.status === "completed") {
         setIsLoading(false);
@@ -116,6 +119,7 @@ const SalonBoardIntegrationView: React.FC = () => {
     setIsIntegrationEnabled(!isIntegrationEnabled);
   };
 
+  // ★ サロンボード情報を保存する (username, password, serviceType)
   const handleSaveCredentials = async () => {
     setIsLoading(true);
     setResult(null);
@@ -126,7 +130,12 @@ const SalonBoardIntegrationView: React.FC = () => {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ username, password, userId: user.id }),
+        body: JSON.stringify({
+          username,
+          password,
+          serviceType, // ★ 追加
+          userId: user.id,
+        }),
       });
 
       if (!response.ok) {
@@ -135,7 +144,7 @@ const SalonBoardIntegrationView: React.FC = () => {
 
       const data = await response.json();
       setResult(data.message);
-      fetchSavedCredentials(); // 保存後に最新の情報を取得
+      fetchSavedCredentials(); // 保存後に最新の情報を再取得
     } catch (error) {
       setResult(
         "ログイン情報の保存中にエラーが発生しました。もう一度お試しください。"
@@ -167,7 +176,6 @@ const SalonBoardIntegrationView: React.FC = () => {
           clearInterval(pollingIntervalId);
         }
       } else {
-        // まだ同期中
         setSyncStatus("in_progress");
         setResult("同期中...");
       }
@@ -176,7 +184,6 @@ const SalonBoardIntegrationView: React.FC = () => {
     }
   };
 
-  // 新しい同期ボタンのハンドラ
   const handleFullSync = async () => {
     setIsLoading(true);
     setResult(null);
@@ -199,8 +206,7 @@ const SalonBoardIntegrationView: React.FC = () => {
       const data = await response.json();
       setResult(data.message);
 
-      // 同期状態のポーリングを開始
-      const intervalId = setInterval(checkSyncStatus, 5000); // 5秒ごとにチェック
+      const intervalId = setInterval(checkSyncStatus, 5000);
       setPollingIntervalId(intervalId);
     } catch (error) {
       setIsLoading(false);
@@ -238,6 +244,11 @@ const SalonBoardIntegrationView: React.FC = () => {
                 <br />
                 最終更新日時:{" "}
                 {new Date(savedCredentials.lastUpdated).toLocaleString()}
+                <br />
+                サービス種別:{" "}
+                {savedCredentials.serviceType
+                  ? savedCredentials.serviceType
+                  : "未設定"}
               </AlertDescription>
             </Alert>
           )}
@@ -263,6 +274,34 @@ const SalonBoardIntegrationView: React.FC = () => {
                   placeholder="パスワードを入力"
                 />
               </div>
+
+              {/* ★ 追加: ヘア or スパ を選択するUI */}
+              <div className="space-y-2">
+                <Label>サービス種別</Label>
+                <div className="flex space-x-4">
+                  <label className="flex items-center space-x-2">
+                    <input
+                      type="radio"
+                      name="service_type"
+                      value="spa"
+                      checked={serviceType === "spa"}
+                      onChange={() => setServiceType("spa")}
+                    />
+                    <span>ヘッドスパ</span>
+                  </label>
+                  <label className="flex items-center space-x-2">
+                    <input
+                      type="radio"
+                      name="service_type"
+                      value="hair"
+                      checked={serviceType === "hair"}
+                      onChange={() => setServiceType("hair")}
+                    />
+                    <span>ヘアサロン</span>
+                  </label>
+                </div>
+              </div>
+
               <div className="flex space-x-4">
                 <Button
                   onClick={handleSaveCredentials}
