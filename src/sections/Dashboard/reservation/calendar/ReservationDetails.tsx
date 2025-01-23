@@ -83,8 +83,8 @@ const ReservationDetails: React.FC<ReservationDetailsProps> = ({
             */}
             {reservation.menu_id && reservation.menu_name
               ? reservation.menu_name
-              : reservation.coupon_id && reservation.coupon_name
-              ? reservation.coupon_name
+              : reservation.coupon_id && reservation.coupons?.name
+              ? reservation.coupons?.name
               : "未設定 or 不明"}
           </p>
 

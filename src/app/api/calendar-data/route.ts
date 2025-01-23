@@ -110,7 +110,8 @@ export async function GET(request: Request) {
           id, name, email, phone, name_kana
         ),
         menu_items (id, name, duration, price),
-        staff (id, name, schedule_order)
+        staff (id, name, schedule_order),
+         coupons!fk_coupon (id, name, duration, price)
       `
       )
       .eq("user_id", userId)
@@ -378,6 +379,7 @@ export async function POST(request: Request) {
           p_user_id: authResult.user.id,
           p_staff_id: staff_id,
           p_menu_id: menu_id ? parseInt(menu_id, 10) : null,
+          p_coupon_id: data.coupon_id || null,
           p_start_time: start_time
             ? moment.utc(start_time).format("YYYY-MM-DD HH:mm:ss")
             : null,
@@ -392,11 +394,15 @@ export async function POST(request: Request) {
           p_customer_email: customer_email || null,
           p_customer_phone: customer_phone || null,
           p_customer_id: data.customer_id || null,
+          p_payment_method: null,
+          p_payment_status: null,
+          p_payment_amount: 0,
+          p_stripe_payment_intent_id: null,
         };
 
         // create_staff_reservation 関数を呼び出す
         const { data: reservationData, error: reservationError } =
-          await supabase.rpc("create_staff_reservation", rpcParams);
+          await supabase.rpc("create_reservation", rpcParams);
 
         if (reservationError) {
           console.error("Error creating staff reservation:", reservationError);
@@ -437,7 +443,8 @@ export async function POST(request: Request) {
               id, name, email, phone, name_kana
             ),
             menu_items (id, name, duration, price),
-            staff (id, name)
+            staff (id, name),
+            coupons!fk_coupon (id, name, duration, price)
           `
           )
           .eq("id", reservationId)
@@ -591,6 +598,7 @@ export async function PUT(request: Request) {
       "end_time",
       "staff_id",
       "menu_id",
+      "coupon_id",
       "status",
       "total_price",
       "is_staff_schedule",
@@ -638,7 +646,8 @@ export async function PUT(request: Request) {
           id, name, email, phone, name_kana
         ),
         menu_items (id, name, duration, price),
-        staff (id, name)
+        staff (id, name),
+        coupons!fk_coupon (id, name, duration, price)
       `
       )
       .single();
@@ -659,6 +668,8 @@ export async function PUT(request: Request) {
         customerUpdateData.phone = updateFields.customer_phone;
       if (updateFields.customer_name_kana !== undefined)
         customerUpdateData.name_kana = updateFields.customer_name_kana;
+      if (updateFields.coupon_id !== undefined)
+        customerUpdateData.coupon_id = updateFields.coupon_id;
 
       const { error: customerUpdateError } = await supabase
         .from("reservation_customers")

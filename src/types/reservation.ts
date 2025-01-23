@@ -22,7 +22,12 @@ export interface Reservation {
   is_hair_sync?: boolean; // この行を追加
   customer_id?: string; // ここを追加
   coupon_id?: string; // ここを追加
-  coupon_name?: string; // ここを追加
+  coupons?: {
+    id: string;
+    name: string;
+    duration: number;
+    price: number;
+  };
   // その他のフィールドがある場合はここに追加
 }
 

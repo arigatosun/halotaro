@@ -229,7 +229,7 @@ const useReservationCalendar = (): UseReservationCalendarReturn => {
         }
 
         const data = await response.json();
-
+        console.log("data.reservations", data.reservations);
         setReservations(data.reservations);
         setClosedDays(data.closedDays || []);
         setBusinessHours(data.businessHours || []);

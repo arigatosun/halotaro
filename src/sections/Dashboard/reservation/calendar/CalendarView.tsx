@@ -84,6 +84,7 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
     },
     ref
   ) => {
+    console.log("reservations from calendarview", reservations);
     // スクロール同期用
     const resourceAreaRef = useRef<HTMLDivElement | null>(null);
     const timelineBodyRef = useRef<HTMLDivElement | null>(null);
@@ -178,7 +179,7 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
             const menuOrCouponName = r.menu_id
               ? r.menu_name
               : r.coupon_id
-              ? r.coupon_name
+              ? r.coupons?.name
               : "";
             displayedTitle = `${customerDisplay} - ${menuOrCouponName || ""}`;
           }
@@ -458,7 +459,7 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
             const menuOrCouponName = reservation.menu_id
               ? reservation.menu_name // メニュー
               : reservation.coupon_id
-              ? reservation.coupon_name // クーポン
+              ? reservation.coupons?.name // クーポン
               : ""; // どちらも無ければ空
 
             if (isMobile) {
