@@ -28,6 +28,7 @@ export interface Reservation {
     duration: number;
     price: number;
   };
+  scraped_menu?: string;
   // その他のフィールドがある場合はここに追加
 }
 

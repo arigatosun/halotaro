@@ -180,7 +180,7 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
               ? r.menu_name
               : r.coupon_id
               ? r.coupons?.name
-              : "";
+              : r.scraped_menu || "";
             displayedTitle = `${customerDisplay} - ${menuOrCouponName || ""}`;
           }
 
@@ -460,7 +460,7 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
               ? reservation.menu_name // メニュー
               : reservation.coupon_id
               ? reservation.coupons?.name // クーポン
-              : ""; // どちらも無ければ空
+              : reservation.scraped_menu || ""; // どちらも無ければ空
 
             if (isMobile) {
               return {
