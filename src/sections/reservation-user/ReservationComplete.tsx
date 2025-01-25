@@ -31,11 +31,9 @@ interface ReservationCompleteProps {
 export default function ReservationComplete({
   userId,
 }: ReservationCompleteProps) {
-  const hasSaved = useRef(false);
-  const [status, setStatus] = useState<string>("");
-  const [loading, setLoading] = useState(true);
-  const router = useRouter();
-  const { toast } = useToast();
+  // ------------------------------
+  // Reservation context
+  // ------------------------------
   const {
     selectedMenus,
     selectedDateTime,
@@ -45,12 +43,28 @@ export default function ReservationComplete({
     isNoAppointment,
   } = useReservation();
 
-  // ★ 追加: サロンボードのサービス種別 (hair/spa) を読み込むためのstate
-  const [serviceType, setServiceType] = useState<string>("spa"); // デフォルト spa
+  // ------------------------------
+  // Local states
+  // ------------------------------
+  const hasSaved = useRef(false);
+  const [status, setStatus] = useState<string>("");
+  const [loading, setLoading] = useState(true);
 
-  // 画面初期表示時に、userIdを使って service_type を fetch
+  // サロンボードのサービス種別 (hair/spa) を読み込むための state
+  // デフォルトは "spa"
+  const [serviceType, setServiceType] = useState<string>("spa");
+  const [serviceTypeLoaded, setServiceTypeLoaded] = useState<boolean>(false);
+
+  // Router, Toast
+  const router = useRouter();
+  const { toast } = useToast();
+
+  // ------------------------------
+  // Fetch serviceType from server
+  // ------------------------------
   useEffect(() => {
     if (!userId) return;
+
     const fetchServiceType = async () => {
       try {
         const res = await fetch(
@@ -60,24 +74,24 @@ export default function ReservationComplete({
           const data = await res.json();
           if (data.serviceType) {
             setServiceType(data.serviceType); // hair or spa
+            console.log("serviceType fetched:", data.serviceType);
           }
         }
       } catch (error) {
         console.error("Failed to fetch service type:", error);
+        // 失敗時はデフォルト"spa"のまま進める
+      } finally {
+        // フェッチが終わったらフラグを立てる（成功/失敗問わず）
+        setServiceTypeLoaded(true);
       }
     };
+
     fetchServiceType();
   }, [userId]);
 
-  // 日付フォーマット
-  const formatDate = (date: Date) => {
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, "0");
-    const d = String(date.getDate()).padStart(2, "0");
-    return `${y}${m}${d}`;
-  };
-
-  // ★ 予約完了後にサロンボードへ登録する関数
+  // ------------------------------
+  // 予約後にサロンボードへ連携する関数
+  // ------------------------------
   const sendReservationToAutomation = useCallback(async () => {
     try {
       if (!selectedDateTime) {
@@ -92,10 +106,7 @@ export default function ReservationComplete({
         0
       ); // 合計施術時間 (分)
 
-      const rsvTermHour = Math.floor(duration / 60).toString();
-      const rsvTermMinute = (duration % 60).toString();
-
-      // ★ ここで service_type を含めたデータを作成
+      // サロンボード向けフォーマット例
       const automationData = {
         service_type: serviceType, // hair or spa
         user_id: userId,
@@ -108,15 +119,13 @@ export default function ReservationComplete({
         nm_sei: customerInfo.lastNameKanji,
         nm_mei: customerInfo.firstNameKanji,
         is_no_appointment: isNoAppointment,
+        // hair の場合のみ施術時間をtime_valueにセット
         time_value: serviceType === "hair" ? duration.toString() : "",
       };
 
       console.log("Sending automation data:", automationData);
 
-      // 例: ngrokで公開中のFastAPIエンドポイント
-      const FASTAPI_ENDPOINT =
-        "https://4e37-34-97-99-223.ngrok-free.app/run-automation";
-
+      const FASTAPI_ENDPOINT = "https://example.ngrok-free.app/run-automation";
       const automationResponse = await fetch(FASTAPI_ENDPOINT, {
         method: "POST",
         headers: {
@@ -133,7 +142,6 @@ export default function ReservationComplete({
           automationResponseData.error ||
           "Automation failed";
         console.error("Automation sync failed:", errorMessage);
-        // 必要に応じてエラーハンドリング
       } else {
         console.log("Automation sync successful:", automationResponseData);
       }
@@ -141,19 +149,22 @@ export default function ReservationComplete({
       console.error("Error in sendReservationToAutomation:", error);
     }
   }, [
-    selectedDateTime,
+    userId,
     selectedMenus,
     selectedStaff,
-    customerInfo,
-    userId,
-    isNoAppointment,
     serviceType,
+    selectedDateTime,
+    customerInfo,
+    isNoAppointment,
   ]);
 
-  // 予約をDBに保存後、バックグラウンドでサロンボード登録
+  // ------------------------------
+  // 予約をDBに保存 -> 成功後に automation
+  // ------------------------------
   const saveReservation = useCallback(async () => {
     if (hasSaved.current) return;
-    hasSaved.current = true;
+    hasSaved.current = true; // 二重呼び出し防止
+
     try {
       if (!selectedDateTime) {
         throw new Error("予約日時が選択されていません");
@@ -161,7 +172,7 @@ export default function ReservationComplete({
 
       const reservationData = {
         userId,
-        menuId: selectedMenus[0].id,
+        menuId: selectedMenus[0]?.id,
         staffId: selectedStaff?.id,
         startTime: selectedDateTime.start.toISOString(),
         endTime: selectedDateTime.end.toISOString(),
@@ -173,9 +184,10 @@ export default function ReservationComplete({
         paymentInfo,
         paymentMethodId: paymentInfo?.paymentMethodId,
         customerEmail: customerInfo.email,
+        customerId: customerInfo.customerId,
       };
 
-      console.log("予約情報です。", reservationData);
+      console.log("予約情報です:", reservationData);
 
       const response = await fetch("/api/create-reservation", {
         method: "POST",
@@ -189,6 +201,7 @@ export default function ReservationComplete({
       if (!response.ok) {
         console.error("Server responded with an error:", responseData);
         if (response.status === 409) {
+          // 一意制約違反
           console.error(
             "Unique constraint violation details:",
             responseData.details
@@ -202,10 +215,8 @@ export default function ReservationComplete({
         );
       }
 
-      const { reservationId, reservationCustomerId } = responseData;
-
-      // 30日以上先の予約の場合の処理 (省略 or 従来通り)
-      // ...
+      const { reservationId } = responseData;
+      console.log("Reservation saved. ID:", reservationId);
 
       setStatus("予約が完了しました");
       toast({
@@ -213,7 +224,7 @@ export default function ReservationComplete({
         description: `予約ID: ${reservationId}`,
       });
 
-      // 保存成功後、画面は完了表示にしつつ裏でサロンボード登録
+      // 予約保存成功 -> automation送信
       setLoading(false);
       sendReservationToAutomation(); // awaitしない
     } catch (error: any) {
@@ -241,11 +252,48 @@ export default function ReservationComplete({
     sendReservationToAutomation,
   ]);
 
-  // コンポーネントマウント時に予約保存を開始
+  // ------------------------------
+  // serviceType フェッチ後に予約開始
+  // ------------------------------
   useEffect(() => {
+    // serviceTypeLoaded がまだ false なら待機
+    if (!serviceTypeLoaded) return;
+    // serviceTypeLoaded === true になったら予約保存開始
     saveReservation();
-  }, [saveReservation]);
+  }, [serviceTypeLoaded, saveReservation]);
 
+  // ------------------------------
+  // UI ヘルパー関数
+  // ------------------------------
+  const formatDateTime = (date: Date) => {
+    return date.toLocaleString("ja-JP", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      weekday: "long",
+    });
+  };
+
+  // ------------------------------
+  // 表示
+  // ------------------------------
+  // もし serviceType がまだ未ロード なら簡易ローディング表示
+  if (!serviceTypeLoaded) {
+    return (
+      <div className="w-full max-w-2xl mx-auto mt-8 space-y-4">
+        <div className="flex flex-col items-center justify-center space-y-4">
+          <CircularProgress size={60} style={{ color: "#F9802D" }} />
+          <p className="text-lg font-semibold text-[#F9802D]">
+            サービス種別を読み込んでいます...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // reservation保存 or 自動化の処理がまだ進行中の場合のローディング表示
   if (loading) {
     return (
       <div className="w-full max-w-2xl mx-auto mt-8 space-y-4">
@@ -258,17 +306,6 @@ export default function ReservationComplete({
       </div>
     );
   }
-
-  const formatDateTime = (date: Date) => {
-    return date.toLocaleString("ja-JP", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      weekday: "long",
-    });
-  };
 
   const fullName = `${customerInfo.lastNameKanji} ${customerInfo.firstNameKanji}`;
 
@@ -358,4 +395,14 @@ export default function ReservationComplete({
       </CardFooter>
     </Card>
   );
+}
+
+// ------------------------------
+// ヘルパー: 日付フォーマット
+// ------------------------------
+function formatDate(date: Date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}${m}${d}`;
 }

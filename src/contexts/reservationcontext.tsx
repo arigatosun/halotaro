@@ -30,7 +30,7 @@ export interface CustomerInfo {
   firstNameKanji: string;
   email: string;
   phone: string;
-  [key: string]: string;
+  customerId?: string;
 }
 
 // PaymentInfo の型定義
@@ -49,7 +49,9 @@ interface ReservationContextType {
   selectedMenus: SelectedMenuItem[];
   setSelectedMenus: React.Dispatch<React.SetStateAction<SelectedMenuItem[]>>;
   selectedDateTime: SelectedDateTime | null;
-  setSelectedDateTime: React.Dispatch<React.SetStateAction<SelectedDateTime | null>>;
+  setSelectedDateTime: React.Dispatch<
+    React.SetStateAction<SelectedDateTime | null>
+  >;
   selectedStaff: SelectedStaff | null;
   setSelectedStaff: React.Dispatch<React.SetStateAction<SelectedStaff | null>>;
   customerInfo: CustomerInfo;
@@ -59,19 +61,26 @@ interface ReservationContextType {
   setPaymentInfo: React.Dispatch<React.SetStateAction<PaymentInfo | null>>;
   reservationCustomerId: string | null;
   setReservationCustomerId: React.Dispatch<React.SetStateAction<string | null>>;
-  isNoAppointment: boolean;  // 指名なしフラグを追加
+  isNoAppointment: boolean; // 指名なしフラグを追加
   setIsNoAppointment: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
 // 予約コンテキストの作成
-const ReservationContext = createContext<ReservationContextType | undefined>(undefined);
+const ReservationContext = createContext<ReservationContextType | undefined>(
+  undefined
+);
 
 // 予約プロバイダーコンポーネント
-export const ReservationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const ReservationProvider: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
   // 各種状態の初期化
   const [selectedMenus, setSelectedMenus] = useState<SelectedMenuItem[]>([]);
-  const [selectedDateTime, setSelectedDateTime] = useState<SelectedDateTime | null>(null);
-  const [selectedStaff, setSelectedStaff] = useState<SelectedStaff | null>(null);
+  const [selectedDateTime, setSelectedDateTime] =
+    useState<SelectedDateTime | null>(null);
+  const [selectedStaff, setSelectedStaff] = useState<SelectedStaff | null>(
+    null
+  );
   const [paymentInfo, setPaymentInfo] = useState<PaymentInfo | null>({
     method: "",
     status: "",
@@ -88,7 +97,9 @@ export const ReservationProvider: React.FC<{ children: React.ReactNode }> = ({ c
     email: "",
     phone: "",
   });
-  const [reservationCustomerId, setReservationCustomerId] = useState<string | null>(null);
+  const [reservationCustomerId, setReservationCustomerId] = useState<
+    string | null
+  >(null);
 
   // 合計金額の計算関数
   const calculateTotalAmount = (menus: SelectedMenuItem[]) => {

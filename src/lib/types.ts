@@ -37,4 +37,5 @@ export interface CreateReservationBody {
   paymentInfo: PaymentInfo;
   paymentMethodId?: string; // 任意
   customerEmail?: string; // 任意
+  customerId?: string; // 任意
 }

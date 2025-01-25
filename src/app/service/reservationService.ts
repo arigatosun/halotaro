@@ -189,21 +189,28 @@ export async function createReservation(
   const { userId, startTime, endTime, totalPrice, customerInfo, paymentInfo } =
     body;
 
-  // menuId/couponId の判定
+  // メニュー or クーポンの判定
   const { menuId: p_menu_id, couponId: p_coupon_id } =
     await fetchMenuOrCouponInfo(body.menuId);
 
-  // 顧客名
-  const customerFullName = `${customerInfo.lastNameKanji} ${customerInfo.firstNameKanji}`;
-  const customerFullNameKana = `${customerInfo.lastNameKana} ${customerInfo.firstNameKana}`;
+  // ★ 名前を姓・名に分ける
+  const p_customer_last_name = customerInfo.lastNameKanji; // 例: "山田"
+  const p_customer_first_name = customerInfo.firstNameKanji; // 例: "太郎"
+  const p_customer_last_name_kana = customerInfo.lastNameKana; // 例: "ヤマダ"
+  const p_customer_first_name_kana = customerInfo.firstNameKana; // 例: "タロウ"
+
+  const p_customer_id = body.customerId ?? null;
 
   const rpcParams = {
     p_user_id: userId,
     p_start_time: startTime,
     p_end_time: endTime,
     p_total_price: totalPrice,
-    p_customer_name: customerFullName,
-    p_customer_name_kana: customerFullNameKana,
+    p_customer_last_name,
+    p_customer_first_name,
+    p_customer_last_name_kana,
+    p_customer_first_name_kana,
+    p_customer_id,
     p_customer_email: customerInfo.email,
     p_customer_phone: customerInfo.phone,
     p_menu_id: p_menu_id ?? null,

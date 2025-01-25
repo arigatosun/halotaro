@@ -71,7 +71,6 @@ const ReservationCalendar: React.FC = () => {
     closedDays,
     businessHours,
     staffShifts,
-    loadData,
     setReservations,
     dateRange,
     setDateRange,
