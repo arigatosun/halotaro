@@ -34,33 +34,41 @@ export function useStaffManagement(userId: string, menuItemId?: string) {
 
   console.log("menuItemId", menuItemId);
 
+  // useStaffManagement.ts 内
+
   const fetchStaff = useCallback(async () => {
     try {
       setLoading(true);
 
+      // ベースクエリ: user_id が一致する staff を取得
       let query = supabase.from("staff").select("*").eq("user_id", userId);
 
-      if (menuItemId) {
-        // 対応不可スタッフを取得
+      // まず menuItemId が整数かどうか判定 (クーポンなら UUID)
+      // 例: /^[0-9]+$/ で判定
+      const isInteger = /^[0-9]+$/.test(menuItemId || "");
+
+      if (menuItemId && isInteger) {
+        // メニューIDとしてスタッフ除外を適用
         const { data: unavailableStaff, error: unavailableStaffError } =
           await supabase
             .from("menu_item_unavailable_staff")
             .select("staff_id")
-            .eq("menu_item_id", menuItemId);
+            .eq("menu_item_id", menuItemId); // ここは整数の想定
 
         if (unavailableStaffError) throw unavailableStaffError;
 
         const unavailableStaffIds = unavailableStaff.map(
           (item) => item.staff_id
         );
-
         if (unavailableStaffIds.length > 0) {
           query = query.not("id", "in", `(${unavailableStaffIds.join(",")})`);
         }
+      } else {
+        // menuItemId が UUID or そもそも未指定 => クーポン or 指定なし
+        // => 特に staff の除外はしない
       }
 
       const { data, error } = await query;
-
       if (error) throw error;
 
       setStaffList(data || []);

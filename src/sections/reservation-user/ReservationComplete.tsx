@@ -126,7 +126,7 @@ export default function ReservationComplete({
       console.log("Sending automation data:", automationData);
 
       const FASTAPI_ENDPOINT =
-        "https://eb46-2400-4150-78a0-5300-10dd-e8d0-1c5-cc64.ngrok-free.app/run-automation";
+        "https://4127-34-97-208-164.ngrok-free.app/run-automation";
       const automationResponse = await fetch(FASTAPI_ENDPOINT, {
         method: "POST",
         headers: {

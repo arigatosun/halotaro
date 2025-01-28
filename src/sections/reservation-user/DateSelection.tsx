@@ -336,17 +336,25 @@ const DateSelection: React.FC<DateSelectionProps> = ({
     try {
       // メニューに対応できないスタッフのIDを取得
       let unavailableStaffIds: string[] = [];
-      const { data: unavailableStaffData, error: unavailableStaffError } =
-        await supabase
-          .from("menu_item_unavailable_staff")
-          .select("staff_id")
-          .eq("menu_item_id", selectedMenuId);
+      const menuIdNumber = parseInt(selectedMenuId, 10);
 
-      if (unavailableStaffError) {
-        throw unavailableStaffError;
+      if (selectedMenuId && !isNaN(menuIdNumber)) {
+        // menuId が数値として有効な場合（= メニューID）だけ問い合わせする
+        const { data: unavailableStaffData, error: unavailableStaffError } =
+          await supabase
+            .from("menu_item_unavailable_staff")
+            .select("staff_id")
+            .eq("menu_item_id", menuIdNumber);
+
+        if (unavailableStaffError) {
+          throw unavailableStaffError;
+        }
+
+        unavailableStaffIds = unavailableStaffData.map((item) => item.staff_id);
+      } else {
+        // それ以外（クーポンIDなど）は問い合わせをスキップ
+        unavailableStaffIds = [];
       }
-
-      unavailableStaffIds = unavailableStaffData.map((item) => item.staff_id);
 
       // スタッフのリストを取得（対応不可スタッフを除外）
       let staffQuery = supabase

@@ -8,7 +8,7 @@ const supabase = createClient(
 );
 
 export async function GET(request: Request) {
-  console.group('Staff Availability API Call');
+  console.group("Staff Availability API Call");
   const { searchParams } = new URL(request.url);
   const staffId = searchParams.get("staffId");
   const startDate = searchParams.get("startDate");
@@ -16,16 +16,16 @@ export async function GET(request: Request) {
   const menuId = searchParams.get("menuId");
   const salonId = searchParams.get("salonId");
 
-  console.log('Request Parameters:', {
+  console.log("Request Parameters:", {
     staffId,
     startDate,
     endDate,
     menuId,
-    salonId
+    salonId,
   });
 
   if (!startDate || !endDate || !salonId) {
-    console.log('Missing Required Parameters');
+    console.log("Missing Required Parameters");
     console.groupEnd();
     return NextResponse.json(
       { error: "Missing required parameters" },
@@ -36,16 +36,19 @@ export async function GET(request: Request) {
   try {
     // メニューに対応できないスタッフのIDを取得
     let unavailableStaffIds: string[] = [];
-    if (menuId) {
+    let menuIdNumber = parseInt(menuId ?? "", 10);
+
+    // menuId が存在し、かつ数値変換できる場合のみ menu_item_unavailable_staff を参照する
+    if (menuId && !isNaN(menuIdNumber)) {
       const { data: unavailableStaffData, error: unavailableStaffError } =
         await supabase
           .from("menu_item_unavailable_staff")
           .select("staff_id")
-          .eq("menu_item_id", menuId);
+          .eq("menu_item_id", menuIdNumber);
 
-      console.log('Unavailable Staff Query Result:', {
+      console.log("Unavailable Staff Query Result:", {
         data: unavailableStaffData,
-        error: unavailableStaffError
+        error: unavailableStaffError,
       });
 
       if (unavailableStaffError) {
@@ -61,10 +64,10 @@ export async function GET(request: Request) {
       .select("id, name") // nameも取得して確認
       .eq("user_id", salonId);
 
-    console.log('Salon Staff Query Result:', {
+    console.log("Salon Staff Query Result:", {
       data: staffData,
       error: staffError,
-      salonId
+      salonId,
     });
 
     if (staffError) {
@@ -80,18 +83,20 @@ export async function GET(request: Request) {
       );
     }
 
-    console.log('Staff Availability Check:', {
+    console.log("Staff Availability Check:", {
       totalStaff: staffData.length,
       unavailableStaffCount: unavailableStaffIds.length,
       availableStaffCount: availableStaffIds.length,
       selectedStaffId: staffId,
-      isSelectedStaffAvailable: staffId ? availableStaffIds.includes(staffId) : 'No staff selected'
+      isSelectedStaffAvailable: staffId
+        ? availableStaffIds.includes(staffId)
+        : "No staff selected",
     });
 
     // 選択されたスタッフが対応可能かチェック
     if (staffId) {
       if (!availableStaffIds.includes(staffId)) {
-        console.log('Selected Staff is not available for this menu');
+        console.log("Selected Staff is not available for this menu");
         console.groupEnd();
         return NextResponse.json({});
       }
@@ -99,7 +104,7 @@ export async function GET(request: Request) {
     }
 
     if (availableStaffIds.length === 0) {
-      console.log('No available staff found');
+      console.log("No available staff found");
       console.groupEnd();
       return NextResponse.json({});
     }
@@ -111,14 +116,14 @@ export async function GET(request: Request) {
       staff_ids: availableStaffIds,
     });
 
-    console.log('Stored Procedure Call:', {
+    console.log("Stored Procedure Call:", {
       parameters: {
         start_date: startDate,
         end_date: endDate,
-        staff_ids: availableStaffIds
+        staff_ids: availableStaffIds,
       },
       resultCount: data?.length || 0,
-      error: error
+      error: error,
     });
 
     if (error) {
@@ -143,11 +148,13 @@ export async function GET(request: Request) {
     );
 
     // レスポンスデータの確認
-    console.log('Response Data Summary:', {
+    console.log("Response Data Summary:", {
       totalDates: Object.keys(availabilityByDate).length,
       sampleDate: Object.keys(availabilityByDate)[0],
-      totalTimeSlots: Object.keys(availabilityByDate[Object.keys(availabilityByDate)[0]] || {}).length,
-      staffAvailabilityCount: availableStaffIds.length
+      totalTimeSlots: Object.keys(
+        availabilityByDate[Object.keys(availabilityByDate)[0]] || {}
+      ).length,
+      staffAvailabilityCount: availableStaffIds.length,
     });
 
     console.groupEnd();
