@@ -108,7 +108,7 @@ export default function ReservationComplete({
 
       // サロンボード向けフォーマット例
       const automationData = {
-        service_type: serviceType, // hair or spa
+         service_type: serviceType,
         user_id: userId,
         date: formatDate(startTime),
         rsv_hour: startTime.getHours().toString(),
@@ -119,13 +119,13 @@ export default function ReservationComplete({
         nm_sei: customerInfo.lastNameKanji,
         nm_mei: customerInfo.firstNameKanji,
         is_no_appointment: isNoAppointment,
-        // hair の場合のみ施術時間をtime_valueにセット
-        time_value: serviceType === "hair" ? duration.toString() : "",
+        spa_duration: serviceType === "hair" ? null : duration.toString(),  // hairの場合はnull
+        time_value: serviceType === "hair" ? duration.toString() : ""  // hairの場合は施術時間
       };
 
       console.log("Sending automation data:", automationData);
 
-      const FASTAPI_ENDPOINT = "https://example.ngrok-free.app/run-automation";
+      const FASTAPI_ENDPOINT = "https://1d99-34-97-208-164.ngrok-free.app/run-automation";
       const automationResponse = await fetch(FASTAPI_ENDPOINT, {
         method: "POST",
         headers: {
