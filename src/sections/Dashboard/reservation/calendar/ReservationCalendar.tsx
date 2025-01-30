@@ -29,7 +29,7 @@ import StaffScheduleDetails from "./StaffScheduleDetails";
 import ReservationEditForm from "./ReservationEditForm";
 import useReservationCalendar from "./useReservationCalendar";
 import { EventClickArg, EventDropArg, DateSelectArg } from "@fullcalendar/core";
-import { DateClickArg } from "@fullcalendar/interaction";
+import { DateClickArg, EventResizeDoneArg } from "@fullcalendar/interaction";
 import { Reservation } from "@/types/reservation";
 import { useAuth } from "@/lib/authContext";
 import FullCalendar from "@fullcalendar/react";
@@ -710,6 +710,69 @@ const ReservationCalendar: React.FC = () => {
     }
   };
 
+  const handleEventResize = async (resizeInfo: EventResizeDoneArg) => {
+    if (!user) return;
+    setIsUpdating(true);
+
+    try {
+      const eventData = resizeInfo.event.extendedProps as Reservation;
+      const newStart = resizeInfo.event.start;
+      const newEnd = resizeInfo.event.end;
+      // スタッフIDは変わらない想定なら eventData.staff_id そのままでもOK
+      // resourceId が必要であれば↓のように取ってください
+      // const staffId = resizeInfo.event.getResources()[0]?.id || eventData.staff_id;
+
+      const updatedReservation = {
+        id: eventData.id,
+        start_time: newStart?.toISOString(),
+        end_time: newEnd?.toISOString(),
+        staff_id: eventData.staff_id,
+        user_id: user.id,
+      };
+
+      const response = await fetch("/api/calendar-data", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify(updatedReservation),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to update reservation");
+      }
+
+      // 成功時はローカル state を更新
+      const updatedData = await response.json();
+      setReservations((prev) => {
+        const idx = prev.findIndex((r) => r.id === updatedData.id);
+        if (idx !== -1) {
+          const newList = [...prev];
+          newList[idx] = updatedData;
+          return newList;
+        }
+        return prev;
+      });
+
+      const message = eventData.is_staff_schedule
+        ? "スタッフスケジュールが更新されました"
+        : "予約が更新されました";
+      setSnackbar({ message, severity: "success" });
+    } catch (error) {
+      console.error("Error in handleEventResize:", error);
+      // 失敗時はリサイズを取り消す
+      resizeInfo.revert();
+      setSnackbar({
+        message: "更新に失敗しました",
+        severity: "error",
+      });
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
   // ------------------------------------
   // カレンダー表示範囲変更
   // ------------------------------------
@@ -815,6 +878,7 @@ const ReservationCalendar: React.FC = () => {
           onDateSelect={handleDateSelect}
           onEventClick={handleEventClick}
           onEventDrop={handleEventDrop}
+          onEventResize={handleEventResize}
           handleDatesSet={handleDatesSet}
           ref={calendarRef}
           currentDate={currentDate}

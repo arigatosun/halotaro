@@ -4,7 +4,10 @@
 import React, { forwardRef, useRef, useEffect } from "react";
 import FullCalendar from "@fullcalendar/react";
 import resourceTimelinePlugin from "@fullcalendar/resource-timeline";
-import interactionPlugin, { DateClickArg } from "@fullcalendar/interaction";
+import interactionPlugin, {
+  DateClickArg,
+  EventResizeDoneArg,
+} from "@fullcalendar/interaction";
 import listPlugin from "@fullcalendar/list";
 import {
   EventClickArg,
@@ -43,6 +46,7 @@ interface CalendarViewProps {
   onDateSelect: (selectInfo: DateSelectArg) => void;
   onEventClick: (clickInfo: EventClickArg) => void;
   onEventDrop: (dropInfo: EventDropArg) => void;
+  onEventResize: (resizeInfo: EventResizeDoneArg) => void; // ★ 追加
   handleDatesSet: (arg: any) => void;
   currentDate: moment.Moment;
   onDateClick: (clickInfo: DateClickArg) => void;
@@ -76,6 +80,7 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
       onDateSelect,
       onEventClick,
       onEventDrop,
+      onEventResize,
       handleDatesSet,
       currentDate,
       onDateClick,
@@ -331,6 +336,7 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
           resourceOrder={() => 0}
           eventClick={onEventClick}
           eventDrop={onEventDrop}
+          eventResize={onEventResize}
           slotDuration="00:30:00"
           slotMinWidth={20}
           slotMinTime={earliestOpenTime}
