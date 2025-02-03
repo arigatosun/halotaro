@@ -37,14 +37,29 @@ export default function MenuSelection({
     error: couponError,
   } = useCoupons(userId);
 
+  // タブの状態 ("all" | "coupon" | "menu")
   const [activeTab, setActiveTab] = useState("all");
+
+  // 検索ワード
   const [searchTerm, setSearchTerm] = useState("");
 
-  // メニューとクーポンをまとめる
-  const allItems = useMemo(
-    () => [...menuItems, ...coupons],
-    [menuItems, coupons]
-  );
+  // メニュー + クーポンをまとめる
+  const allItems = useMemo(() => {
+    // もしクーポン側のアイテムに "isCoupon = true" などを付与しておきたい場合は、フック内などで付与するか、
+    // ここで map して付与することもできます
+    // 例: coupons.map(item => ({ ...item, isCoupon: true }))
+    // ただし useCoupons の実装によって変わります
+    const mappedCoupons = coupons.map((c) => ({
+      ...c,
+      isCoupon: true, // クーポンを判別するために付与
+    }));
+    // メニュー側は isCoupon を false としておく
+    const mappedMenus = menuItems.map((m) => ({
+      ...m,
+      isCoupon: false, // メニューを判別
+    }));
+    return [...mappedMenus, ...mappedCoupons];
+  }, [menuItems, coupons]);
 
   // メニュー or クーポンを選択したときのハンドラ
   const handleItemSelect = (item: MenuItem) => {
@@ -66,29 +81,27 @@ export default function MenuSelection({
 
     // タブ切り替えによる絞り込み
     switch (activeTab) {
-      case "firstVisit":
-        items = coupons.filter((coupon) => coupon.category === "new");
-        break;
-      case "repeater":
-        items = coupons.filter((coupon) => coupon.category === "repeat");
+      case "coupon":
+        items = items.filter((it) => it.isCoupon === true);
         break;
       case "menu":
-        items = menuItems;
+        items = items.filter((it) => it.isCoupon === false);
         break;
-      // default: "all" の場合は allItems（すべて表示）
+      // default の "all" はそのまま全件
     }
 
-    // 予約不可能(is_reservable = false, null)を除外し、検索ワードで絞り込み
-    return items
-      .filter((item) => item.is_reservable === true) // ここで予約不可を除外
-      .filter(
-        (item) =>
-          item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          item.description?.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-  }, [activeTab, allItems, coupons, menuItems, searchTerm]);
+    // 予約不可能(is_reservable === false)は除外
+    items = items.filter((it) => it.is_reservable === true);
 
-  // ローディング
+    // 検索ワードによる絞り込み
+    return items.filter(
+      (item) =>
+        item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.description?.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [activeTab, allItems, searchTerm]);
+
+  // ローディング表示
   if (menuLoading || couponLoading) {
     return (
       <div className="w-full max-w-md mx-auto mt-8 space-y-4">
@@ -175,6 +188,7 @@ export default function MenuSelection({
       <h2 className="text-2xl font-bold mb-4">
         クーポン・メニューを選択してください
       </h2>
+
       {/* 検索入力 */}
       <div className="mb-4">
         <Input
@@ -188,35 +202,22 @@ export default function MenuSelection({
 
       {/* タブ表示 */}
       <Tabs defaultValue="all" onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid grid-cols-4 w-full mb-4">
+        <TabsList className="grid grid-cols-3 w-full mb-4">
           <TabsTrigger value="all" className="text-xs py-2 px-1 md:text-sm">
             すべて
           </TabsTrigger>
-          <TabsTrigger
-            value="firstVisit"
-            className="text-xs py-2 px-1 md:text-sm"
-          >
-            初来店
-          </TabsTrigger>
-          <TabsTrigger
-            value="repeater"
-            className="text-xs py-2 px-1 md:text-sm"
-          >
-            2回目以降
+          <TabsTrigger value="coupon" className="text-xs py-2 px-1 md:text-sm">
+            クーポン
           </TabsTrigger>
           <TabsTrigger value="menu" className="text-xs py-2 px-1 md:text-sm">
             メニュー
           </TabsTrigger>
         </TabsList>
 
-        {/* タブのコンテンツ */}
         <TabsContent value="all" className="mt-2 md:mt-4">
           {filteredItems.map(renderItem)}
         </TabsContent>
-        <TabsContent value="firstVisit" className="mt-2 md:mt-4">
-          {filteredItems.map(renderItem)}
-        </TabsContent>
-        <TabsContent value="repeater" className="mt-2 md:mt-4">
+        <TabsContent value="coupon" className="mt-2 md:mt-4">
           {filteredItems.map(renderItem)}
         </TabsContent>
         <TabsContent value="menu" className="mt-2 md:mt-4">
