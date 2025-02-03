@@ -29,6 +29,8 @@ interface EditingFormDataType extends Partial<Reservation> {
   customer_last_name?: string;
   customer_first_name_kana?: string;
   customer_last_name_kana?: string;
+  // 追加：memoフィールド
+  memo?: string;
 }
 
 interface ReservationEditFormProps {
@@ -94,6 +96,8 @@ const ReservationEditForm: React.FC<ReservationEditFormProps> = ({
               .tz("Asia/Tokyo")
               .format("YYYY-MM-DDTHH:mm")
           : "",
+        // 既存のmemoフィールドをセット（なければ空文字）
+        memo: reservation.memo || "",
       });
 
       setSelectedDate(
@@ -182,7 +186,7 @@ const ReservationEditForm: React.FC<ReservationEditFormProps> = ({
       "Asia/Tokyo"
     );
 
-    const slots = [];
+    const slots: string[] = [];
 
     let currentTime = openingTime.clone();
     while (currentTime.isBefore(closingTime)) {
@@ -267,7 +271,7 @@ const ReservationEditForm: React.FC<ReservationEditFormProps> = ({
       return;
     }
 
-    // 姓名を結合
+    // 姓名結合
     const customer_name = `${editingFormData.customer_last_name || ""} ${
       editingFormData.customer_first_name || ""
     }`.trim();
@@ -283,7 +287,7 @@ const ReservationEditForm: React.FC<ReservationEditFormProps> = ({
       customer_name_kana = editingFormData.customer_first_name_kana;
     }
 
-    // `start_time` と `end_time` を UTC に変換
+    // start_time と end_time を UTC に変換
     const utcStartTime = editingFormData.start_time
       ? moment
           .tz(editingFormData.start_time, "YYYY-MM-DDTHH:mm", "Asia/Tokyo")
@@ -304,6 +308,7 @@ const ReservationEditForm: React.FC<ReservationEditFormProps> = ({
       menu_id: editingFormData.menu_id || reservation.menu_id,
       start_time: utcStartTime,
       end_time: utcEndTime,
+      // ※ memo は editingFormData.memo としてそのまま渡す
     };
 
     try {
@@ -321,11 +326,9 @@ const ReservationEditForm: React.FC<ReservationEditFormProps> = ({
         try {
           const now = moment();
           const startTime = moment(editingFormData.start_time);
-
           const cancellationType = now.isAfter(startTime)
             ? "no_show"
             : "salon_cancelled";
-
           await onDelete(editingFormData.id, cancellationType);
           onClose();
         } catch (error) {
@@ -448,7 +451,7 @@ const ReservationEditForm: React.FC<ReservationEditFormProps> = ({
                   <Label htmlFor="menu_id">メニュー</Label>
                   <Select
                     value={
-                      editingFormData.menu_id != null // 修正
+                      editingFormData.menu_id != null
                         ? editingFormData.menu_id.toString()
                         : ""
                     }
@@ -465,6 +468,18 @@ const ReservationEditForm: React.FC<ReservationEditFormProps> = ({
                       ))}
                     </SelectContent>
                   </Select>
+                </div>
+
+                {/* ここでメモ欄を追加 */}
+                <div className="space-y-2">
+                  <Label htmlFor="memo">メモ</Label>
+                  <textarea
+                    id="memo"
+                    className="w-full border rounded-md p-1 text-sm"
+                    value={editingFormData.memo || ""}
+                    onChange={(e) => handleChange("memo", e.target.value)}
+                    placeholder="予約に関するメモを入力してください"
+                  />
                 </div>
               </div>
             </Box>
@@ -486,7 +501,7 @@ const ReservationEditForm: React.FC<ReservationEditFormProps> = ({
                 {/* 予約時間 */}
                 {selectedDate &&
                   editingFormData.staff_id &&
-                  editingFormData.menu_id != null && ( // 修正
+                  editingFormData.menu_id != null && (
                     <div className="space-y-2">
                       <Label>予約時間</Label>
                       <Paper

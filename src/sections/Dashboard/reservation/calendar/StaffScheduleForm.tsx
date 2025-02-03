@@ -43,6 +43,7 @@ const StaffScheduleForm: React.FC<StaffScheduleFormProps> = ({
     end_time: "",
     is_staff_schedule: true,
     status: "staff",
+    memo: "", // メモ
   });
 
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
@@ -59,6 +60,7 @@ const StaffScheduleForm: React.FC<StaffScheduleFormProps> = ({
         end_time: staffSchedule.end_time
           ? formatDateTimeLocal(staffSchedule.end_time)
           : "",
+        memo: staffSchedule.memo || "",
         event: staffSchedule.event || "",
         staff_id: staffSchedule.staff_id || "",
         is_staff_schedule: true,
@@ -72,6 +74,7 @@ const StaffScheduleForm: React.FC<StaffScheduleFormProps> = ({
         end_time: "",
         is_staff_schedule: true,
         status: "staff",
+        memo: "",
       });
     }
   }, [staffSchedule]);
@@ -119,6 +122,7 @@ const StaffScheduleForm: React.FC<StaffScheduleFormProps> = ({
       status: "staff",
       start_time: formData.start_time,
       end_time: formData.end_time,
+      memo: formData.memo || "",
     };
 
     setIsSubmitting(true);
@@ -199,6 +203,17 @@ const StaffScheduleForm: React.FC<StaffScheduleFormProps> = ({
                   <SelectItem value="その他">その他</SelectItem>
                 </SelectContent>
               </Select>
+
+              {/* メモ欄を追加 */}
+              <div className="space-y-2">
+                <Label htmlFor="memo">メモ</Label>
+                <textarea
+                  id="memo"
+                  className="w-full border rounded-md p-1"
+                  value={formData.memo || ""}
+                  onChange={(e) => handleChange("memo", e.target.value)}
+                />
+              </div>
             </div>
 
             <div className="space-y-2">

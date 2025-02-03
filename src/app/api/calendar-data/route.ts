@@ -16,9 +16,9 @@ const supabaseAnon = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
+
 // 認証チェック関数
 async function checkAuth(request: Request) {
-  // createRouteHandlerClient({ cookies }) は使わない
   const authHeader = request.headers.get("Authorization");
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
     return { error: "Missing or invalid authorization header", status: 401 };
@@ -29,7 +29,6 @@ async function checkAuth(request: Request) {
     data: { user },
     error,
   } = await supabaseAnon.auth.getUser(token);
-  // ↑ anon クライアントで token 検証
 
   if (error || !user) {
     console.error("Authentication error:", error);
@@ -50,13 +49,15 @@ function formatReservation(reservation: any) {
     customer_email: reservation.reservation_customers?.email || "",
     customer_phone: reservation.reservation_customers?.phone || "",
     customer_name_kana: reservation.reservation_customers?.name_kana || "",
-    menu_name: reservation.scraped_menu || reservation.menu_items?.name || "", // scraped_menuを優先
+    menu_name: reservation.scraped_menu || reservation.menu_items?.name || "",
     staff_name: reservation.staff?.name || "",
     start_time: moment.utc(reservation.start_time).toISOString(),
     end_time: moment.utc(reservation.end_time).toISOString(),
     is_staff_schedule: reservation.is_staff_schedule || false,
     editable: reservation.is_staff_schedule === true,
     is_hair_sync: reservation.is_hair_sync || false,
+    // memo フィールドを追加（なければ空文字）
+    memo: reservation.memo || "",
   };
 }
 
@@ -98,7 +99,7 @@ export async function GET(request: Request) {
     // 表示対象のステータスリスト
     const includedStatuses = ["confirmed", "paid", "staff"];
 
-    // 予約データの取得
+    // 予約データの取得（memo カラムも含む）
     const { data: reservations, error: reservationError } = await supabase
       .from("reservations")
       .select(
@@ -111,7 +112,8 @@ export async function GET(request: Request) {
         ),
         menu_items (id, name, duration, price),
         staff (id, name, schedule_order),
-         coupons!fk_coupon (id, name, duration, price)
+        coupons!fk_coupon (id, name, duration, price),
+        memo
       `
       )
       .eq("user_id", userId)
@@ -128,7 +130,7 @@ export async function GET(request: Request) {
       );
     }
 
-    // 予約データのフォーマット
+    // フォーマット処理
     const formattedReservations = reservations.map(formatReservation);
 
     // サロンデータの取得
@@ -145,17 +147,15 @@ export async function GET(request: Request) {
 
     if (!salonData) {
       console.warn("No salon data found for user:", userId);
-
-      // 休業日がない場合もレスポンスを返す
       return NextResponse.json({
         reservations: formattedReservations,
         closedDays: [],
         businessHours: [],
-        staffShifts: [], // スタッフシフトデータも空配列を返す
+        staffShifts: [],
       });
     }
 
-    // 指定された期間内の営業時間データの取得
+    // 営業時間データの取得
     const { data: businessHoursData, error: businessHoursError } =
       await supabase
         .from("salon_business_hours")
@@ -179,7 +179,7 @@ export async function GET(request: Request) {
       is_holiday: bh.is_holiday,
     }));
 
-    // 各日付の営業時間を取得またはデフォルト値を設定
+    // 各日付の営業時間（存在しない場合はデフォルト値を設定）
     const dateRange: BusinessHour[] = [];
     let currentDate = moment(startDateStr, "YYYY-MM-DD");
     const endMoment = moment(endDateStr, "YYYY-MM-DD");
@@ -218,7 +218,7 @@ export async function GET(request: Request) {
       )
       .map((bh) => bh.date);
 
-    // スタッフシフトの取得（追加）
+    // スタッフシフトの取得
     const { data: staffShiftsData, error: staffShiftsError } = await supabase
       .from("staff_shifts")
       .select("*, staff!inner(user_id)")
@@ -234,7 +234,6 @@ export async function GET(request: Request) {
       );
     }
 
-    // スタッフシフトデータの整形
     const staffShifts = staffShiftsData.map((shift) => ({
       id: shift.id,
       staff_id: shift.staff_id,
@@ -249,7 +248,7 @@ export async function GET(request: Request) {
       reservations: formattedReservations,
       closedDays,
       businessHours: dateRange,
-      staffShifts, // 追加
+      staffShifts,
     });
   } catch (error) {
     console.error("Unexpected error in GET handler:", error);
@@ -301,7 +300,6 @@ export async function POST(request: Request) {
     if (isStaffSchedule) {
       // スタッフスケジュールの作成
       try {
-        // バリデーション: end_time が必須
         if (!end_time) {
           return NextResponse.json(
             { error: "end_time is required for staff schedule" },
@@ -309,7 +307,6 @@ export async function POST(request: Request) {
           );
         }
 
-        // バリデーション: end_time が start_time より後
         const startMoment = moment(start_time);
         const endMoment = moment(end_time);
         if (!endMoment.isAfter(startMoment)) {
@@ -319,7 +316,7 @@ export async function POST(request: Request) {
           );
         }
 
-        // 重要: クライアントから受け取った時間をJSTとして解釈し、UTCに変換
+        // クライアントから受け取った時間をJSTとして解釈し、UTCに変換
         const utcStartTime = moment.tz(start_time, "Asia/Tokyo").utc().format();
         const utcEndTime = moment.tz(end_time, "Asia/Tokyo").utc().format();
 
@@ -332,6 +329,8 @@ export async function POST(request: Request) {
           total_price: 0,
           is_staff_schedule: true,
           event: event || "予定あり",
+          // memo フィールドを追加（なければ空文字）
+          memo: data.memo || "",
         };
 
         console.log("Inserting staff schedule:", insertData);
@@ -341,13 +340,13 @@ export async function POST(request: Request) {
           .insert(insertData)
           .select(
             `
-    *,
-    reservation_customers!fk_customer (
-      id, name, email, phone, name_kana
-    ),
-    menu_items (id, name, duration, price),
-    staff (id, name)
-  `
+            *,
+            reservation_customers!fk_customer (
+              id, name, email, phone, name_kana
+            ),
+            menu_items (id, name, duration, price),
+            staff (id, name)
+          `
           )
           .single();
 
@@ -374,7 +373,6 @@ export async function POST(request: Request) {
     } else {
       // スタッフダッシュボードからの予約作成
       try {
-        // create_staff_reservation 関数を呼び出すためのパラメータを準備
         const rpcParams = {
           p_user_id: authResult.user.id,
           p_staff_id: staff_id,
@@ -398,9 +396,10 @@ export async function POST(request: Request) {
           p_payment_status: null,
           p_payment_amount: 0,
           p_stripe_payment_intent_id: null,
+          // 追加：memo パラメータ
+          p_memo: data.memo || null,
         };
 
-        // create_staff_reservation 関数を呼び出す
         const { data: reservationData, error: reservationError } =
           await supabase.rpc("create_reservation", rpcParams);
 
@@ -412,7 +411,6 @@ export async function POST(request: Request) {
           );
         }
 
-        // 予約IDとreservation_customer_idの存在を確認
         if (
           !reservationData ||
           reservationData.length === 0 ||
@@ -433,7 +431,6 @@ export async function POST(request: Request) {
         console.log("Created reservation ID:", reservationId);
         console.log("Created reservation customer ID:", reservationCustomerId);
 
-        // 作成された予約情報を取得
         const { data: newReservation, error: fetchError } = await supabase
           .from("reservations")
           .select(
@@ -458,20 +455,16 @@ export async function POST(request: Request) {
           );
         }
 
-        // フォーマット処理
         const formattedReservation = formatReservation(newReservation);
 
-        // もしメールアドレスがあればメール送信する
         if (customer_email) {
           try {
-            // 予約開始・終了日時などを取り出し
             const startTime = data.start_time;
             const endTime = data.end_time;
             const staffName = formattedReservation.staff_name || "";
             const serviceName = formattedReservation.menu_name || "";
             const totalPrice = data.total_price || 0;
 
-            // 送信用パラメータを組み立て
             await sendReservationEmails({
               reservationId,
               customerInfo: {
@@ -487,8 +480,6 @@ export async function POST(request: Request) {
               staffName,
               serviceName,
               totalPrice,
-              // スタッフやサロン運営者への通知メール先をどう取得するかは
-              // fetchRecipientEmails(userId) などで
               recipientEmails: [],
             });
             console.log(
@@ -497,11 +488,9 @@ export async function POST(request: Request) {
             );
           } catch (err) {
             console.error("Failed to send reservation email:", err);
-            // メール送信に失敗しても、予約自体は成功として扱うかどうかは要件次第
           }
         }
 
-        // レスポンスを返す
         return NextResponse.json(formattedReservation);
       } catch (error: any) {
         console.error("Error saving staff reservation:", error);
@@ -541,7 +530,6 @@ export async function PUT(request: Request) {
       );
     }
 
-    // 既存の予約データを取得
     const { data: existingReservation, error: fetchError } = await supabase
       .from("reservations")
       .select(
@@ -569,10 +557,8 @@ export async function PUT(request: Request) {
       );
     }
 
-    // 顧客IDの取得（存在しない場合もあり）
     const customerId = existingReservation.reservation_customers?.id;
 
-    // スタッフスケジュールの場合、end_time が必須
     if (existingReservation.is_staff_schedule && !updateFields.end_time) {
       return NextResponse.json(
         { error: "end_time is required for staff schedule updates" },
@@ -580,7 +566,6 @@ export async function PUT(request: Request) {
       );
     }
 
-    // スタッフスケジュールの場合、顧客関連フィールドは除外
     if (existingReservation.is_staff_schedule) {
       delete updateFields.customer_name;
       delete updateFields.customer_email;
@@ -592,7 +577,7 @@ export async function PUT(request: Request) {
       delete updateFields.customer_first_name_kana;
     }
 
-    // 更新するフィールドを明示的に指定
+    // 更新するフィールドリストに memo を追加
     const fieldsToUpdate = [
       "start_time",
       "end_time",
@@ -603,19 +588,18 @@ export async function PUT(request: Request) {
       "total_price",
       "is_staff_schedule",
       "event",
+      "memo",
     ] as const;
 
     const updatedData: Partial<Reservation> = {};
     for (const field of fieldsToUpdate) {
       if (updateFields[field] !== undefined) {
         if (field === "start_time" || field === "end_time") {
-          // スタッフスケジュールの場合は特別な処理を行う
           if (existingReservation.is_staff_schedule) {
             updatedData[field] = updateFields[field]
               ? moment.tz(updateFields[field], "Asia/Tokyo").utc().format()
               : undefined;
           } else {
-            // 通常の予約は既存の処理を使用
             updatedData[field] = updateFields[field]
               ? moment.utc(updateFields[field]).format("YYYY-MM-DD HH:mm:ss")
               : undefined;
@@ -626,7 +610,6 @@ export async function PUT(request: Request) {
       }
     }
 
-    // スタッフスケジュールの場合、ステータスを 'staff' に強制設定
     if (
       existingReservation.is_staff_schedule &&
       updatedData.status !== "staff"
@@ -634,7 +617,6 @@ export async function PUT(request: Request) {
       updatedData.status = "staff";
     }
 
-    // 予約の更新
     const { data: updatedReservation, error: updateError } = await supabase
       .from("reservations")
       .update(updatedData)
@@ -657,7 +639,6 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: updateError.message }, { status: 500 });
     }
 
-    // 顧客情報の更新（顧客IDが存在する場合のみ）
     if (customerId) {
       const customerUpdateData: any = {};
       if (updateFields.customer_name !== undefined)
@@ -681,13 +662,10 @@ export async function PUT(request: Request) {
           "Warning: Could not update customer information:",
           customerUpdateError
         );
-        // 顧客情報の更新に失敗しても、予約の更新自体は成功とする
       }
     }
 
-    // フォーマット処理
     const formattedReservation = formatReservation(updatedReservation);
-
     console.log("Reservation updated:", formattedReservation);
     return NextResponse.json(formattedReservation);
   } catch (error: any) {
@@ -717,7 +695,6 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: "ID is required" }, { status: 400 });
     }
 
-    // 予約の取得
     const { data: reservation, error: fetchError } = await supabase
       .from("reservations")
       .select("start_time, is_staff_schedule")
@@ -738,7 +715,6 @@ export async function DELETE(request: Request) {
     }
 
     if (reservation.is_staff_schedule) {
-      // スタッフスケジュールの場合、予約を削除
       const { error: deleteError } = await supabase
         .from("reservations")
         .delete()
@@ -758,19 +734,16 @@ export async function DELETE(request: Request) {
         message: "Staff schedule deleted successfully.",
       });
     } else {
-      // 通常の予約の場合、ステータスを更新
       const currentTime = moment.utc();
       const reservationStartTime = moment.utc(reservation.start_time);
 
       let newStatus: string;
-
       if (currentTime.isBefore(reservationStartTime)) {
         newStatus = "salon_cancelled";
       } else {
         newStatus = "no_show";
       }
 
-      // 予約のステータスを更新
       const { error: updateError } = await supabase
         .from("reservations")
         .update({ status: newStatus })
@@ -787,9 +760,6 @@ export async function DELETE(request: Request) {
       console.log(
         `Reservation ${reservationId} status updated to ${newStatus}`
       );
-
-      // キャンセル時の追加処理は不要
-
       return NextResponse.json({ success: true, status: newStatus });
     }
   } catch (error: any) {

@@ -29,7 +29,7 @@ export interface Reservation {
     price: number;
   };
   scraped_menu?: string;
-  // その他のフィールドがある場合はここに追加
+  memo?: string | null;
 }
 
 export interface Staff {
@@ -44,6 +44,7 @@ export interface MenuItem {
   name: string;
   duration: number;
   price: number;
+  category_id: number;
   // その他のプロパティがあれば追加
 }
 
@@ -52,4 +53,9 @@ export interface BusinessHour {
   open_time: string;
   close_time: string;
   is_holiday: boolean; // この行を追加
+}
+
+export interface Category {
+  id: number;
+  name: string;
 }

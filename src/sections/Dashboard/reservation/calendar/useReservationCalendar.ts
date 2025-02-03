@@ -6,6 +6,7 @@ import {
   Staff,
   MenuItem,
   BusinessHour,
+  Category,
 } from "@/types/reservation";
 import { useAuth } from "@/lib/authContext";
 import moment from "moment";
@@ -41,12 +42,14 @@ interface UseReservationCalendarReturn {
   staffList: Staff[];
   menuList: MenuItem[];
   couponList: Coupon[];
+  categoryList: Category[];
   closedDays: string[];
   businessHours: BusinessHour[];
   staffShifts: StaffShift[]; // 追加
   loadData: () => Promise<void>;
   setReservations: React.Dispatch<React.SetStateAction<Reservation[]>>;
   setClosedDays: React.Dispatch<React.SetStateAction<string[]>>;
+
   setBusinessHours: React.Dispatch<React.SetStateAction<BusinessHour[]>>;
   dateRange: { start: string; end: string };
   setDateRange: React.Dispatch<
@@ -131,10 +134,12 @@ const useReservationCalendar = (): UseReservationCalendarReturn => {
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const [menuList, setMenuList] = useState<MenuItem[]>([]);
   const [couponList, setCouponList] = useState<Coupon[]>([]);
+  const [categoryList, setCategoryList] = useState<Category[]>([]);
   const [snackbar, setSnackbar] = useState<{
     message: string;
     severity: "success" | "error";
   } | null>(null);
+
   const [isLoading, setIsLoading] = useState<boolean>(false); // ローディング状態を追加
 
   const [dateRange, setDateRange] = useState<{ start: string; end: string }>(
@@ -173,6 +178,7 @@ const useReservationCalendar = (): UseReservationCalendarReturn => {
         setStaffList(data.staffList);
         setMenuList(data.menuList);
         setCouponList(data.couponList);
+        setCategoryList(data.categoryList);
       } catch (error) {
         console.error("Error in loadInitialData:", error);
         setSnackbar({
@@ -253,10 +259,12 @@ const useReservationCalendar = (): UseReservationCalendarReturn => {
     staffList,
     menuList,
     couponList,
+    categoryList,
     closedDays,
     businessHours,
     staffShifts, // 追加
     loadData: async () => {}, // データが既にロードされているため空の関数を返す
+
     setReservations,
     setClosedDays,
     setBusinessHours,

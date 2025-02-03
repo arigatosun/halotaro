@@ -68,6 +68,7 @@ const ReservationCalendar: React.FC = () => {
     reservations,
     staffList,
     menuList,
+    categoryList,
     closedDays,
     businessHours,
     staffShifts,
@@ -900,6 +901,7 @@ const ReservationCalendar: React.FC = () => {
           reservations={reservations}
           isCreatingFromButton={isCreatingFromButton}
           businessHours={businessHours}
+          categories={categoryList} // <-- ここでちゃんと渡す
         />
       )}
 

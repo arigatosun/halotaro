@@ -22,18 +22,14 @@ import moment from "moment-timezone";
 
 import { useAuth } from "@/lib/authContext";
 import useReservationCalendar from "@/sections/Dashboard/reservation/calendar/useReservationCalendar";
-
-// Reservation や Staff, MenuItem, BusinessHour などの型定義
 import {
   BusinessHour,
   Reservation,
   Staff,
   MenuItem as MenuItemType,
+  Category,
 } from "@/types/reservation";
 
-// -----------------------------
-// 顧客検索用の型
-// -----------------------------
 interface Customer {
   id: string;
   name: string;
@@ -42,9 +38,6 @@ interface Customer {
   phone: string;
 }
 
-// -----------------------------
-// フォーム内部のステート型
-// -----------------------------
 interface FormDataType {
   customer_first_name: string;
   customer_last_name: string;
@@ -52,19 +45,17 @@ interface FormDataType {
   customer_last_name_kana: string;
   customer_email: string;
   customer_phone: string;
-  menu_id?: number; // メニューID (number)
-  coupon_id?: string; // クーポンID (uuid)
+  menu_id?: number;
+  coupon_id?: string;
   staff_id: string;
-  start_time: string; // 常に "YYYY-MM-DDTHH:mm" (ローカル) で保持
-  end_time: string; // 同上
+  memo: string;
+  start_time: string;
+  end_time: string;
   event: string;
   id: string;
   customer_id: string;
 }
 
-// -----------------------------
-// ReservationFormProps
-// -----------------------------
 interface ReservationFormProps {
   reservation: Partial<Reservation> | null;
   isNew: boolean;
@@ -76,23 +67,10 @@ interface ReservationFormProps {
   reservations: Reservation[];
   isCreatingFromButton?: boolean;
   businessHours: BusinessHour[];
+  categories: Category[]; // カテゴリ一覧
 }
 
-// -----------------------------
-// メニューとクーポンを共通で扱うための型
-// -----------------------------
-type ItemType = "menu" | "coupon";
-interface CombinedItem {
-  id: string; // menu_id (number→string化) or coupon_id (uuid)
-  name: string;
-  duration?: number;
-  price?: number;
-  type: ItemType; // "menu" or "coupon"
-}
-
-// -----------------------------
-// カタカナのバリデーション
-// -----------------------------
+// カナのバリデーション
 const isKatakana = (str: string): boolean => {
   const regex = /^[\u30A0-\u30FF]+$/;
   return regex.test(str);
@@ -109,83 +87,53 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
   reservations,
   isCreatingFromButton = false,
   businessHours,
+  categories,
 }) => {
-  // 認証情報
   const { session } = useAuth();
-
-  // useReservationCalendar から couponList を取得
   const { couponList } = useReservationCalendar();
 
-  // -----------------------------
-  // "メニュー + クーポン" をまとめた配列
-  // -----------------------------
-  const combinedItems: CombinedItem[] = useMemo(() => {
-    const menus = menuList.map((m) => ({
-      id: String(m.id),
-      name: m.name,
-      duration: m.duration,
-      price: m.price,
-      type: "menu" as const,
-    }));
-    const coupons = couponList.map((c) => ({
-      id: c.id,
-      name: c.name,
-      duration: c.duration,
-      price: c.price,
-      type: "coupon" as const,
-    }));
-    return [...menus, ...coupons];
-  }, [menuList, couponList]);
-
-  // -----------------------------
-  // フォームの初期値
-  // -----------------------------
-  const initialFormData: FormDataType = {
-    customer_first_name: "",
-    customer_last_name: "",
-    customer_first_name_kana: "",
-    customer_last_name_kana: "",
-    customer_email: "",
-    customer_phone: "",
-    menu_id: undefined,
-    coupon_id: undefined,
-    staff_id: "",
-    start_time: "", // ローカル "YYYY-MM-DDTHH:mm"
-    end_time: "",
-    event: "",
-    id: "",
-    customer_id: "",
-  };
+  // 初期値（useMemoでメモ化）
+  const initialFormData = useMemo<FormDataType>(
+    () => ({
+      customer_first_name: "",
+      customer_last_name: "",
+      customer_first_name_kana: "",
+      customer_last_name_kana: "",
+      customer_email: "",
+      customer_phone: "",
+      menu_id: undefined,
+      coupon_id: undefined,
+      staff_id: "",
+      start_time: "",
+      end_time: "",
+      event: "",
+      id: "",
+      customer_id: "",
+      memo: "",
+    }),
+    []
+  );
 
   const [formData, setFormData] = useState<FormDataType>(initialFormData);
-
-  // 重複チェック関連
   const [isOverlap, setIsOverlap] = useState<boolean>(false);
   const [overlapMessage, setOverlapMessage] = useState<string>("");
-
-  // スナックバー
   const [snackbar, setSnackbar] = useState<{
     message: string;
     severity: "success" | "error";
   } | null>(null);
 
-  // 日付・時刻スロット
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [availableTimes, setAvailableTimes] = useState<string[]>([]);
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<string | null>(null);
-
-  // メニュー/クーポン選択
-  const [selectedItem, setSelectedItem] = useState<CombinedItem | null>(null);
   const [selectedMenuPrice, setSelectedMenuPrice] = useState<number>(0);
 
-  // 顧客検索関連
-  interface Customer {
-    id: string;
-    name: string;
-    name_kana: string;
-    email: string;
-    phone: string;
-  }
+  // カナバリデーション用
+  const [validationErrors, setValidationErrors] = useState<{
+    customer_last_name_kana?: string;
+    customer_first_name_kana?: string;
+  }>({});
+
+  // 顧客検索用
   const [searchValue, setSearchValue] = useState("");
   const [searchResults, setSearchResults] = useState<Customer[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(
@@ -196,22 +144,36 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
   const [isCustomerSelected, setIsCustomerSelected] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
 
-  // カナバリデーションエラー
-  const [validationErrors, setValidationErrors] = useState<{
-    customer_last_name_kana?: string;
-    customer_first_name_kana?: string;
-  }>({});
+  // メニュー/クーポン 選択状態
+  const [selectionType, setSelectionType] = useState<"menu" | "coupon">("menu");
 
-  // -----------------------------
+  // カテゴリ選択ID (string型で運用)
+  const [selectedCategory, setSelectedCategory] = useState<string>("0");
+
+  // ---------------------------
+  // ここで「カテゴリが取れたら最初のカテゴリIDをセット」する
+  // ---------------------------
+  useEffect(() => {
+    if (categories.length > 0 && selectedCategory === "0") {
+      // category.id が number の場合は String() に変換
+      setSelectedCategory(String(categories[0].id));
+    }
+  }, [categories, selectedCategory]);
+
+  // フィルタされたメニュー
+  const filteredMenus = useMemo(() => {
+    return menuList.filter(
+      (m) => String(m.category_id) === String(selectedCategory)
+    );
+  }, [menuList, selectedCategory]);
+
   // 顧客検索 (debounce)
-  // -----------------------------
   const searchCustomers = debounce(async (query: string) => {
     if (!query.trim() || !session?.access_token) {
       setSearchResults([]);
       return;
     }
     setIsLoading(true);
-
     try {
       const response = await fetch("/api/search-customers", {
         method: "POST",
@@ -228,11 +190,7 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
       }
 
       const customers = await response.json();
-      if (Array.isArray(customers)) {
-        setSearchResults(customers);
-      } else {
-        setSearchResults([]);
-      }
+      setSearchResults(Array.isArray(customers) ? customers : []);
     } catch (error) {
       setSnackbar({
         message:
@@ -245,16 +203,14 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
     }
   }, 300);
 
-  // -----------------------------
-  // 顧客選択
-  // -----------------------------
+  // 顧客を選択
   const handleCustomerSelect = (customer: Customer) => {
     setSelectedCustomer(customer);
     setIsSearchOpen(false);
     setSearchValue(customer.name);
     setIsCustomerSelected(true);
 
-    // 姓名を分割
+    // 姓名とカナを分割してセット
     const nameParts = customer.name.trim().split(/[ 　]+/);
     const nameKanaParts = customer.name_kana.trim().split(/[ 　]+/);
 
@@ -270,9 +226,7 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
     }));
   };
 
-  // -----------------------------
-  // フォームクリア
-  // -----------------------------
+  // フォームをクリア
   const handleClearForm = () => {
     setFormData(initialFormData);
     setSelectedCustomer(null);
@@ -283,9 +237,7 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
     setValidationErrors({});
   };
 
-  // -----------------------------
-  // 既存予約を読み込む（ローカル時刻へ変換）
-  // -----------------------------
+  // 既存予約を読み込み（編集時）
   useEffect(() => {
     if (reservation && !isCreatingFromButton) {
       // フルネーム分割
@@ -308,40 +260,26 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
         customer_first_name: firstName,
         customer_last_name_kana: lastKana,
         customer_first_name_kana: firstKana,
+        staff_id: reservation.staff_id || "",
         menu_id: reservation.menu_id,
         coupon_id: reservation.coupon_id,
-        staff_id: reservation.staff_id || "",
+        memo: reservation.memo || "",
         start_time: "",
         end_time: "",
       };
 
-      // coupon or menu 選択
-      if (reservation.coupon_id) {
-        const found = combinedItems.find(
-          (x) => x.type === "coupon" && x.id === reservation.coupon_id
-        );
-        if (found) setSelectedItem(found);
-      } else if (reservation.menu_id) {
-        const found = combinedItems.find(
-          (x) => x.type === "menu" && x.id === String(reservation.menu_id)
-        );
-        if (found) setSelectedItem(found);
+      if (reservation.menu_id) {
+        setSelectionType("menu");
+      } else if (reservation.coupon_id) {
+        setSelectionType("coupon");
       }
 
-      // start_time (UTC) → ローカル文字列
       if (reservation.start_time) {
         const startMoment = moment.utc(reservation.start_time).tz("Asia/Tokyo");
         newFormData.start_time = startMoment.format("YYYY-MM-DDTHH:mm");
-
-        // カレンダー用に Date オブジェクト
-        const localDate = startMoment.toDate();
-        setSelectedDate(localDate);
-
-        // スロットも確定
+        setSelectedDate(startMoment.toDate());
         setSelectedTimeSlot(startMoment.format("HH:mm"));
       }
-
-      // end_time (UTC) → ローカル文字列
       if (reservation.end_time) {
         const endMoment = moment.utc(reservation.end_time).tz("Asia/Tokyo");
         newFormData.end_time = endMoment.format("YYYY-MM-DDTHH:mm");
@@ -349,17 +287,12 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
 
       setFormData(newFormData);
 
-      // duration 分から price を確定
       if (reservation.menu_id) {
-        const m = menuList.find((menu) => menu.id === reservation.menu_id);
-        if (m) {
-          setSelectedMenuPrice(m.price);
-        }
+        const found = menuList.find((m) => m.id === reservation.menu_id);
+        if (found) setSelectedMenuPrice(found.price);
       } else if (reservation.coupon_id) {
         const c = couponList.find((cp) => cp.id === reservation.coupon_id);
-        if (c?.price) {
-          setSelectedMenuPrice(c.price);
-        }
+        if (c?.price) setSelectedMenuPrice(c.price);
       }
 
       setIsOverlap(false);
@@ -371,14 +304,18 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
       setSelectedTimeSlot(null);
       setIsOverlap(false);
       setOverlapMessage("");
-      setSelectedItem(null);
       setSelectedMenuPrice(0);
+      setSelectionType("menu"); // 新規はメニューをデフォルトに
     }
-  }, [reservation, isCreatingFromButton, couponList, menuList, combinedItems]);
+  }, [
+    reservation,
+    isCreatingFromButton,
+    couponList,
+    menuList,
+    initialFormData,
+  ]);
 
-  // -----------------------------
-  // フィールド更新ハンドラ
-  // -----------------------------
+  // フォームフィールドの変更ハンドラ
   const handleChange = (name: string, value: string) => {
     setFormData((prev) => ({
       ...prev,
@@ -407,31 +344,21 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
     }
   };
 
-  // -----------------------------
-  // メニュー/クーポン選択
-  // -----------------------------
-  const handleSelectItem = (item: CombinedItem) => {
-    setSelectedItem(item);
-    if (item.type === "menu") {
-      setFormData((prev) => ({
-        ...prev,
-        menu_id: Number(item.id),
-        coupon_id: undefined,
-      }));
-      setSelectedMenuPrice(item.price || 0);
+  // メニュー or クーポン 切り替え
+  const handleSelectionTypeChange = (type: "menu" | "coupon") => {
+    setSelectionType(type);
+    if (type === "menu") {
+      // クーポンをクリア
+      setFormData((prev) => ({ ...prev, coupon_id: undefined }));
+      setSelectedMenuPrice(0);
     } else {
-      setFormData((prev) => ({
-        ...prev,
-        coupon_id: item.id,
-        menu_id: undefined,
-      }));
-      setSelectedMenuPrice(item.price || 0);
+      // メニューをクリア
+      setFormData((prev) => ({ ...prev, menu_id: undefined }));
+      setSelectedMenuPrice(0);
     }
   };
 
-  // -----------------------------
-  // 予約日変更 → 可能な時間帯更新
-  // -----------------------------
+  // 予約日が変わったり、メニュー/クーポンが変わったら利用可能時間を計算
   useEffect(() => {
     if (
       selectedDate &&
@@ -450,7 +377,7 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
       const dateStr = moment(selectedDate).format("YYYY-MM-DD");
       let bh = businessHours.find((x) => x.date === dateStr);
       if (!bh) {
-        // デフォルト営業時間（例）
+        // デフォルト営業時間を仮で決める
         const isWeekend = [0, 6].includes(moment(dateStr).day());
         bh = {
           date: dateStr,
@@ -475,11 +402,13 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
 
       const slots: string[] = [];
       let currentTime = openingTime.clone();
+
       while (currentTime.isBefore(closingTime)) {
         const slotStart = currentTime.clone();
         const slotEnd = slotStart.clone().add(duration, "minutes");
         if (slotEnd.isAfter(closingTime)) break;
 
+        // 重複チェック
         const isOverlapSlot = reservations.some((res) => {
           if (res.staff_id !== formData.staff_id) return false;
           if (
@@ -493,12 +422,10 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
           ) {
             return false;
           }
-
           const resStart = moment.utc(res.start_time).local();
           const resEnd = moment.utc(res.end_time).local();
           if (resStart.format("YYYY-MM-DD") !== dateStr) return false;
 
-          // スロットが既存の予約とかぶるかどうか
           return slotStart.isBefore(resEnd) && slotEnd.isAfter(resStart);
         });
 
@@ -507,7 +434,6 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
         }
         currentTime.add(30, "minutes");
       }
-
       setAvailableTimes(slots);
     } else {
       setAvailableTimes([]);
@@ -523,9 +449,7 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
     businessHours,
   ]);
 
-  // -----------------------------
-  // 時間帯をクリック → ローカル時刻セット
-  // -----------------------------
+  // 時間枠をクリック
   const handleTimeSlotClick = (time: string) => {
     setSelectedTimeSlot(time);
 
@@ -548,37 +472,46 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
     }));
   };
 
-  // ---------------------------------------------------------------------------------
-  // 方式A: start_time or 選択メニューが変わるたびに、end_time を自動再計算する useEffect
-  // ---------------------------------------------------------------------------------
+  // start_time が変わるたびに end_time を再計算
   useEffect(() => {
-    // start_time が未設定、またはまだメニュー/クーポンが未選択の場合は何もしない
     if (!formData.start_time) return;
-    if (!selectedItem?.duration) return;
+    let itemDuration = 0;
 
-    // すでにタイムスロットをクリックして end_time が入っている場合でも、
-    // 「start_time を再度変更 or メニュー変更」したら正しく再計算して上書きする
-    const startMoment = moment.tz(
-      formData.start_time,
-      "YYYY-MM-DDTHH:mm",
-      "Asia/Tokyo"
-    );
-    if (!startMoment.isValid()) return;
+    if (formData.menu_id) {
+      const found = menuList.find((m) => m.id === formData.menu_id);
+      if (found) itemDuration = found.duration;
+    } else if (formData.coupon_id) {
+      const c = couponList.find((cp) => cp.id === formData.coupon_id);
+      if (c?.duration) itemDuration = c.duration;
+    }
 
-    const endMoment = startMoment.clone().add(selectedItem.duration, "minutes");
-    setFormData((prev) => ({
-      ...prev,
-      end_time: endMoment.format("YYYY-MM-DDTHH:mm"),
-    }));
-  }, [formData.start_time, selectedItem]);
+    if (itemDuration > 0) {
+      const startMoment = moment.tz(
+        formData.start_time,
+        "YYYY-MM-DDTHH:mm",
+        "Asia/Tokyo"
+      );
+      if (startMoment.isValid()) {
+        const endMoment = startMoment.clone().add(itemDuration, "minutes");
+        setFormData((prev) => ({
+          ...prev,
+          end_time: endMoment.format("YYYY-MM-DDTHH:mm"),
+        }));
+      }
+    }
+  }, [
+    formData.start_time,
+    formData.menu_id,
+    formData.coupon_id,
+    menuList,
+    couponList,
+  ]);
 
-  // -----------------------------
-  // 送信ボタン
-  // -----------------------------
+  // フォーム送信
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    // カナバリデーション
+    // カナバリデーションチェック
     const errors: { [key: string]: string } = {};
     if (
       !formData.customer_last_name_kana &&
@@ -606,7 +539,6 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
       return;
     }
 
-    // もし「スロット選択が必須」なら、ここでエラーチェックも可能
     if (isOverlap || !selectedTimeSlot) {
       setSnackbar({
         message: overlapMessage || "予約情報に問題があります",
@@ -615,10 +547,12 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
       return;
     }
 
-    // 姓名結合
+    // 姓名を結合
     const customer_name = `${formData.customer_last_name || ""} ${
       formData.customer_first_name || ""
     }`.trim();
+
+    // カナも結合
     let customer_name_kana = "";
     if (formData.customer_last_name_kana && formData.customer_first_name_kana) {
       customer_name_kana = `${formData.customer_last_name_kana} ${formData.customer_first_name_kana}`;
@@ -628,14 +562,13 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
       customer_name_kana = formData.customer_first_name_kana;
     }
 
-    // ローカル → UTC文字列へ変換
+    // 時刻を UTC 文字列に
     const utcStart = formData.start_time
       ? moment
           .tz(formData.start_time, "YYYY-MM-DDTHH:mm", "Asia/Tokyo")
           .utc()
           .format()
       : undefined;
-
     const utcEnd = formData.end_time
       ? moment
           .tz(formData.end_time, "YYYY-MM-DDTHH:mm", "Asia/Tokyo")
@@ -643,24 +576,33 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
           .format()
       : undefined;
 
-    // 最終ペイロード
+    // 価格計算
+    let totalPrice = 0;
+    if (formData.menu_id) {
+      const m = menuList.find((mn) => mn.id === formData.menu_id);
+      if (m) totalPrice = m.price;
+    } else if (formData.coupon_id) {
+      const c = couponList.find((cp) => cp.id === formData.coupon_id);
+      if (c?.price) totalPrice = c.price;
+    }
+
     const updatedReservation: Partial<Reservation> = {
       ...formData,
       customer_name,
       customer_name_kana,
       start_time: utcStart,
       end_time: utcEnd,
-      total_price: selectedMenuPrice,
+      total_price: totalPrice,
       is_staff_schedule: false,
+      memo: formData.memo,
     };
 
+    // 親コンポーネントへ送信
     onSubmit(updatedReservation, isNew);
     onClose();
   };
 
-  // -----------------------------
-  // 予約削除
-  // -----------------------------
+  // 削除ボタン
   const handleDelete = () => {
     if (window.confirm("この予約をキャンセルしますか？")) {
       if (formData.id && formData.start_time) {
@@ -682,9 +624,7 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
     }
   };
 
-  // -----------------------------
   // 外部クリックで検索結果を閉じる
-  // -----------------------------
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
@@ -711,7 +651,7 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
           </DialogHeader>
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* 顧客検索UI */}
+            {/* --- 顧客検索UI --- */}
             <div className="space-y-1 col-span-2" ref={searchRef}>
               <Label className="text-sm">顧客検索</Label>
               <div className="relative">
@@ -769,7 +709,7 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
               </div>
             )}
 
-            {/* 顧客情報フィールド */}
+            {/* --- 顧客情報 --- */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
                 <Label htmlFor="customer_last_name" className="text-sm">
@@ -785,7 +725,6 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
                   disabled={isCustomerSelected}
                 />
               </div>
-
               <div className="space-y-1">
                 <Label htmlFor="customer_first_name" className="text-sm">
                   顧客名（名）
@@ -830,7 +769,6 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
                   </p>
                 )}
               </div>
-
               <div className="space-y-1">
                 <Label htmlFor="customer_first_name_kana" className="text-sm">
                   顧客名（カナ・名）*
@@ -876,7 +814,6 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
                   disabled={isCustomerSelected}
                 />
               </div>
-
               <div className="space-y-1">
                 <Label htmlFor="customer_phone" className="text-sm">
                   電話番号
@@ -894,7 +831,7 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
               </div>
             </div>
 
-            {/* 担当スタッフ */}
+            {/* --- 担当スタッフ --- */}
             <div className="space-y-1">
               <Label htmlFor="staff_id" className="text-sm">
                 担当スタッフ
@@ -915,108 +852,189 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
               </select>
             </div>
 
-            {/* メニュー or クーポン選択 */}
-            <div className="space-y-1">
-              <Label className="text-sm">メニュー / クーポン</Label>
-              <Listbox value={selectedItem} onChange={handleSelectItem}>
-                <div className="relative">
-                  <Listbox.Button className="relative w-full cursor-default rounded-md border border-gray-300 bg-white py-1 pl-2 pr-8 text-left text-sm focus:outline-none">
-                    <span className="block truncate">
-                      {selectedItem
-                        ? `${selectedItem.name} (${
-                            selectedItem.type === "menu"
-                              ? "メニュー"
-                              : "クーポン"
-                          })`
-                        : "メニュー / クーポンを選択"}
-                    </span>
-                    <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">
-                      <ChevronUpDownIcon
-                        className="h-4 w-4 text-gray-400"
-                        aria-hidden="true"
-                      />
-                    </span>
-                  </Listbox.Button>
-                  <Listbox.Options className="absolute z-10 mt-1 max-h-48 w-full overflow-auto rounded-md bg-white py-1 text-base shadow-lg text-sm">
-                    {/* メニューグループ */}
-                    <div className="px-2 py-1 text-gray-500 text-xs">
-                      --- メニュー ---
-                    </div>
-                    {combinedItems
-                      .filter((x) => x.type === "menu")
-                      .map((item) => (
-                        <Listbox.Option
-                          key={item.id}
-                          value={item}
-                          className={({ active }) =>
-                            `relative cursor-default select-none py-1 pl-8 pr-2 ${
-                              active
-                                ? "bg-blue-100 text-blue-900"
-                                : "text-gray-900"
-                            }`
-                          }
-                        >
-                          {({ selected }) => (
-                            <>
-                              <span
-                                className={`block truncate ${
-                                  selected ? "font-medium" : "font-normal"
-                                }`}
-                              >
-                                {item.name} ({item.duration}分)
-                              </span>
-                              {selected ? (
-                                <span className="absolute inset-y-0 left-0 flex items-center pl-1 text-blue-600">
-                                  <CheckIcon className="h-3 w-3" />
-                                </span>
-                              ) : null}
-                            </>
-                          )}
-                        </Listbox.Option>
-                      ))}
-
-                    {/* クーポングループ */}
-                    <div className="px-2 py-1 text-gray-500 text-xs">
-                      --- クーポン ---
-                    </div>
-                    {combinedItems
-                      .filter((x) => x.type === "coupon")
-                      .map((item) => (
-                        <Listbox.Option
-                          key={item.id}
-                          value={item}
-                          className={({ active }) =>
-                            `relative cursor-default select-none py-1 pl-8 pr-2 ${
-                              active
-                                ? "bg-blue-100 text-blue-900"
-                                : "text-gray-900"
-                            }`
-                          }
-                        >
-                          {({ selected }) => (
-                            <>
-                              <span
-                                className={`block truncate ${
-                                  selected ? "font-medium" : "font-normal"
-                                }`}
-                              >
-                                {item.name}
-                              </span>
-                              {selected ? (
-                                <span className="absolute inset-y-0 left-0 flex items-center pl-1 text-blue-600">
-                                  <CheckIcon className="h-3 w-3" />
-                                </span>
-                              ) : null}
-                            </>
-                          )}
-                        </Listbox.Option>
-                      ))}
-                  </Listbox.Options>
-                </div>
-              </Listbox>
+            {/* --- メニュー or クーポン 切替 --- */}
+            <div className="space-y-2">
+              <Label className="text-sm">選択タイプ</Label>
+              <div className="flex items-center space-x-4">
+                <label className="flex items-center">
+                  <input
+                    type="radio"
+                    name="selectionType"
+                    value="menu"
+                    checked={selectionType === "menu"}
+                    onChange={() => handleSelectionTypeChange("menu")}
+                  />
+                  <span className="ml-1">メニュー</span>
+                </label>
+                <label className="flex items-center">
+                  <input
+                    type="radio"
+                    name="selectionType"
+                    value="coupon"
+                    checked={selectionType === "coupon"}
+                    onChange={() => handleSelectionTypeChange("coupon")}
+                  />
+                  <span className="ml-1">クーポン</span>
+                </label>
+              </div>
             </div>
 
-            {/* メニュー or クーポンの価格表示 */}
+            {/* --- メニュー選択UI (カテゴリ→メニュー) --- */}
+            {selectionType === "menu" && (
+              <>
+                {/* カテゴリ選択 */}
+                <div className="space-y-1">
+                  <Label className="text-sm">メニューのカテゴリー</Label>
+                  <select
+                    value={selectedCategory}
+                    onChange={(e) => {
+                      setSelectedCategory(e.target.value);
+                      setFormData((prev) => ({ ...prev, menu_id: undefined }));
+                      setSelectedMenuPrice(0);
+                    }}
+                    className="w-full border rounded-md p-1 text-sm"
+                  >
+                    {categories.map((cat) => (
+                      <option key={cat.id} value={String(cat.id)}>
+                        {cat.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* メニュー選択 */}
+                <div className="space-y-1">
+                  <Label className="text-sm">メニューを選択</Label>
+                  <Listbox
+                    value={filteredMenus.find((m) => m.id === formData.menu_id)}
+                    onChange={(selected) => {
+                      setFormData((prev) => ({
+                        ...prev,
+                        menu_id: selected.id,
+                        coupon_id: undefined,
+                      }));
+                      setSelectedMenuPrice(selected.price);
+                    }}
+                  >
+                    <div className="relative">
+                      <Listbox.Button className="cursor-pointer relative w-full rounded-md border border-gray-300 bg-white py-1 pl-2 pr-8 text-left text-sm focus:outline-none">
+                        <span className="block truncate">
+                          {formData.menu_id
+                            ? filteredMenus.find(
+                                (m) => m.id === formData.menu_id
+                              )?.name || "メニューを選択"
+                            : "メニューを選択"}
+                        </span>
+                        <span className="pointer-events-auto absolute inset-y-0 right-0 flex items-center pr-2">
+                          <ChevronUpDownIcon className="h-4 w-4 text-gray-900" />
+                        </span>
+                      </Listbox.Button>
+                      <Listbox.Options className="absolute z-10 mt-1 max-h-48 w-full overflow-auto rounded-md bg-white py-1 text-base shadow-lg text-sm">
+                        {filteredMenus.map((menu) => (
+                          <Listbox.Option
+                            key={menu.id}
+                            value={menu}
+                            className={({ active }) =>
+                              `relative cursor-default select-none py-1 pl-8 pr-2 ${
+                                active
+                                  ? "bg-blue-100 text-blue-900"
+                                  : "text-gray-900"
+                              }`
+                            }
+                          >
+                            {({ selected }) => (
+                              <>
+                                <span
+                                  className={`block truncate ${
+                                    selected ? "font-medium" : "font-normal"
+                                  }`}
+                                >
+                                  {menu.name} ({menu.duration}分)
+                                </span>
+                                {selected && (
+                                  <span className="absolute inset-y-0 left-0 flex items-center pl-1 text-blue-600">
+                                    <CheckIcon className="h-3 w-3" />
+                                  </span>
+                                )}
+                              </>
+                            )}
+                          </Listbox.Option>
+                        ))}
+                      </Listbox.Options>
+                    </div>
+                  </Listbox>
+                </div>
+              </>
+            )}
+
+            {/* --- クーポン選択UI --- */}
+            {selectionType === "coupon" && (
+              <div className="space-y-1">
+                <Label className="text-sm">クーポンを選択</Label>
+                <Listbox
+                  value={couponList.find((c) => c.id === formData.coupon_id)}
+                  onChange={(selected) => {
+                    setFormData((prev) => ({
+                      ...prev,
+                      coupon_id: selected.id,
+                      menu_id: undefined,
+                    }));
+                    setSelectedMenuPrice(selected.price || 0);
+                  }}
+                >
+                  <div className="relative">
+                    <Listbox.Button className="relative w-full cursor-default rounded-md border border-gray-300 bg-white py-1 pl-2 pr-8 text-left text-sm focus:outline-none">
+                      <span className="block truncate">
+                        {formData.coupon_id
+                          ? couponList.find((c) => c.id === formData.coupon_id)
+                              ?.name || "クーポンを選択"
+                          : "クーポンを選択"}
+                      </span>
+                      <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">
+                        <ChevronUpDownIcon
+                          className="h-4 w-4 text-gray-400"
+                          aria-hidden="true"
+                        />
+                      </span>
+                    </Listbox.Button>
+                    <Listbox.Options className="absolute z-10 mt-1 max-h-48 w-full overflow-auto rounded-md bg-white py-1 text-base shadow-lg text-sm">
+                      {couponList.map((coupon) => (
+                        <Listbox.Option
+                          key={coupon.id}
+                          value={coupon}
+                          className={({ active }) =>
+                            `relative cursor-default select-none py-1 pl-8 pr-2 ${
+                              active
+                                ? "bg-blue-100 text-blue-900"
+                                : "text-gray-900"
+                            }`
+                          }
+                        >
+                          {({ selected }) => (
+                            <>
+                              <span
+                                className={`block truncate ${
+                                  selected ? "font-medium" : "font-normal"
+                                }`}
+                              >
+                                {coupon.name}
+                              </span>
+                              {selected && (
+                                <span className="absolute inset-y-0 left-0 flex items-center pl-1 text-blue-600">
+                                  <CheckIcon className="h-3 w-3" />
+                                </span>
+                              )}
+                            </>
+                          )}
+                        </Listbox.Option>
+                      ))}
+                    </Listbox.Options>
+                  </div>
+                </Listbox>
+              </div>
+            )}
+
+            {/* 選択したメニュー/クーポンの価格表示 */}
             {selectedMenuPrice > 0 && (
               <div className="space-y-1">
                 <Label className="text-sm">選択項目の価格</Label>
@@ -1083,7 +1101,14 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
                     }T${selectedTimeSlot}`,
                     "YYYY-MM-DDTHH:mm"
                   )
-                    .add(selectedItem?.duration || 0, "minutes")
+                    .add(
+                      formData.menu_id
+                        ? menuList.find((m) => m.id === formData.menu_id)
+                            ?.duration || 0
+                        : couponList.find((c) => c.id === formData.coupon_id)
+                            ?.duration || 0,
+                      "minutes"
+                    )
                     .format("HH:mm")}
                 </p>
               </div>
@@ -1094,6 +1119,17 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
                 {overlapMessage}
               </Alert>
             )}
+
+            {/* メモ */}
+            <div className="space-y-1">
+              <Label className="text-sm">メモ</Label>
+              <textarea
+                className="w-full border rounded-md p-1 text-sm"
+                value={formData.memo}
+                onChange={(e) => handleChange("memo", e.target.value)}
+                placeholder="スタッフ用メモなど、自由に入力できます"
+              />
+            </div>
 
             {/* 送信・削除ボタン */}
             <div className="flex justify-between mt-4">
@@ -1134,11 +1170,7 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
         <Alert
           onClose={() => setSnackbar(null)}
           severity={snackbar?.severity}
-          sx={{
-            width: "100%",
-            borderRadius: "8px",
-            boxShadow: 3,
-          }}
+          sx={{ width: "100%", borderRadius: "8px", boxShadow: 3 }}
           className="text-sm"
         >
           {snackbar?.message}

@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
     // 3) menuList の取得
     const { data: menuList, error: menuError } = await supabaseAnon
       .from("menu_items")
-      .select("id, name, duration, price")
+      .select("id, name, duration, price, category_id")
       .eq("user_id", userId)
       .order("name", { ascending: true });
 
@@ -76,11 +76,27 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: couponError.message }, { status: 500 });
     }
 
+    // 4) categories の取得
+    const { data: categoryList, error: categoryError } = await supabaseAnon
+      .from("categories")
+      .select("*")
+      .eq("user_id", userId)
+      .order("id", { ascending: true });
+
+    if (categoryError) {
+      console.error("Error fetching category list:", categoryError);
+      return NextResponse.json(
+        { error: categoryError.message },
+        { status: 500 }
+      );
+    }
+
     // 4) 結果返却
     return NextResponse.json({
       staffList,
       menuList,
       couponList,
+      categoryList,
     });
   } catch (error) {
     console.error("Unexpected error in GET handler:", error);
