@@ -19,18 +19,18 @@ import moment from "moment-timezone";
 import "moment/locale/ja";
 
 // ------------------ 型定義 ------------------
-interface Reservation {
+interface CaldendarViewReservation {
   id: string;
   staff_id?: string | number;
-  start_time: string;
-  end_time: string;
+  start_time?: string;
+  end_time?: string;
   is_staff_schedule?: boolean;
   is_closed_day?: boolean;
   is_hair_sync?: boolean;
   customer_name?: string;
-  customer_name_kana?: string;
-  menu_id?: string;
+  menu_id?: number | string;
   menu_name?: string;
+  customer_name_kana?: string;
   coupon_id?: string;
   coupons?: { name: string };
   scraped_menu?: string;
@@ -61,7 +61,7 @@ interface StaffShift {
 
 // カレンダー表示用のプロップス
 interface CalendarViewProps {
-  reservations: Reservation[]; // 予約 or スタッフスケジュールの一覧
+  reservations: CaldendarViewReservation[]; // 予約 or スタッフスケジュールの一覧
   staffList: Staff[]; // スタッフ一覧
   closedDays: string[]; // ※使用していない？（不要なら削除してOK）
   businessHours: BusinessHour[]; // サロン営業時間 + 休業日
@@ -78,22 +78,25 @@ interface CalendarViewProps {
 }
 
 // フルカレンダーのイベント拡張用
-interface CalendarEventProps extends Reservation {
+interface CalendarEventProps extends CaldendarViewReservation {
   is_closed_day?: boolean;
   is_staff_holiday?: boolean; // スタッフ不在 or 休日
 }
 
 // 型ガード：staff_id があるか
 function hasStaffId(
-  reservation: Reservation
-): reservation is Reservation & { staff_id: string | number } {
+  reservation: CaldendarViewReservation
+): reservation is CaldendarViewReservation & { staff_id: string | number } {
   return reservation.staff_id !== undefined && reservation.staff_id !== null;
 }
 
 // 型ガード：start_time/end_time が文字列か
 function hasValidStartAndEnd(
-  reservation: Reservation
-): reservation is Reservation & { start_time: string; end_time: string } {
+  reservation: CaldendarViewReservation
+): reservation is CaldendarViewReservation & {
+  start_time: string;
+  end_time: string;
+} {
   return (
     typeof reservation.start_time === "string" &&
     typeof reservation.end_time === "string"

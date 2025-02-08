@@ -1,7 +1,7 @@
 // src/types/reservation.ts
 
 export interface Reservation {
-  id?: string;
+  id: string;
   user_id?: string;
   staff_id?: string; // UUID（文字列）
   menu_id?: number; // 整数
