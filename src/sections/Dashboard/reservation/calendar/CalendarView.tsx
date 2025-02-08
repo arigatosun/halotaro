@@ -1,4 +1,3 @@
-// CalendarView.tsx
 "use client";
 
 import React, { forwardRef, useRef, useEffect } from "react";
@@ -15,34 +14,58 @@ import {
   DateSelectArg,
   DateSpanApi,
 } from "@fullcalendar/core";
-import { Reservation, Staff, BusinessHour } from "@/types/reservation";
+import { Box } from "@mui/material";
 import moment from "moment-timezone";
 import "moment/locale/ja";
-import { Box } from "@mui/material";
 
-moment.locale("ja");
+// ------------------ 型定義 ------------------
+interface Reservation {
+  id: string;
+  staff_id?: string | number;
+  start_time: string;
+  end_time: string;
+  is_staff_schedule?: boolean;
+  is_closed_day?: boolean;
+  is_hair_sync?: boolean;
+  customer_name?: string;
+  customer_name_kana?: string;
+  menu_id?: string;
+  menu_name?: string;
+  coupon_id?: string;
+  coupons?: { name: string };
+  scraped_menu?: string;
+  event?: string; // スタッフスケジュールの場合の予定名など
+}
+
+interface Staff {
+  id: string | number;
+  name: string;
+}
+
+interface BusinessHour {
+  date: string; // "YYYY-MM-DD"
+  is_holiday: boolean;
+  open_time?: string; // "HH:mm:ss"
+  close_time?: string; // "HH:mm:ss"
+}
 
 interface StaffShift {
   id: string;
   staff_id: string;
-  date: string;
+  date: string; // "YYYY-MM-DD"
   shift_status: string; // "出勤" or "休日"
-  start_time?: string;
-  end_time?: string;
+  start_time?: string; // "HH:mm:ss"
+  end_time?: string; // "HH:mm:ss"
   memo?: string;
 }
 
-interface CalendarEventProps extends Reservation {
-  is_closed_day?: boolean;
-  is_staff_holiday?: boolean;
-}
-
+// カレンダー表示用のプロップス
 interface CalendarViewProps {
-  reservations: Reservation[];
-  staffList: Staff[];
-  closedDays: string[];
-  businessHours: BusinessHour[];
-  staffShifts: StaffShift[];
+  reservations: Reservation[]; // 予約 or スタッフスケジュールの一覧
+  staffList: Staff[]; // スタッフ一覧
+  closedDays: string[]; // ※使用していない？（不要なら削除してOK）
+  businessHours: BusinessHour[]; // サロン営業時間 + 休業日
+  staffShifts: StaffShift[]; // スタッフシフト一覧
   onDateSelect: (selectInfo: DateSelectArg) => void;
   onEventClick: (clickInfo: EventClickArg) => void;
   onEventDrop: (dropInfo: EventDropArg) => void;
@@ -54,12 +77,20 @@ interface CalendarViewProps {
   isUpdating: boolean;
 }
 
+// フルカレンダーのイベント拡張用
+interface CalendarEventProps extends Reservation {
+  is_closed_day?: boolean;
+  is_staff_holiday?: boolean; // スタッフ不在 or 休日
+}
+
+// 型ガード：staff_id があるか
 function hasStaffId(
   reservation: Reservation
 ): reservation is Reservation & { staff_id: string | number } {
   return reservation.staff_id !== undefined && reservation.staff_id !== null;
 }
 
+// 型ガード：start_time/end_time が文字列か
 function hasValidStartAndEnd(
   reservation: Reservation
 ): reservation is Reservation & { start_time: string; end_time: string } {
@@ -90,6 +121,7 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
     ref
   ) => {
     console.log("reservations from calendarview", reservations);
+
     // スクロール同期用
     const resourceAreaRef = useRef<HTMLDivElement | null>(null);
     const timelineBodyRef = useRef<HTMLDivElement | null>(null);
@@ -119,7 +151,8 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
       return <div>営業時間を読み込んでいます...</div>;
     }
 
-    // 現在の日付の営業時間を取得
+    // ----- 1) カレンダー最小/最大表示時間の決定 -----
+    // 現在の日付（currentDate）でサロン営業時間を取得
     const currentDateStr = currentDate.tz("Asia/Tokyo").format("YYYY-MM-DD");
     const currentBusinessHours = businessHours.filter(
       (bh) => bh.date === currentDateStr && !bh.is_holiday
@@ -144,12 +177,15 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
           .format("HH:mm:ss")
       : defaultCloseTime;
 
+    // ----- 2) FullCalendar resource（スタッフ一覧） -----
     const resources = staffList.map((staff) => ({
       id: staff.id.toString(),
       title: staff.name,
     }));
 
-    // スタッフ休日イベント
+    // ---------------------------------------------------
+    // 3) スタッフ休日イベント (shift_status = "休日" は終日不在)
+    // ---------------------------------------------------
     const staffHolidayEvents = staffShifts
       .filter((shift) => shift.shift_status === "休日")
       .map((shift) => ({
@@ -165,74 +201,187 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
         },
       }));
 
-    // 予約 (通常 or スタッフスケジュール) + サロン休業日 + スタッフ休日 をまとめた events
-    const events = [
-      // 予約・スタッフスケジュール
-      ...reservations
-        .filter((r) => hasValidStartAndEnd(r) && hasStaffId(r))
-        .map((r) => {
-          // メニューorクーポンをタイトルに反映 (表示を調整したい場合はお好みで)
-          let displayedTitle = "";
-          if (r.is_staff_schedule) {
-            // スタッフスケジュール
-            displayedTitle = r.event || "";
-          } else {
-            // 通常予約 (メニュー or クーポン)
-            const customerDisplay =
-              r.customer_name || r.customer_name_kana || "Unknown";
-            // ここで、menu_id があれば menu_name、coupon_id があれば coupon_name を表示
-            const menuOrCouponName = r.menu_id
-              ? r.menu_name
-              : r.coupon_id
-              ? r.coupons?.name
-              : r.scraped_menu || "";
-            displayedTitle = `${customerDisplay} - ${menuOrCouponName || ""}`;
-          }
+    // ---------------------------------------------------
+    // 4) 部分的な不在時間をイベント化 (シフトがサロン営業時間より短い場合)
+    // ---------------------------------------------------
+    // シフトレコードで "出勤" となっているが、start_time, end_time が
+    // サロン営業時間より狭い場合、その前後を「不在」イベントとする
+    function createPartialHolidayEvents(shift: StaffShift): any[] {
+      // まずサロンが営業しているかどうか
+      const storeDayHours = businessHours.find(
+        (bh) => bh.date === shift.date && !bh.is_holiday
+      );
+      if (!storeDayHours) {
+        // サロン自体が休日 → スタッフ不在は別に作らない (サロン休業イベントが既にある)
+        return [];
+      }
 
-          return {
-            id: r.id,
-            resourceId: r.staff_id.toString(),
-            title: displayedTitle,
-            start: r.start_time,
-            end: r.end_time,
-            classNames: r.is_staff_schedule
-              ? ["staff-schedule"]
-              : r.is_hair_sync
-              ? ["hair-reservation"]
-              : ["customer-reservation"],
-            editable: !r.is_closed_day && !r.is_hair_sync,
-            resourceEditable: !r.is_closed_day && !r.is_hair_sync,
-            extendedProps: r, // ← coupon_id, coupon_nameなどもここに含まれる
-          };
-        }),
+      const storeOpen = storeDayHours.open_time || "00:00:00";
+      const storeClose = storeDayHours.close_time || "23:59:59";
 
-      // サロン休業日
-      ...businessHours
-        .filter((bh) => bh.is_holiday)
-        .map((bh) => ({
-          id: `holiday-${bh.date}`,
-          title: "サロン休業日",
-          start: `${bh.date}T00:00:00`,
-          end: `${bh.date}T23:59:59`,
-          classNames: ["closed-day"],
+      // シフト開始/終了
+      // ※ null や空文字の場合はサロン営業時間全て出勤扱いにする or 逆に不在扱いにするなど要件次第
+      const staffStart = shift.start_time || storeOpen;
+      const staffEnd = shift.end_time || storeClose;
+
+      // partial holidayイベントを作る
+      const events: any[] = [];
+
+      // staffStart より前
+      if (staffStart > storeOpen) {
+        events.push({
+          id: `partial-holiday-1-${shift.staff_id}-${shift.date}`,
+          title: "スタッフ不在",
+          start: `${shift.date}T${storeOpen}`,
+          end: `${shift.date}T${staffStart}`,
+          resourceId: shift.staff_id.toString(),
+          classNames: ["staff-holiday"],
           editable: false,
-          resourceIds: resources.map((res) => res.id),
           extendedProps: {
-            is_closed_day: true,
+            is_staff_holiday: true,
           },
-        })),
+        });
+      }
 
-      // スタッフ休日
-      ...staffHolidayEvents,
+      // staffEnd より後
+      if (staffEnd < storeClose) {
+        events.push({
+          id: `partial-holiday-2-${shift.staff_id}-${shift.date}`,
+          title: "スタッフ不在",
+          start: `${shift.date}T${staffEnd}`,
+          end: `${shift.date}T${storeClose}`,
+          resourceId: shift.staff_id.toString(),
+          classNames: ["staff-holiday"],
+          editable: false,
+          extendedProps: {
+            is_staff_holiday: true,
+          },
+        });
+      }
+      return events;
+    }
+
+    const partialHolidayEvents = staffShifts
+      .filter((shift) => shift.shift_status === "出勤")
+      .flatMap((shift) => createPartialHolidayEvents(shift));
+
+    // ---------------------------------------------------
+    // 5) シフトが無い日 = 終日不在 (サロンが営業している日だけ)
+    // ---------------------------------------------------
+    const noShiftHolidayEvents: any[] = [];
+    for (const staff of staffList) {
+      const staffId = staff.id.toString();
+      const staffShiftsForThisStaff = staffShifts.filter(
+        (s) => s.staff_id === staffId
+      );
+
+      // 営業日だけループ
+      businessHours.forEach((bh) => {
+        if (bh.is_holiday) return; // サロン休業ならスキップ
+        const yyyymmdd = bh.date;
+        // この日付のスタッフシフトがあるか?
+        const shiftOfTheDay = staffShiftsForThisStaff.find(
+          (s) => s.date === yyyymmdd
+        );
+        if (!shiftOfTheDay) {
+          // シフト未登録 → 終日不在
+          noShiftHolidayEvents.push({
+            id: `staff-noshift-${staffId}-${yyyymmdd}`,
+            title: "スタッフ不在（シフトなし）",
+            start: `${yyyymmdd}T00:00:00`,
+            end: `${yyyymmdd}T23:59:59`,
+            resourceId: staffId,
+            classNames: ["staff-holiday"],
+            editable: false,
+            extendedProps: {
+              is_staff_holiday: true,
+            },
+          });
+        }
+      });
+    }
+
+    // まとめて「スタッフ休日/不在」イベント
+    const allStaffHolidayEvents = [
+      ...staffHolidayEvents, // shift_status = "休日"
+      ...partialHolidayEvents, // 出勤時間外を不在に
+      ...noShiftHolidayEvents, // シフトなしの日は終日不在
     ];
 
-    // FullCalendar 設定
+    // ---------------------------------------------------
+    // 6) 通常の予約/スケジュール + サロン休業日 + スタッフ不在
+    // ---------------------------------------------------
+    // (A) 通常予約 or スタッフスケジュール
+    const normalEvents = reservations
+      .filter((r) => hasValidStartAndEnd(r) && hasStaffId(r))
+      .map((r) => {
+        let displayedTitle = "";
+        if (r.is_staff_schedule) {
+          // スタッフスケジュール
+          displayedTitle = r.event || "";
+        } else {
+          // 通常予約
+          const customerDisplay =
+            r.customer_name || r.customer_name_kana || "Unknown";
+          const menuOrCouponName = r.menu_id
+            ? r.menu_name
+            : r.coupon_id
+            ? r.coupons?.name
+            : r.scraped_menu || "";
+          displayedTitle = `${customerDisplay} - ${menuOrCouponName || ""}`;
+        }
+
+        return {
+          id: r.id,
+          resourceId: r.staff_id.toString(),
+          title: displayedTitle,
+          start: r.start_time,
+          end: r.end_time,
+          classNames: r.is_staff_schedule
+            ? ["staff-schedule"]
+            : r.is_hair_sync
+            ? ["hair-reservation"]
+            : ["customer-reservation"],
+          editable: !r.is_closed_day && !r.is_hair_sync,
+          resourceEditable: !r.is_closed_day && !r.is_hair_sync,
+          extendedProps: r,
+        };
+      });
+
+    // (B) サロン休業日イベント
+    const salonClosedEvents = businessHours
+      .filter((bh) => bh.is_holiday)
+      .map((bh) => ({
+        id: `holiday-${bh.date}`,
+        title: "サロン休業日",
+        start: `${bh.date}T00:00:00`,
+        end: `${bh.date}T23:59:59`,
+        classNames: ["closed-day"],
+        editable: false,
+        // 全スタッフに対して休業
+        resourceIds: resources.map((res) => res.id),
+        extendedProps: {
+          is_closed_day: true,
+        },
+      }));
+
+    // 全イベント合体
+    const events = [
+      ...normalEvents,
+      ...salonClosedEvents,
+      ...allStaffHolidayEvents,
+    ];
+
+    // ---------------------------------------------------
+    // 7) FullCalendar 設定
+    // ---------------------------------------------------
     const plugins = [resourceTimelinePlugin, interactionPlugin, listPlugin];
     const initialView = "resourceTimelineDay";
 
-    // businessHours 設定
-    const businessHoursConfig = currentBusinessHours.length
-      ? currentBusinessHours.map((bh) => ({
+    // businessHoursConfig：サロンの営業日時を FullCalendar の businessHours に設定
+    const currentDayBH = businessHours.filter((bh) => !bh.is_holiday);
+    const businessHoursConfig = currentDayBH.length
+      ? currentDayBH.map((bh) => ({
           daysOfWeek: [moment(bh.date).day()],
           startTime: bh.open_time || "00:00",
           endTime: bh.close_time || "24:00",
@@ -245,21 +394,24 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
           },
         ];
 
-    // 選択・移動制限のヘルパー
+    // 予約/ドラッグを許可するか判断する関数
     const isDateAllowed = (date: Date, resourceId?: string) => {
       const dateStr = moment(date).format("YYYY-MM-DD");
-      // サロン休業日チェック
+      // サロン休業日
       const isHoliday = businessHours.some(
         (bh) => bh.date === dateStr && bh.is_holiday
       );
-      // スタッフ休日チェック
-      const isStaffHoliday = staffShifts.some(
+      // スタッフ休日 (終日)
+      const isStaffFullHoliday = staffShifts.some(
         (shift) =>
           shift.staff_id === resourceId &&
           shift.shift_status === "休日" &&
           shift.date === dateStr
       );
-      return !isHoliday && !isStaffHoliday;
+      // シフトなし日 → noShiftHolidayEvents で終日不在
+      // ※ ここでさらに厳密に「時間内に partialHoliday が入っているか」チェックしてもOK
+      //   ただし eventOverlap / selectOverlap でもブロックするので最低限でOK
+      return !isHoliday && !isStaffFullHoliday;
     };
 
     return (
@@ -271,6 +423,7 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
             margin: 0,
             padding: 0,
           },
+          // サロン休業日
           "& .closed-day": {
             backgroundColor: "rgba(244, 67, 54, 0.1) !important",
             borderLeft: "4px solid #f44336",
@@ -282,6 +435,7 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
               fontSize: "1rem",
             },
           },
+          // スタッフ不在/休日
           "& .staff-holiday": {
             backgroundColor: "rgba(255, 193, 7, 0.1) !important",
             borderLeft: "4px solid #FFC107",
@@ -367,8 +521,10 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
             timelineBodyRef.current = arg.el.querySelector(".fc-timeline-body");
           }}
           eventDisplay="block"
+          // イベント同士の重なりを許可するかどうか
           eventOverlap={(stillEvent, movingEvent) => {
             if (!movingEvent) return false;
+            // どちらかがサロン休業 or スタッフ不在なら重なり不可
             const isOverlapAllowed =
               !stillEvent.extendedProps.is_closed_day &&
               !stillEvent.extendedProps.is_staff_holiday &&
@@ -376,16 +532,19 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
               !movingEvent.extendedProps.is_staff_holiday;
             return isOverlapAllowed;
           }}
+          // 選択時に「サロン休業 or スタッフ不在」を除外
           selectOverlap={(event) => {
             return (
               !event.extendedProps.is_closed_day &&
               !event.extendedProps.is_staff_holiday
             );
           }}
+          // ドラッグ選択を許可するかどうか
           selectAllow={(span: DateSpanApi) => {
             const resourceId = span.resource?.id;
             return isDateAllowed(span.start, resourceId);
           }}
+          // イベントを移動/リサイズしていいかどうか
           eventAllow={(span, movingEvent) => {
             const resourceId =
               span.resource?.id || movingEvent?.getResources()[0]?.id;
@@ -396,6 +555,7 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
             info.el.style.height = "auto";
           }}
           eventDidMount={(info) => {
+            // カスタムクラスの付与
             const reservation = info.event.extendedProps as CalendarEventProps;
             if (reservation.is_closed_day) {
               info.el.classList.add("closed-day");
@@ -425,7 +585,7 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
                 html: `<div class="fc-event-title">サロン休業日</div>`,
               };
             }
-            // スタッフ休日
+            // スタッフ休日/不在
             if (reservation.is_staff_holiday) {
               return {
                 html: `<div class="fc-event-title">スタッフ休日</div>`,
@@ -461,12 +621,12 @@ const CalendarView = forwardRef<FullCalendar, CalendarViewProps>(
               reservation.customer_name_kana ||
               "Unknown";
 
-            // メニューかクーポンか判定してタイトルを作る
+            // メニュー or クーポン名
             const menuOrCouponName = reservation.menu_id
-              ? reservation.menu_name // メニュー
+              ? reservation.menu_name
               : reservation.coupon_id
-              ? reservation.coupons?.name // クーポン
-              : reservation.scraped_menu || ""; // どちらも無ければ空
+              ? reservation.coupons?.name
+              : reservation.scraped_menu || "";
 
             if (isMobile) {
               return {
