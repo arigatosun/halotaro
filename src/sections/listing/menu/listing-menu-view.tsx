@@ -33,13 +33,12 @@ import { Toaster } from "@/components/ui/toaster";
 import { toast } from "@/components/ui/use-toast";
 import { PlusCircle, Pencil, Trash2, Loader2, ImageOff } from "lucide-react";
 
-import { MenuItem } from "@/types/menuItem"; // id, name, description, price, duration, ...
+import { MenuItem } from "@/types/menuItem"; // id, name, description, price, duration, sort_order, etc.
 import { useStaffManagement } from "@/hooks/useStaffManagement"; // スタッフ一覧を取得するカスタムフック想定
 
 import { createClient } from "@supabase/supabase-js";
 import { v4 as uuidv4 } from "uuid";
 
-// ---- Supabaseクライアントを直接生成 ----
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -105,14 +104,13 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
 
   // ------------------------------------
   // カテゴリ一覧を取得
-  // user_id で絞り込む！
   // ------------------------------------
   const fetchCategories = async () => {
     try {
       const { data, error: catError } = await supabase
         .from("categories")
         .select("*")
-        .eq("user_id", session.user.id) // <= ログインユーザーのカテゴリのみ
+        .eq("user_id", session.user.id)
         .order("id", { ascending: true });
 
       if (catError) throw catError;
@@ -124,7 +122,7 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
 
   // ------------------------------------
   // メニュー一覧を取得
-  // user_id で絞り込む
+  // ※ ここで sort_order 昇順に
   // ------------------------------------
   const fetchMenuItems = async () => {
     try {
@@ -132,8 +130,9 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
       const { data, error: menuError } = await supabase
         .from("menu_items")
         .select(`*, categories(name)`)
-        .eq("user_id", session.user.id) // <= ログインユーザーのメニューだけ
-        .order("id", { ascending: true });
+        .eq("user_id", session.user.id)
+        .order("sort_order", { ascending: true }) // ★ 並び順でソート
+        .order("id", { ascending: true }); // sort_order が同値の場合 id 順で保険的に
 
       if (menuError) throw menuError;
       setMenuItems(data as MenuItem[]);
@@ -155,7 +154,6 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
 
   // ------------------------------------
   // カテゴリ削除
-  // (user_id で安全策)
   // ------------------------------------
   const handleDeleteCategory = async (categoryId: number) => {
     if (!window.confirm("このカテゴリを削除しますか？")) return;
@@ -242,7 +240,7 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
         .from("menu_items")
         .delete()
         .eq("id", menuItemId)
-        .eq("user_id", session.user.id) // セキュリティ
+        .eq("user_id", session.user.id)
         .select("*");
 
       if (error) {
@@ -337,6 +335,8 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
     const price = Number(formData.get("price"));
     const duration = Number(formData.get("duration"));
     const categoryId = Number(formData.get("category_id")) || null;
+    // ★ 新しく並び順を取得
+    const sort_order = Number(formData.get("sort_order")) || 0;
 
     // 画像があればStorageアップロード
     let uploadedImageUrl: string | null = editingMenu?.image_url || null;
@@ -370,8 +370,9 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
     try {
       let newOrUpdatedItem: MenuItem | null = null;
 
+      // 新規 or 更新
       if (editingMenu) {
-        // update
+        // ★ 更新
         const { data, error } = await supabase
           .from("menu_items")
           .update({
@@ -381,6 +382,7 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
             duration,
             image_url: uploadedImageUrl,
             category_id: categoryId,
+            sort_order: sort_order, // 並び順を更新
             updated_at: new Date().toISOString(),
           })
           .eq("id", editingMenu.id)
@@ -407,7 +409,19 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
           await supabase.from("menu_item_unavailable_staff").insert(insertData);
         }
       } else {
-        // insert
+        // ★ 新規作成
+        // sort_order が 0 なら一番下になるようにする例
+        // 例: 既存の最大 sort_order + 1
+        let finalSortOrder = sort_order;
+        if (!finalSortOrder) {
+          // もしユーザーが未入力なら「既存末尾 +1」
+          const maxOrder = Math.max(
+            0,
+            ...menuItems.map((m) => m.sort_order ?? 0)
+          );
+          finalSortOrder = maxOrder + 1;
+        }
+
         const { data, error } = await supabase
           .from("menu_items")
           .insert({
@@ -418,6 +432,7 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
             duration,
             image_url: uploadedImageUrl,
             category_id: categoryId,
+            sort_order: finalSortOrder,
             created_at: new Date().toISOString(),
           })
           .select(`*, categories(name)`)
@@ -428,6 +443,7 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
         }
         newOrUpdatedItem = data as MenuItem;
 
+        // スタッフ非対応
         if (unavailableStaffIds.length > 0) {
           const insertData = unavailableStaffIds.map((staffId) => ({
             menu_item_id: data.id,
@@ -442,13 +458,18 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
       }
 
       // ローカル更新
-      setMenuItems((prevItems) =>
-        editingMenu
-          ? prevItems.map((item) =>
-              item.id === newOrUpdatedItem!.id ? newOrUpdatedItem! : item
-            )
-          : [newOrUpdatedItem, ...prevItems]
-      );
+      setMenuItems((prevItems) => {
+        if (editingMenu) {
+          return prevItems.map((item) =>
+            item.id === newOrUpdatedItem!.id ? newOrUpdatedItem! : item
+          );
+        } else {
+          const newList = [newOrUpdatedItem, ...prevItems];
+          // sort_order 昇順に並べ替え
+          newList.sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+          return newList;
+        }
+      });
 
       setIsModalOpen(false);
       toast({
@@ -484,7 +505,6 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
 
   // ------------------------------------
   // カテゴリ新規作成
-  // user_id もセット
   // ------------------------------------
   const handleCreateCategory = async () => {
     if (!newCategoryName.trim()) return;
@@ -548,7 +568,8 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>No.</TableHead>
+            {/* 「No.」→「並び順」に変更し sort_order を表示 */}
+            <TableHead>並び順</TableHead>
             <TableHead>メニュー写真</TableHead>
             <TableHead>メニュー名</TableHead>
             <TableHead>カテゴリ</TableHead>
@@ -560,9 +581,9 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {menuItems.map((item, index) => (
+          {menuItems.map((item) => (
             <TableRow key={item.id}>
-              <TableCell>{index + 1}</TableCell>
+              <TableCell>{item.sort_order ?? 0}</TableCell>
               {/* メニュー写真 */}
               <TableCell>
                 {item.image_url ? (
@@ -707,6 +728,21 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
                   required
                 />
               </div>
+
+              {/* 並び順 (sort_order) */}
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="sort_order" className="text-right">
+                  並び順
+                </Label>
+                <Input
+                  id="sort_order"
+                  name="sort_order"
+                  type="number"
+                  defaultValue={editingMenu?.sort_order ?? 0}
+                  className="col-span-3"
+                />
+              </div>
+
               {/* 画像 */}
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="image" className="text-right">
@@ -729,6 +765,7 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
                   className="col-span-3"
                 />
               </div>
+
               {/* 対応不可スタッフ */}
               <div className="grid grid-cols-4 items-start gap-4">
                 <Label className="text-right">対応不可スタッフ</Label>
@@ -749,7 +786,7 @@ const AuthenticatedMenuSettingsPage: React.FC<{ session: any }> = ({
               </div>
             </div>
 
-            <div className="flex justify-end">
+            <div className="flex justify-end mt-2">
               <Button type="submit">保存</Button>
             </div>
           </form>

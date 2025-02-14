@@ -16,4 +16,5 @@ export type MenuItem = {
     id: number;
     name: string;
   } | null;
+  sort_order?: number | null;
 };

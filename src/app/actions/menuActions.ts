@@ -3,14 +3,17 @@ import { MenuItem } from "@/types/menuItem";
 import { supabase } from "@/lib/supabaseClient";
 
 export async function getMenuItems(userId: string): Promise<MenuItem[]> {
-  const { data, error } = await supabase
+  const { data, error: supaError } = await supabase
     .from("menu_items")
     .select("*")
-    .eq("user_id", userId);
+    .eq("user_id", userId)
+    // ★ ここで sort_order 昇順
+    .order("sort_order", { ascending: true })
+    .order("id", { ascending: true }); // お好みで
 
-  if (error) {
-    console.error("Supabase error:", error);
-    throw new Error(`Failed to fetch menu data: ${error.message}`);
+  if (supaError) {
+    console.error("Supabase error:", supaError);
+    throw new Error(`Failed to fetch menu data: ${supaError.message}`);
   }
 
   return data || [];
@@ -65,7 +68,10 @@ export async function toggleReservable(
   }
 }
 
-export async function getMenuItemById(id: number, userId: string): Promise<MenuItem | null> {
+export async function getMenuItemById(
+  id: number,
+  userId: string
+): Promise<MenuItem | null> {
   const { data, error } = await supabase
     .from("menu_items")
     .select("*")
