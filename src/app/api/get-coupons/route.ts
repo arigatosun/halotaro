@@ -15,12 +15,14 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
 
-    const { data, error } = await supabase
+    // ここで sort_order 昇順を指定
+    const { data, error: supaError } = await supabase
       .from("coupons")
       .select("*")
-      .eq("user_id", userId);
+      .eq("user_id", userId)
+      .order("sort_order", { ascending: true }); // ★ これがポイント
 
-    if (error) throw error;
+    if (supaError) throw supaError;
 
     return NextResponse.json(data);
   } catch (error) {

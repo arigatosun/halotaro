@@ -20,15 +20,13 @@ import {
 import { Coupon } from "@/types/coupon";
 
 /**
- * フォームで扱う型を新規定義:
- * - "id" / "created_at" / "updated_at" / "is_reservable" は不要
- * - "coupon_id" はオプションにする
+ * フォームで扱う型 (並び順 sort_order も含む)
  */
 export type CouponFormData = Omit<
   Coupon,
   "id" | "created_at" | "updated_at" | "is_reservable"
 > & {
-  coupon_id?: string;
+  coupon_id?: string; // 新規作成時は任意
 };
 
 interface CouponFormModalProps {
@@ -47,26 +45,26 @@ const CouponFormModal: React.FC<CouponFormModalProps> = ({
   userId,
 }) => {
   // フォーム状態管理
-  const [name, setName] = useState(coupon?.name || "");
-  const [category, setCategory] = useState(coupon?.category || "");
-  const [description, setDescription] = useState(coupon?.description || "");
-  const [price, setPrice] = useState(coupon?.price?.toString() || "");
-  const [duration, setDuration] = useState(coupon?.duration?.toString() || "");
+  const [name, setName] = useState("");
+  const [category, setCategory] = useState("");
+  const [description, setDescription] = useState("");
+  const [price, setPrice] = useState("");
+  const [duration, setDuration] = useState("");
+  const [sortOrder, setSortOrder] = useState("");
   const [imageFile, setImageFile] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(
-    coupon?.image_url || null
-  );
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
-  // プレースホルダー用のテキスト例
+  // プレースホルダー
   const placeholders = {
     name: "例: 驚きの実感☆育毛促進プレミアムヘッドスパ",
     description:
       "例: 今話題の「プロセルセラピーズ」と「育毛促進ヘッドスパ」のWメニュー♪",
     price: "例: 5000",
     duration: "例: 60",
+    sort_order: "例: 1",
   };
 
-  // couponが変わるたびに初期値をセット
+  // coupon が変わるたびに初期値をセット
   useEffect(() => {
     if (coupon) {
       setName(coupon.name);
@@ -74,13 +72,16 @@ const CouponFormModal: React.FC<CouponFormModalProps> = ({
       setDescription(coupon.description || "");
       setPrice(coupon.price?.toString() || "");
       setDuration(coupon.duration?.toString() || "");
+      setSortOrder(coupon.sort_order?.toString() || "");
       setPreviewUrl(coupon.image_url || null);
     } else {
+      // 新規作成用 初期化
       setName("");
       setCategory("");
       setDescription("");
       setPrice("");
       setDuration("");
+      setSortOrder(""); // 新規の場合は空欄(あとで送信時にデフォルト化)など
       setPreviewUrl(null);
     }
     setImageFile(null);
@@ -93,15 +94,14 @@ const CouponFormModal: React.FC<CouponFormModalProps> = ({
     // フォーム送信用データ
     const couponData: CouponFormData = {
       user_id: userId,
-      // 新規作成時: coupon_id は undefined のまま
-      // 編集時: 既存の coupon_id を渡すなら、(coupon && coupon.coupon_id) とかでもよい
-      coupon_id: coupon?.coupon_id || "",
+      coupon_id: coupon?.coupon_id || "", // 既存があれば使う
       name,
       category,
       description,
-      price: price ? parseInt(price) : null,
-      duration: duration ? parseInt(duration) : null,
-      image_url: coupon?.image_url || null, // 既存があれば残す
+      price: price ? parseInt(price, 10) : null,
+      duration: duration ? parseInt(duration, 10) : null,
+      sort_order: sortOrder ? parseInt(sortOrder, 10) : 0, // 空欄なら0など
+      image_url: coupon?.image_url || null,
     };
 
     onSubmit(couponData, imageFile);
@@ -118,7 +118,6 @@ const CouponFormModal: React.FC<CouponFormModalProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      {/* はみ出し対応 */}
       <DialogContent className="max-h-[80vh] overflow-y-auto sm:max-w-[600px]">
         <DialogHeader>
           <DialogTitle>
@@ -192,6 +191,21 @@ const CouponFormModal: React.FC<CouponFormModalProps> = ({
               placeholder={placeholders.duration}
               required
             />
+          </div>
+
+          {/* 並び順 */}
+          <div>
+            <Label htmlFor="sortOrder">並び順</Label>
+            <Input
+              id="sortOrder"
+              type="number"
+              value={sortOrder}
+              onChange={(e) => setSortOrder(e.target.value)}
+              placeholder={placeholders.sort_order}
+            />
+            <p className="text-sm text-gray-500 mt-1">
+              数値が小さいほど上に表示されます
+            </p>
           </div>
 
           {/* 画像アップロード */}

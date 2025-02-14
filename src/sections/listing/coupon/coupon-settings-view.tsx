@@ -15,9 +15,11 @@ import { toast } from "@/components/ui/use-toast";
 import { Toaster } from "@/components/ui/toaster";
 import { PlusCircle, Pencil, Trash2, Loader2 } from "lucide-react";
 import CouponFormModal from "@/components/CouponFormModal";
-import { Coupon } from "@/types/coupon";
-import { useAuth } from "@/lib/authContext";
 import { Chip } from "@/components/ui/chip";
+import { useAuth } from "@/lib/authContext";
+
+// react で定義されている Coupon 型に sort_order を追加してください
+import { Coupon } from "@/types/coupon";
 
 // ★ Supabaseクライアントをクライアントサイドで生成
 import { createClient } from "@supabase/supabase-js";
@@ -29,7 +31,6 @@ const supabase = createClient(
 
 /**
  * カテゴリの表示設定サンプル
- * 例: 'new' => "新規" (緑), 'repeat' => "再来" (オレンジ), 'all' => "全員" (グレー), null => "未分類"
  */
 const getCategoryDisplay = (
   category: string | null
@@ -49,29 +50,32 @@ const getCategoryDisplay = (
 
 const CouponManagement: React.FC = () => {
   const { user } = useAuth();
+
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // フォームモーダルの開閉管理
+  // モーダル開閉
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCoupon, setEditingCoupon] = useState<Coupon | null>(null);
 
-  // 予約可能スイッチをクリックしたときの押下中ID (連打防止, UI制御用などに使う)
+  // 予約可能スイッチ押下中管理
   const [updatingCouponId, setUpdatingCouponId] = useState<string | null>(null);
 
-  // ----------------------------------------------------------------
-  // クーポン一覧を Supabase から直接取得
-  // ----------------------------------------------------------------
+  // ------------------------------
+  // クーポン一覧取得
+  // ------------------------------
   const fetchCoupons = async () => {
     if (!user) return;
     try {
       setIsLoading(true);
 
+      // sort_order 昇順で表示したい場合は order() を付与
       const { data, error: supaError } = await supabase
         .from("coupons")
         .select("*")
-        .eq("user_id", user.id);
+        .eq("user_id", user.id)
+        .order("sort_order", { ascending: true });
 
       if (supaError) {
         throw new Error(supaError.message || "Failed to fetch coupons");
@@ -88,32 +92,32 @@ const CouponManagement: React.FC = () => {
     }
   };
 
-  // 初回＆ユーザー認証完了後にクーポン一覧を読み込み
+  // 初回＆user認証完了後にクーポン一覧読み込み
   useEffect(() => {
     if (user) {
       fetchCoupons();
     }
   }, [user]);
 
-  /**
-   * 新規追加ボタン
-   */
+  // ------------------------------
+  // 新規追加ボタン
+  // ------------------------------
   const handleAddNew = () => {
-    setEditingCoupon(null);
+    setEditingCoupon(null); // 新規モード
     setIsModalOpen(true);
   };
 
-  /**
-   * 編集ボタン
-   */
+  // ------------------------------
+  // 編集ボタン
+  // ------------------------------
   const handleEdit = (coupon: Coupon) => {
-    setEditingCoupon(coupon);
+    setEditingCoupon(coupon); // 編集モード
     setIsModalOpen(true);
   };
 
-  /**
-   * 削除 (Supabase の coupons テーブルを直接操作)
-   */
+  // ------------------------------
+  // 削除
+  // ------------------------------
   const handleDelete = async (couponId: string) => {
     if (!window.confirm("このクーポンを削除してもよろしいですか？")) return;
     try {
@@ -128,8 +132,8 @@ const CouponManagement: React.FC = () => {
         );
       }
 
-      // 成功した場合、ローカルの状態を更新
-      setCoupons((prev) => prev.filter((coupon) => coupon.id !== couponId));
+      // ローカル更新
+      setCoupons((prev) => prev.filter((c) => c.id !== couponId));
 
       toast({
         title: "削除成功",
@@ -148,22 +152,19 @@ const CouponManagement: React.FC = () => {
     }
   };
 
-  /**
-   * 予約可能トグル (Supabase 直接更新)
-   */
+  // ------------------------------
+  // 予約可能トグル
+  // ------------------------------
   const handleToggleReservable = async (
     couponId: string,
     isReservable: boolean
   ) => {
     setUpdatingCouponId(couponId);
-
-    // 楽観的UIのため、先にローカルステートを更新
-    const oldCoupons = [...coupons];
-    setCoupons((prevCoupons) =>
-      prevCoupons.map((coupon) =>
-        coupon.id === couponId
-          ? { ...coupon, is_reservable: isReservable }
-          : coupon
+    // 楽観的UI
+    const oldState = [...coupons];
+    setCoupons((prev) =>
+      prev.map((c) =>
+        c.id === couponId ? { ...c, is_reservable: isReservable } : c
       )
     );
 
@@ -174,24 +175,24 @@ const CouponManagement: React.FC = () => {
         .eq("id", couponId);
 
       if (updateError) {
-        throw new Error(updateError.message || "Failed to update coupon");
+        throw new Error(updateError.message);
       }
 
       toast({
         title: "予約可能状態変更",
-        description: `クーポンID: ${couponId} の予約可能状態が ${
+        description: `クーポンID: ${couponId} の予約可能状態を ${
           isReservable ? "可能" : "不可能"
-        } に変更されました`,
+        } に変更しました`,
       });
     } catch (error) {
-      console.error("Error updating coupon reservable status:", error);
-
-      // エラー時はロールバック
-      setCoupons(oldCoupons);
+      console.error(error);
+      // ロールバック
+      setCoupons(oldState);
 
       toast({
         title: "エラー",
-        description: "予約可能状態の更新に失敗しました",
+        description:
+          "予約可能状態の更新中にエラーが発生しました。リトライしてください。",
         variant: "destructive",
       });
     } finally {
@@ -199,17 +200,17 @@ const CouponManagement: React.FC = () => {
     }
   };
 
-  /**
-   * モーダルを閉じる
-   */
+  // ------------------------------
+  // モーダルを閉じる
+  // ------------------------------
   const handleModalClose = () => {
     setIsModalOpen(false);
     setEditingCoupon(null);
   };
 
-  /**
-   * フォーム送信（追加 or 更新）
-   */
+  // ------------------------------
+  // フォーム送信
+  // ------------------------------
   const handleSubmit = async (
     couponData: Omit<
       Coupon,
@@ -223,7 +224,6 @@ const CouponManagement: React.FC = () => {
       if (imageFile) {
         const fileExt = imageFile.name.split(".").pop();
         const fileName = `${crypto.randomUUID()}.${fileExt}`;
-
         const { error: uploadError } = await supabase.storage
           .from("coupon-images")
           .upload(fileName, imageFile);
@@ -247,12 +247,13 @@ const CouponManagement: React.FC = () => {
           .from("coupons")
           .update({
             user_id: couponData.user_id,
-            coupon_id: editingCoupon.coupon_id, // 既存のcoupon_idを使用
+            coupon_id: editingCoupon.coupon_id, // 既存の
             name: couponData.name,
             category: couponData.category,
             description: couponData.description,
             price: couponData.price,
             duration: couponData.duration,
+            sort_order: couponData.sort_order, // 並び順の更新
             image_url: uploadedImageUrl,
             updated_at: new Date().toISOString(),
           })
@@ -266,7 +267,7 @@ const CouponManagement: React.FC = () => {
           );
         }
 
-        // ローカルステート置き換え
+        // ローカル更新
         setCoupons((prev) =>
           prev.map((c) => (c.id === editingCoupon.id ? updateRes : c))
         );
@@ -277,14 +278,20 @@ const CouponManagement: React.FC = () => {
         });
       } else {
         // --- 新規追加 ---
-        // coupon_id が NOT NULL のため、ここで必ず値を生成する
         const newCouponId = crypto.randomUUID();
+
+        // もし couponData.sort_order が 0 や空などならデフォルト設定
+        // 例: 既存の件数 + 1
+        let sortOrderToUse = couponData.sort_order ?? 0;
+        if (!sortOrderToUse) {
+          sortOrderToUse = coupons.length + 1;
+        }
 
         const { data: insertRes, error: insertError } = await supabase
           .from("coupons")
           .insert({
             user_id: couponData.user_id,
-            coupon_id: newCouponId, // ← ここで必ずセット
+            coupon_id: newCouponId,
             name: couponData.name,
             category: couponData.category,
             description: couponData.description,
@@ -292,6 +299,7 @@ const CouponManagement: React.FC = () => {
             duration: couponData.duration,
             image_url: uploadedImageUrl,
             is_reservable: true,
+            sort_order: sortOrderToUse,
             created_at: new Date().toISOString(),
           })
           .select("*")
@@ -303,8 +311,13 @@ const CouponManagement: React.FC = () => {
           );
         }
 
-        // 先頭に追加
-        setCoupons((prev) => [insertRes, ...prev]);
+        // ローカルに追加
+        setCoupons((prev) => {
+          const newList = [insertRes, ...prev];
+          // sort_order 昇順で再ソートしたいなら下記のように並べ替えても可
+          newList.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+          return newList;
+        });
 
         toast({
           title: "追加成功",
@@ -355,7 +368,8 @@ const CouponManagement: React.FC = () => {
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>No.</TableHead>
+            {/* 「No.」を「並び順」に変更 */}
+            <TableHead>並び順</TableHead>
             <TableHead>クーポン写真</TableHead>
             <TableHead>種別</TableHead>
             <TableHead>クーポン名</TableHead>
@@ -367,9 +381,10 @@ const CouponManagement: React.FC = () => {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {coupons.map((coupon, index) => (
+          {coupons.map((coupon) => (
             <TableRow key={coupon.id}>
-              <TableCell>{index + 1}</TableCell>
+              {/* 「並び順」表示 */}
+              <TableCell>{coupon.sort_order ?? 0}</TableCell>
               <TableCell>
                 {coupon.image_url ? (
                   <img
