@@ -220,6 +220,7 @@ export async function createReservation(
     p_payment_status: paymentInfo?.status ?? null,
     p_payment_amount: paymentInfo?.amount ?? totalPrice,
     p_stripe_payment_intent_id: paymentInfo?.stripePaymentIntentId ?? null,
+    p_memo: null,
   };
 
   const { data, error: reservationError } = await supabase.rpc(
