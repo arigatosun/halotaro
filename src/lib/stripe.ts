@@ -5,12 +5,7 @@ let stripePromise: Promise<any>;
 
 const getStripe = (connectedAccountId?: string) => {
   if (!stripePromise) {
-    stripePromise = loadStripe(
-      process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!,
-      {
-        stripeAccount: connectedAccountId,
-      }
-    );
+    stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
   }
   return stripePromise;
 };
