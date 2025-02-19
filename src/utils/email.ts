@@ -22,7 +22,10 @@ export async function sendReservationEmails(
   recipientEmails: string[],
   baseUrl: string
 ) {
-  const cancelUrl = generateCancelUrl(baseUrl, reservationDetails.reservationId);
+  const cancelUrl = generateCancelUrl(
+    baseUrl,
+    reservationDetails.reservationId
+  );
 
   // 顧客へのメール送信
   await resend.emails.send({
@@ -31,8 +34,12 @@ export async function sendReservationEmails(
     subject: "予約完了のお知らせ",
     react: ReservationConfirmation({
       customerName: reservationDetails.customerFullName,
-      dateTime: new Date(reservationDetails.startTime).toLocaleString("ja-JP"),
-      endTime: new Date(reservationDetails.endTime).toLocaleString("ja-JP"),
+      dateTime: new Date(reservationDetails.startTime).toLocaleString("ja-JP", {
+        timeZone: "Asia/Tokyo",
+      }),
+      endTime: new Date(reservationDetails.endTime).toLocaleString("ja-JP", {
+        timeZone: "Asia/Tokyo",
+      }),
       staffName: reservationDetails.staffName,
       serviceName: reservationDetails.serviceName,
       totalPrice: reservationDetails.totalPrice,
@@ -51,8 +58,15 @@ export async function sendReservationEmails(
         customerName: reservationDetails.customerFullName,
         customerEmail: customerInfo.email,
         customerPhone: customerInfo.phone,
-        dateTime: new Date(reservationDetails.startTime).toLocaleString("ja-JP"),
-        endTime: new Date(reservationDetails.endTime).toLocaleString("ja-JP"),
+        dateTime: new Date(reservationDetails.startTime).toLocaleString(
+          "ja-JP",
+          {
+            timeZone: "Asia/Tokyo",
+          }
+        ),
+        endTime: new Date(reservationDetails.endTime).toLocaleString("ja-JP", {
+          timeZone: "Asia/Tokyo",
+        }),
         staffName: reservationDetails.staffName,
         serviceName: reservationDetails.serviceName,
         totalPrice: reservationDetails.totalPrice,
