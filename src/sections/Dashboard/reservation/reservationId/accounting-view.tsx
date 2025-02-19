@@ -135,6 +135,23 @@ interface Reservation {
   reservation_customers: ReservationCustomer | null;
 }
 
+// DBのクーポン型定義を追加
+interface DBCoupon {
+  id: string;
+  user_id: string;
+  coupon_id: string;
+  name: string;
+  category: string | null;
+  description: string | null;
+  price: number | null;
+  duration: number | null;
+  is_reservable: boolean | null;
+  image_url: string | null;
+  created_at: string;
+  updated_at: string;
+  sort_order: number;
+}
+
 interface AccountingPageProps {
   reservationId: string;
 }
@@ -242,6 +259,12 @@ export const AccountingPage: React.FC<AccountingPageProps> = ({
   const fetchSalesMenuItemsRef = useRef<boolean>(false);
   const fetchDiscountItemsRef = useRef<boolean>(false);
   const fetchTemporarySaveRef = useRef<boolean>(false);
+
+  // クーポン関連のステート
+  const [coupons, setCoupons] = useState<DBCoupon[]>([]);
+  const [couponsByCategory, setCouponsByCategory] = useState<{
+    [category: string]: DBCoupon[];
+  }>({});
 
   const userId = user?.id;
 
@@ -1052,6 +1075,45 @@ export const AccountingPage: React.FC<AccountingPageProps> = ({
   };
 
   // ------------------------------------
+  // クーポン一覧の取得
+  // ------------------------------------
+  useEffect(() => {
+    if (authLoading || !user || !session) return;
+
+    const fetchCoupons = async () => {
+      try {
+        const response = await fetch("/api/get-coupons", {
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        });
+        if (!response.ok) {
+          throw new Error("クーポンの取得に失敗しました");
+        }
+
+        const data: DBCoupon[] = await response.json();
+        setCoupons(data);
+
+        // カテゴリごとにグループ化
+        const grouped: Record<string, DBCoupon[]> = {};
+        data.forEach((coupon) => {
+          const catName = coupon.category || "未分類";
+          if (!grouped[catName]) {
+            grouped[catName] = [];
+          }
+          grouped[catName].push(coupon);
+        });
+
+        setCouponsByCategory(grouped);
+      } catch (error) {
+        console.error("クーポンの取得エラー:", error);
+      }
+    };
+
+    fetchCoupons();
+  }, [authLoading, user, session]);
+
+  // ------------------------------------
   // 19) レンダリング
   // ------------------------------------
   if (authLoading) {
@@ -1195,6 +1257,8 @@ export const AccountingPage: React.FC<AccountingPageProps> = ({
                       } else {
                         setSelectedCategory("");
                       }
+                    } else if (tabValue === "coupon") {
+                      setSelectedCategory(""); // クーポンタブではカテゴリ選択をクリア
                     } else if (tabValue === "retail") {
                       if (retailCategories.length > 0) {
                         setSelectedCategory(retailCategories[0]);
@@ -1202,14 +1266,16 @@ export const AccountingPage: React.FC<AccountingPageProps> = ({
                         setSelectedCategory("");
                       }
                     } else if (tabValue === "discount") {
-                      // 割引タブ
                       setSelectedCategory("");
                     }
                   }}
                 >
                   <TabsList className="w-full">
                     <TabsTrigger value="treatment" className="flex-1">
-                      施術
+                      メニュー
+                    </TabsTrigger>
+                    <TabsTrigger value="coupon" className="flex-1">
+                      クーポン
                     </TabsTrigger>
                     <TabsTrigger value="retail" className="flex-1">
                       店販
@@ -1219,7 +1285,7 @@ export const AccountingPage: React.FC<AccountingPageProps> = ({
                     </TabsTrigger>
                   </TabsList>
 
-                  {/* 施術タブ */}
+                  {/* メニュータブ */}
                   <TabsContent value="treatment">
                     <div className="space-y-4">
                       {/* カテゴリ一覧ボタン */}
@@ -1243,7 +1309,7 @@ export const AccountingPage: React.FC<AccountingPageProps> = ({
                           </Button>
                         ))}
                       </div>
-                      {/* カテゴリに紐づく施術メニュー一覧 */}
+                      {/* カテゴリに紐づくメニュー一覧 */}
                       <div className="space-y-2">
                         {treatmentItemsByCategory[selectedCategory]?.map(
                           (m) => (
@@ -1251,13 +1317,45 @@ export const AccountingPage: React.FC<AccountingPageProps> = ({
                               key={m.id}
                               variant="outline"
                               className="w-full justify-start"
-                              onClick={() => addItem("施術", m.name, m.price)}
+                              onClick={() =>
+                                addItem("メニュー", m.name, m.price)
+                              }
                             >
                               <PlusIcon className="mr-2 h-4 w-4" />
                               {m.name} （{m.price}円）
                             </Button>
                           )
                         )}
+                      </div>
+                    </div>
+                  </TabsContent>
+
+                  {/* クーポンタブ */}
+                  <TabsContent value="coupon">
+                    <div className="space-y-4">
+                      <div className="space-y-2 max-h-[600px] overflow-y-auto">
+                        {Object.values(couponsByCategory)
+                          .flat()
+                          .map((coupon: DBCoupon) => (
+                            <Button
+                              key={coupon.id}
+                              variant="outline"
+                              className="w-full justify-start"
+                              onClick={() =>
+                                addItem(
+                                  "クーポン",
+                                  coupon.name,
+                                  coupon.price || 0
+                                )
+                              }
+                            >
+                              <PlusIcon className="mr-2 h-4 w-4" />
+                              <span>
+                                {coupon.name}
+                                {coupon.price ? ` （${coupon.price}円）` : ""}
+                              </span>
+                            </Button>
+                          ))}
                       </div>
                     </div>
                   </TabsContent>

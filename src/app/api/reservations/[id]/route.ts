@@ -37,7 +37,9 @@ export async function GET(
     const token = authHeader.split("Bearer ")[1];
 
     // トークンからユーザー情報を取得
-    const { data: userData, error: authError } = await supabase.auth.getUser(token);
+    const { data: userData, error: authError } = await supabase.auth.getUser(
+      token
+    );
 
     if (authError || !userData.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -48,7 +50,8 @@ export async function GET(
     // reservationsテーブルから予約情報を取得し、menu_items、staff、reservation_customersをリレーション
     const { data: reservation, error } = await supabase
       .from("reservations")
-      .select(`
+      .select(
+        `
         id,
         user_id,
         menu_id,
@@ -67,22 +70,25 @@ export async function GET(
         menu_items (
           *
         ),
-        staff (
-          *
-        ),
+        staff!fk_staff(*),
         reservation_customers!fk_customer (
           id,
           name,
           name_kana
         )
-      `)
+      `
+      )
       .eq("id", reservationId)
       .eq("user_id", userId)
       .single();
 
     if (error) {
-      if (error.code === "PGRST116") { // 予約が見つからない場合
-        return NextResponse.json({ error: "Reservation not found" }, { status: 404 });
+      if (error.code === "PGRST116") {
+        // 予約が見つからない場合
+        return NextResponse.json(
+          { error: "Reservation not found" },
+          { status: 404 }
+        );
       }
       throw error;
     }
@@ -97,7 +103,8 @@ export async function GET(
       .single();
 
     if (fetchError) {
-      if (fetchError.code === "PGRST116") { // 一時保存データが見つからない場合
+      if (fetchError.code === "PGRST116") {
+        // 一時保存データが見つからない場合
         return NextResponse.json({ reservation }, { status: 200 });
       }
       throw fetchError;
@@ -126,7 +133,9 @@ export async function PUT(
     const token = authHeader.split("Bearer ")[1];
 
     // トークンからユーザー情報を取得
-    const { data: userData, error: authError } = await supabase.auth.getUser(token);
+    const { data: userData, error: authError } = await supabase.auth.getUser(
+      token
+    );
 
     if (authError || !userData.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -139,11 +148,17 @@ export async function PUT(
 
     // ステータスのバリデーション
     if (!status || typeof status !== "string") {
-      return NextResponse.json({ error: "Invalid status value" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Invalid status value" },
+        { status: 400 }
+      );
     }
 
     if (!validStatuses.includes(status)) {
-      return NextResponse.json({ error: "Invalid status value" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Invalid status value" },
+        { status: 400 }
+      );
     }
 
     // reservationsテーブルのステータスを更新
@@ -156,12 +171,21 @@ export async function PUT(
 
     if (error) {
       console.error("ステータス更新エラー:", error);
-      return NextResponse.json({ error: "Failed to update reservation status" }, { status: 500 });
+      return NextResponse.json(
+        { error: "Failed to update reservation status" },
+        { status: 500 }
+      );
     }
 
-    return NextResponse.json({ message: "Reservation status updated successfully", reservation: data }, { status: 200 });
+    return NextResponse.json(
+      { message: "Reservation status updated successfully", reservation: data },
+      { status: 200 }
+    );
   } catch (error: any) {
     console.error("ステータス更新エラー:", error);
-    return NextResponse.json({ error: error.message || "Failed to update reservation status" }, { status: 500 });
+    return NextResponse.json(
+      { error: error.message || "Failed to update reservation status" },
+      { status: 500 }
+    );
   }
 }
