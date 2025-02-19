@@ -734,70 +734,55 @@ const DateSelection: React.FC<DateSelectionProps> = ({
 
         let isAvailable = true;
 
-        // サロンの営業時間内かどうかをチェック
-        if (
-          startDateTime.isBefore(salonOpenTime) ||
-          endDateTime.isAfter(salonCloseTime)
-        ) {
+        // 過去の時間スロットは予約不可
+        if (startDateTime.isBefore(moment().tz("Asia/Tokyo"))) {
           isAvailable = false;
         } else {
-          // キャパシティと予約チェック
-          for (
-            let currentTime = moment(startDateTime);
-            currentTime.isBefore(endDateTime);
-            currentTime.add(slotInterval, "minutes")
+          // サロンの営業時間内かどうかをチェック
+          if (
+            startDateTime.isBefore(salonOpenTime) ||
+            endDateTime.isAfter(salonCloseTime)
           ) {
-            const timeKey = currentTime.format("YYYY-MM-DD HH:mm");
-
-            // サロン全体のキャパシティチェック
-            const currentReservations = reservationCounts[timeKey] || 0;
-            if (currentReservations >= maxCapacity) {
-              isAvailable = false;
-              break;
-            }
-
-            // 選択されたスタッフの予約チェック
-            if (selectedStaffProp && selectedStaffReservations.has(timeKey)) {
-              isAvailable = false;
-              break;
-            }
-
-            // スタッフの利用可能性チェック
-            const currentTimeStr = currentTime.format("HH:mm");
-            const staffIdsAtTime = availableSlots[dateStr]?.[currentTimeStr];
-
-            if (!staffIdsAtTime || staffIdsAtTime.length === 0) {
-              isAvailable = false;
-              break;
-            }
-
-            if (
-              selectedStaffProp &&
-              !staffIdsAtTime.includes(selectedStaffProp.id)
+            isAvailable = false;
+          } else {
+            // キャパシティと予約チェック
+            for (
+              let currentTime = moment(startDateTime);
+              currentTime.isBefore(endDateTime);
+              currentTime.add(slotInterval, "minutes")
             ) {
-              isAvailable = false;
-              break;
+              const timeKey = currentTime.format("YYYY-MM-DD HH:mm");
+
+              // サロン全体のキャパシティチェック
+              const currentReservations = reservationCounts[timeKey] || 0;
+              if (currentReservations >= maxCapacity) {
+                isAvailable = false;
+                break;
+              }
+
+              // 選択されたスタッフの予約状況チェック
+              if (selectedStaffProp && selectedStaffReservations.get(timeKey)) {
+                isAvailable = false;
+                break;
+              }
             }
           }
         }
 
-        // 現在の時間スロットの利用可能性を設定
         availability[dateStr][time] = isAvailable;
       }
     }
 
     return availability;
   }, [
-    // 再計算のための依存関係
     startDate,
     displayDays,
-    selectedStaffProp,
-    selectedMenus,
-    availableSlots,
-    reservedSlots,
     timeSlots,
-    isHoliday,
+    selectedMenus,
     operatingHours,
+    reservedSlots,
+    selectedStaffProp,
+    slotInterval,
   ]);
 
   // handleTimeSlotClick を修正

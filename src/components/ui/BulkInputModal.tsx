@@ -1,6 +1,6 @@
 // BulkInputModal.tsx
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
 import {
   Box,
   Typography,
@@ -15,15 +15,17 @@ import {
   Radio,
   RadioGroup,
   Grid,
-} from '@mui/material';
-import moment from 'moment';
-import { supabase } from '@/lib/supabaseClient';
+} from "@mui/material";
+import moment from "moment";
+import { supabase } from "@/lib/supabaseClient";
 
 interface BulkInputModalProps {
   staffs: { id: number; name: string }[];
   currentDate: moment.Moment;
   user: any;
-  onSubmit: (newShifts: Record<number, { [index: number]: ShiftData }>) => Promise<void>;
+  onSubmit: (
+    newShifts: Record<number, { [index: number]: ShiftData }>
+  ) => Promise<void>;
   onClose: () => void;
 }
 
@@ -50,16 +52,22 @@ const BulkInputModal: React.FC<BulkInputModalProps> = ({
   onClose,
 }) => {
   const [selectedStaffs, setSelectedStaffs] = useState<number[]>([]);
-  const [dateType, setDateType] = useState<string>('specific');
+  const [dateType, setDateType] = useState<string>("specific");
   const [specificDates, setSpecificDates] = useState<number[]>([]);
-  const [dateRange, setDateRange] = useState<[number, number]>([1, currentDate.daysInMonth()]);
+  const [dateRange, setDateRange] = useState<[number, number]>([
+    1,
+    currentDate.daysInMonth(),
+  ]);
   const [weekdays, setWeekdays] = useState<number[]>([]);
-  const [shiftType, setShiftType] = useState<string>('出勤');
-  const [startTime, setStartTime] = useState<string>('09:00');
-  const [endTime, setEndTime] = useState<string>('18:00');
+  const [shiftType, setShiftType] = useState<string>("出勤");
+  const [startTime, setStartTime] = useState<string>("09:00");
+  const [endTime, setEndTime] = useState<string>("18:00");
   const [workPatterns, setWorkPatterns] = useState<WorkPattern[]>([]);
-  const [selectedWorkPattern, setSelectedWorkPattern] = useState<string | null>(null);
-  const [useBusinessStartTime, setUseBusinessStartTime] = useState<boolean>(false);
+  const [selectedWorkPattern, setSelectedWorkPattern] = useState<string | null>(
+    null
+  );
+  const [useBusinessStartTime, setUseBusinessStartTime] =
+    useState<boolean>(false);
   const [useBusinessEndTime, setUseBusinessEndTime] = useState<boolean>(false);
 
   // 勤務パターンの取得
@@ -67,12 +75,12 @@ const BulkInputModal: React.FC<BulkInputModalProps> = ({
     const fetchWorkPatterns = async () => {
       if (!user) return;
       const { data, error } = await supabase
-        .from('work_patterns')
-        .select('*')
-        .eq('user_id', user.id);
+        .from("work_patterns")
+        .select("*")
+        .eq("user_id", user.id);
 
       if (error) {
-        console.error('勤務パターンの取得に失敗しました:', error);
+        console.error("勤務パターンの取得に失敗しました:", error);
       } else {
         setWorkPatterns(data as WorkPattern[]);
       }
@@ -101,20 +109,22 @@ const BulkInputModal: React.FC<BulkInputModalProps> = ({
       const indicesToApply: number[] = [];
 
       // 選択された日付タイプに応じて適用する日付インデックスを収集
-      if (dateType === 'specific') {
-        indicesToApply.push(...specificDates.map(date => date - 1));
-      } else if (dateType === 'range') {
+      if (dateType === "specific") {
+        indicesToApply.push(...specificDates.map((date) => date - 1));
+      } else if (dateType === "range") {
         for (let i = dateRange[0] - 1; i < dateRange[1]; i++) {
           indicesToApply.push(i);
         }
-      } else if (dateType === 'weekday') {
+      } else if (dateType === "weekday") {
         for (let i = 0; i < daysInMonth; i++) {
-          const day = moment(currentDate).date(i + 1).day();
+          const day = moment(currentDate)
+            .date(i + 1)
+            .day();
           if (weekdays.includes(day)) {
             indicesToApply.push(i);
           }
         }
-      } else if (dateType === 'everyday') {
+      } else if (dateType === "everyday") {
         for (let i = 0; i < daysInMonth; i++) {
           indicesToApply.push(i);
         }
@@ -124,29 +134,41 @@ const BulkInputModal: React.FC<BulkInputModalProps> = ({
 
       // 勤務パターンで営業開始時間や終了時間を使用する場合、必要な日付を収集
       if (useBusinessStartTime || useBusinessEndTime) {
-        indicesToApply.forEach(index => {
-          const dateStr = currentDate.date(index + 1).format('YYYY-MM-DD');
+        indicesToApply.forEach((index) => {
+          const dateStr = currentDate.date(index + 1).format("YYYY-MM-DD");
           datesToFetch.add(dateStr);
         });
       }
     }
 
     // salon_business_hours を一括取得
-    let businessHoursMap: Record<string, { open_time: string | null; close_time: string | null }> = {};
+    let businessHoursMap: Record<
+      string,
+      { open_time: string | null; close_time: string | null }
+    > = {};
 
     if (datesToFetch.size > 0) {
       const datesArray = Array.from(datesToFetch);
       const { data, error } = await supabase
-        .from('salon_business_hours')
-        .select('date, open_time, close_time')
-        .in('date', datesArray);
+        .from("salon_business_hours")
+        .select("date, open_time, close_time")
+        .in("date", datesArray);
 
       if (error) {
-        console.error('salon_business_hours の取得に失敗しました:', error);
+        console.error("salon_business_hours の取得に失敗しました:", error);
       } else {
-        data.forEach((item: { date: string; open_time: string | null; close_time: string | null }) => {
-          businessHoursMap[item.date] = { open_time: item.open_time, close_time: item.close_time };
-        });
+        data.forEach(
+          (item: {
+            date: string;
+            open_time: string | null;
+            close_time: string | null;
+          }) => {
+            businessHoursMap[item.date] = {
+              open_time: item.open_time,
+              close_time: item.close_time,
+            };
+          }
+        );
       }
     }
 
@@ -154,31 +176,37 @@ const BulkInputModal: React.FC<BulkInputModalProps> = ({
     for (const staffId of selectedStaffs) {
       const indicesToApply = indicesToApplyMap[staffId];
 
-      indicesToApply.forEach(index => {
+      indicesToApply.forEach((index) => {
         let shiftStartTime = startTime;
         let shiftEndTime = endTime;
 
-        const dateStr = currentDate.date(index + 1).format('YYYY-MM-DD');
+        const dateStr = currentDate.date(index + 1).format("YYYY-MM-DD");
 
         if (useBusinessStartTime || useBusinessEndTime) {
           const businessHours = businessHoursMap[dateStr];
 
           if (businessHours) {
             if (useBusinessStartTime) {
-              shiftStartTime = businessHours.open_time?.slice(0, 5) || '';
+              shiftStartTime = businessHours.open_time?.slice(0, 5) || "";
             }
             if (useBusinessEndTime) {
-              shiftEndTime = businessHours.close_time?.slice(0, 5) || '';
+              shiftEndTime = businessHours.close_time?.slice(0, 5) || "";
             }
           } else {
             console.warn(`営業時間が見つかりません: ${dateStr}`);
           }
         }
 
-        if (shiftType === '出勤') {
-          newShifts[staffId][index] = { type: '出', startTime: shiftStartTime, endTime: shiftEndTime };
+        if (shiftType === "出勤") {
+          newShifts[staffId][index] = {
+            type: "出",
+            startTime: shiftStartTime,
+            endTime: shiftEndTime,
+          };
         } else {
-          newShifts[staffId][index] = { type: shiftType === '休日' ? '休' : '店休' };
+          newShifts[staffId][index] = {
+            type: shiftType === "休日" ? "休" : "店休",
+          };
         }
       });
     }
@@ -190,9 +218,9 @@ const BulkInputModal: React.FC<BulkInputModalProps> = ({
     const options = [];
     for (let hour = 0; hour < 24; hour++) {
       for (let minute = 0; minute < 60; minute += 30) {
-        const time = `${hour.toString().padStart(2, '0')}:${minute
+        const time = `${hour.toString().padStart(2, "0")}:${minute
           .toString()
-          .padStart(2, '0')}`;
+          .padStart(2, "0")}`;
         options.push(
           <MenuItem key={time} value={time}>
             {time}
@@ -206,16 +234,16 @@ const BulkInputModal: React.FC<BulkInputModalProps> = ({
   return (
     <Box
       sx={{
-        position: 'absolute',
-        top: '50%',
-        left: '50%',
-        transform: 'translate(-50%, -50%)',
+        position: "absolute",
+        top: "50%",
+        left: "50%",
+        transform: "translate(-50%, -50%)",
         width: 500,
-        bgcolor: 'background.paper',
+        bgcolor: "background.paper",
         boxShadow: 24,
         p: 4,
-        maxHeight: '90vh',
-        overflowY: 'auto',
+        maxHeight: "90vh",
+        overflowY: "auto",
       }}
     >
       <Typography variant="h6" component="h2" gutterBottom>
@@ -230,7 +258,9 @@ const BulkInputModal: React.FC<BulkInputModalProps> = ({
           value={selectedStaffs}
           onChange={(e) => setSelectedStaffs(e.target.value as number[])}
           renderValue={(selected) =>
-            selected.map((id) => staffs.find((s) => s.id === id)?.name).join(', ')
+            selected
+              .map((id) => staffs.find((s) => s.id === id)?.name)
+              .join(", ")
           }
         >
           {staffs.map((staff) => (
@@ -244,8 +274,15 @@ const BulkInputModal: React.FC<BulkInputModalProps> = ({
 
       {/* 日付タイプ選択 */}
       <FormControl component="fieldset" fullWidth margin="normal">
-        <RadioGroup value={dateType} onChange={(e) => setDateType(e.target.value)}>
-          <FormControlLabel value="specific" control={<Radio />} label="特定の日付" />
+        <RadioGroup
+          value={dateType}
+          onChange={(e) => setDateType(e.target.value)}
+        >
+          <FormControlLabel
+            value="specific"
+            control={<Radio />}
+            label="特定の日付"
+          />
           <FormControlLabel value="range" control={<Radio />} label="期間" />
           <FormControlLabel value="weekday" control={<Radio />} label="曜日" />
           <FormControlLabel value="everyday" control={<Radio />} label="毎日" />
@@ -253,44 +290,48 @@ const BulkInputModal: React.FC<BulkInputModalProps> = ({
       </FormControl>
 
       {/* 特定の日付選択 */}
-      {dateType === 'specific' && (
+      {dateType === "specific" && (
         <FormControl fullWidth margin="normal">
           <InputLabel>日付を選択</InputLabel>
           <Select
             multiple
             value={specificDates}
             onChange={(e) => setSpecificDates(e.target.value as number[])}
-            renderValue={(selected) => selected.join(', ')}
+            renderValue={(selected) => selected.join(", ")}
           >
-            {Array.from({ length: currentDate.daysInMonth() }, (_, i) => i + 1).map(
-              (day) => (
-                <MenuItem key={day} value={day}>
-                  <Checkbox checked={specificDates.includes(day)} />
-                  <Typography>{day}日</Typography>
-                </MenuItem>
-              )
-            )}
+            {Array.from(
+              { length: currentDate.daysInMonth() },
+              (_, i) => i + 1
+            ).map((day) => (
+              <MenuItem key={day} value={day}>
+                <Checkbox checked={specificDates.includes(day)} />
+                <Typography>{day}日</Typography>
+              </MenuItem>
+            ))}
           </Select>
         </FormControl>
       )}
 
       {/* 期間選択 */}
-      {dateType === 'range' && (
+      {dateType === "range" && (
         <Grid container spacing={2}>
           <Grid item xs={6}>
             <FormControl fullWidth margin="normal">
               <InputLabel>開始日</InputLabel>
               <Select
                 value={dateRange[0]}
-                onChange={(e) => setDateRange([e.target.value as number, dateRange[1]])}
+                onChange={(e) =>
+                  setDateRange([e.target.value as number, dateRange[1]])
+                }
               >
-                {Array.from({ length: currentDate.daysInMonth() }, (_, i) => i + 1).map(
-                  (day) => (
-                    <MenuItem key={day} value={day}>
-                      {day}日
-                    </MenuItem>
-                  )
-                )}
+                {Array.from(
+                  { length: currentDate.daysInMonth() },
+                  (_, i) => i + 1
+                ).map((day) => (
+                  <MenuItem key={day} value={day}>
+                    {day}日
+                  </MenuItem>
+                ))}
               </Select>
             </FormControl>
           </Grid>
@@ -299,15 +340,18 @@ const BulkInputModal: React.FC<BulkInputModalProps> = ({
               <InputLabel>終了日</InputLabel>
               <Select
                 value={dateRange[1]}
-                onChange={(e) => setDateRange([dateRange[0], e.target.value as number])}
+                onChange={(e) =>
+                  setDateRange([dateRange[0], e.target.value as number])
+                }
               >
-                {Array.from({ length: currentDate.daysInMonth() }, (_, i) => i + 1).map(
-                  (day) => (
-                    <MenuItem key={day} value={day}>
-                      {day}日
-                    </MenuItem>
-                  )
-                )}
+                {Array.from(
+                  { length: currentDate.daysInMonth() },
+                  (_, i) => i + 1
+                ).map((day) => (
+                  <MenuItem key={day} value={day}>
+                    {day}日
+                  </MenuItem>
+                ))}
               </Select>
             </FormControl>
           </Grid>
@@ -315,9 +359,9 @@ const BulkInputModal: React.FC<BulkInputModalProps> = ({
       )}
 
       {/* 曜日選択 */}
-      {dateType === 'weekday' && (
+      {dateType === "weekday" && (
         <FormGroup row>
-          {['日', '月', '火', '水', '木', '金', '土'].map((day, index) => (
+          {["日", "月", "火", "水", "木", "金", "土"].map((day, index) => (
             <FormControlLabel
               key={day}
               control={
@@ -340,7 +384,10 @@ const BulkInputModal: React.FC<BulkInputModalProps> = ({
 
       {/* シフトタイプ選択 */}
       <FormControl component="fieldset" fullWidth margin="normal">
-        <RadioGroup value={shiftType} onChange={(e) => setShiftType(e.target.value)}>
+        <RadioGroup
+          value={shiftType}
+          onChange={(e) => setShiftType(e.target.value)}
+        >
           <FormControlLabel value="出勤" control={<Radio />} label="出勤" />
           <FormControlLabel value="休日" control={<Radio />} label="休日" />
           {/*  <FormControlLabel value="店休" control={<Radio />} label="店休" />*/}
@@ -348,7 +395,7 @@ const BulkInputModal: React.FC<BulkInputModalProps> = ({
       </FormControl>
 
       {/* 出勤の場合の詳細設定 */}
-      {shiftType === '出勤' && (
+      {shiftType === "出勤" && (
         <>
           <Grid container spacing={2}>
             <Grid item xs={6}>
@@ -381,7 +428,7 @@ const BulkInputModal: React.FC<BulkInputModalProps> = ({
           <FormControl fullWidth margin="normal">
             <InputLabel>勤務パターン</InputLabel>
             <Select
-              value={selectedWorkPattern || ''}
+              value={selectedWorkPattern || ""}
               onChange={(e) => {
                 const patternId = e.target.value as string;
                 setSelectedWorkPattern(patternId);
@@ -389,18 +436,22 @@ const BulkInputModal: React.FC<BulkInputModalProps> = ({
                 if (pattern) {
                   if (pattern.is_business_start) {
                     setUseBusinessStartTime(true);
-                    setStartTime('');
+                    setStartTime("");
                   } else {
                     setUseBusinessStartTime(false);
-                    setStartTime(pattern.start_time ? pattern.start_time.slice(0, 5) : '');
+                    setStartTime(
+                      pattern.start_time ? pattern.start_time.slice(0, 5) : ""
+                    );
                   }
 
                   if (pattern.is_business_end) {
                     setUseBusinessEndTime(true);
-                    setEndTime('');
+                    setEndTime("");
                   } else {
                     setUseBusinessEndTime(false);
-                    setEndTime(pattern.end_time ? pattern.end_time.slice(0, 5) : '');
+                    setEndTime(
+                      pattern.end_time ? pattern.end_time.slice(0, 5) : ""
+                    );
                   }
                 }
               }}
@@ -416,7 +467,7 @@ const BulkInputModal: React.FC<BulkInputModalProps> = ({
       )}
 
       {/* 閉じる・設定するボタン */}
-      <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 3 }}>
+      <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 3 }}>
         <Button onClick={onClose} sx={{ mr: 2 }}>
           閉じる
         </Button>
