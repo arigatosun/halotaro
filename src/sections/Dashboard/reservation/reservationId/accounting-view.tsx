@@ -1084,7 +1084,7 @@ export const AccountingPage: React.FC<AccountingPageProps> = ({
       try {
         const response = await fetch("/api/get-coupons", {
           headers: {
-            Authorization: `Bearer ${session.access_token}`,
+            "user-id": user.id,
           },
         });
         if (!response.ok) {

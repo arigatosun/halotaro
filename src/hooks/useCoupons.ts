@@ -16,11 +16,14 @@ export function useCoupons(userId: string) {
           "user-id": userId,
         },
       });
+
       if (!response.ok) {
         throw new Error("Failed to fetch coupons");
       }
+
       const data = await response.json();
-      console.log('Fetched coupons:', data); // 追加
+      console.log("Fetched coupons:", data);
+
       const formattedCoupons: MenuItem[] = data.map((coupon: any) => ({
         id: coupon.id,
         user_id: coupon.user_id,
@@ -34,6 +37,7 @@ export function useCoupons(userId: string) {
         coupon_id: coupon.coupon_id,
         image_url: coupon.image_url,
       }));
+
       setCoupons(formattedCoupons);
       setError(null);
     } catch (err) {
