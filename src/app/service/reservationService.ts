@@ -385,8 +385,12 @@ export async function sendReservationEmails(params: {
     subject: "予約完了のお知らせ",
     react: ReservationConfirmation({
       customerName: customerFullName,
-      dateTime: new Date(startTime).toLocaleString("ja-JP"),
-      endTime: new Date(endTime).toLocaleString("ja-JP"),
+      dateTime: new Date(startTime).toLocaleString("ja-JP", {
+        timeZone: "Asia/Tokyo",
+      }),
+      endTime: new Date(endTime).toLocaleString("ja-JP", {
+        timeZone: "Asia/Tokyo",
+      }),
       staffName,
       serviceName,
       totalPrice,
@@ -406,8 +410,12 @@ export async function sendReservationEmails(params: {
         customerName: customerFullName,
         customerEmail: customerInfo.email,
         customerPhone: customerInfo.phone,
-        dateTime: new Date(startTime).toLocaleString("ja-JP"),
-        endTime: new Date(endTime).toLocaleString("ja-JP"),
+        dateTime: new Date(startTime).toLocaleString("ja-JP", {
+          timeZone: "Asia/Tokyo",
+        }),
+        endTime: new Date(endTime).toLocaleString("ja-JP", {
+          timeZone: "Asia/Tokyo",
+        }),
         staffName,
         serviceName,
         totalPrice,
