@@ -88,7 +88,7 @@ export async function GET(request: Request) {
     // 予約の取得（対応可能なスタッフのみ）
     let query = supabase
       .from("reservations")
-      .select("staff_id, start_time, end_time")
+      .select("staff_id, start_time, end_time, is_staff_schedule")
       .in("staff_id", availableStaffIds)
       .gte("start_time", `${startDate}T00:00:00`)
       .lte("end_time", `${endDate}T23:59:59`);
@@ -114,9 +114,10 @@ export async function GET(request: Request) {
         startTime: reservation.start_time,
         endTime: reservation.end_time,
         staffId: reservation.staff_id,
+        is_staff_schedule: reservation.is_staff_schedule,
       });
       return acc;
-    }, {} as Record<string, { startTime: string; endTime: string; staffId: string }[]>);
+    }, {} as Record<string, { startTime: string; endTime: string; staffId: string; is_staff_schedule: boolean }[]>);
 
     return NextResponse.json(reservationsByDate);
   } catch (error) {
