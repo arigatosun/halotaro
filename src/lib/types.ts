@@ -24,6 +24,16 @@ export interface PaymentInfo {
 }
 
 /**
+ * 選択されたメニュー項目
+ */
+export interface SelectedMenuItem {
+  id: string;
+  name: string;
+  price: number;
+  duration: number;
+}
+
+/**
  * create-reservation API のリクエストボディ
  */
 export interface CreateReservationBody {
@@ -38,4 +48,5 @@ export interface CreateReservationBody {
   paymentMethodId?: string; // 任意
   customerEmail?: string; // 任意
   customerId?: string; // 任意
+  selectedMenus?: SelectedMenuItem[]; // 複数メニュー選択対応
 }

@@ -73,20 +73,80 @@ const ReservationDetails: React.FC<ReservationDetailsProps> = ({
             <strong>顧客名:</strong> {reservation.customer_name}
           </p>
 
-          {/* メニュー or クーポンの判定表示 */}
-          <p>
-            <strong>メニュー/クーポン:</strong>{" "}
-            {/* 
-                - menu_id があれば reservation.menu_name を優先
-                - なければ coupon_name を表示
-                - いずれも無ければ "不明" 等
-            */}
-            {reservation.menu_id && reservation.menu_name
-              ? reservation.menu_name
-              : reservation.coupon_id && reservation.coupons?.name
-              ? reservation.coupons?.name
-              : "未設定 or 不明"}
-          </p>
+          {/* メインメニュー/クーポン表示 */}
+          <div>
+            <strong>メインメニュー:</strong>
+            <div className="ml-3 mt-1 mb-3">
+              {(reservation.menu_id && reservation.menu_name) || (reservation.coupon_id && reservation.coupons?.name) ? (
+                <div className="flex items-center bg-orange-50 p-2 rounded-md">
+                  <span className="inline-block w-2 h-2 bg-orange-500 rounded-full mr-2"></span>
+                  <span className="font-medium">
+                    {reservation.menu_id && reservation.menu_name
+                      ? reservation.menu_name
+                      : reservation.coupon_id && reservation.coupons?.name
+                      ? reservation.coupons?.name
+                      : ""}
+                  </span>
+                  {reservation.menu_id && reservation.menu_items?.duration && (
+                    <span className="text-gray-500 text-sm ml-2">({reservation.menu_items.duration}分)</span>
+                  )}
+                  {reservation.coupon_id && reservation.coupons?.duration && (
+                    <span className="text-gray-500 text-sm ml-2">({reservation.coupons.duration}分)</span>
+                  )}
+                  <span className="font-semibold ml-auto">
+                    ¥{(reservation.menu_id && reservation.menu_items?.price 
+                      ? reservation.menu_items.price 
+                      : reservation.coupon_id && reservation.coupons?.price 
+                      ? reservation.coupons.price 
+                      : 0).toLocaleString()}
+                  </span>
+                </div>
+              ) : (
+                <span className="text-gray-500">メインメニューなし</span>
+              )}
+            </div>
+            
+            {/* 追加メニュー表示 */}
+            {reservation.reservation_menu_items && reservation.reservation_menu_items.length > 0 && (
+              <div className="mb-3">
+                <strong>追加メニュー:</strong>
+                <div className="ml-3 mt-1 space-y-1 border-l-2 border-orange-200 pl-3">
+                  {reservation.reservation_menu_items.map((item, index) => (
+                    <div key={index} className="flex items-center bg-gray-50 p-2 rounded-md">
+                      <span className="inline-block w-2 h-2 bg-orange-400 rounded-full mr-2"></span>
+                      <span className="font-medium">{item.name}</span>
+                      <span className="text-gray-500 text-sm ml-2">({item.duration}分)</span>
+                      <span className="font-semibold ml-auto">¥{item.price.toLocaleString()}</span>
+                    </div>
+                  ))}
+                  
+                  {/* 追加メニューの合計 */}
+                  <div className="flex justify-between pt-1 text-sm font-medium">
+                    <span>追加メニュー合計:</span>
+                    <span>
+                      ¥{reservation.reservation_menu_items.reduce((sum, item) => sum + item.price, 0).toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {/* 総合計 */}
+            {reservation.reservation_menu_items && reservation.reservation_menu_items.length > 0 && (
+              <div className="bg-gray-100 p-2 rounded-md mt-2">
+                <div className="flex justify-between font-bold">
+                  <span>総合計金額:</span>
+                  <span className="text-orange-600">
+                    ¥{(
+                      (reservation.menu_id && reservation.menu_items?.price ? reservation.menu_items.price : 0) +
+                      (reservation.coupon_id && reservation.coupons?.price ? reservation.coupons.price : 0) +
+                      reservation.reservation_menu_items.reduce((sum, item) => sum + item.price, 0)
+                    ).toLocaleString()}
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
 
           <p>
             <strong>担当スタッフ:</strong> {reservation.staff_name}

@@ -31,10 +31,8 @@ interface ReservationRootProps {
 
 function ReservationContent({ userId }: ReservationRootProps) {
   const [activeStep, setActiveStep] = useState(0);
-  const [menuSelectionCompleted, setMenuSelectionCompleted] = useState(false);
   const {
     selectedMenus,
-    setSelectedMenus,
     selectedStaff,
     setSelectedStaff,
     setSelectedDateTime,
@@ -50,22 +48,7 @@ function ReservationContent({ userId }: ReservationRootProps) {
   };
 
   const handleBack = () => {
-    if (activeStep === 0 && menuSelectionCompleted) {
-      setMenuSelectionCompleted(false);
-    } else {
-      setActiveStep((prevActiveStep) => prevActiveStep - 1);
-    }
-  };
-
-  const handleMenuSelect = (
-    menuId: string,
-    name: string,
-    price: number,
-    duration: number
-  ) => {
-    setSelectedMenus([{ id: menuId, name, price, duration }]);
-    setMenuSelectionCompleted(true);
-    handleNext();
+    setActiveStep((prevActiveStep) => prevActiveStep - 1);
   };
 
   const handleStaffSelect = (staff: { id: string; name: string } | null) => {
@@ -98,9 +81,8 @@ function ReservationContent({ userId }: ReservationRootProps) {
       case 0:
         return (
           <MenuSelection
-            onSelectMenu={(menuId, name, price, duration) =>
-              handleMenuSelect(menuId, name, price, duration)
-            }
+            onNext={handleNext}
+            onBack={handleBack}
             userId={userId}
           />
         );
@@ -133,7 +115,6 @@ function ReservationContent({ userId }: ReservationRootProps) {
             onBack={handleBack}
             onPaymentComplete={handlePaymentComplete}
             userId={userId}
-            selectedMenuId={selectedMenus[0]?.id || ""}
           />
         );
       case 5:
@@ -145,7 +126,7 @@ function ReservationContent({ userId }: ReservationRootProps) {
 
   return (
     <Layout>
-      <Box sx={{ padding: "0 16px" }}>
+      <Box sx={{ padding: "0 16px", paddingBottom: activeStep === 0 ? "72px" : "16px" }}>
         {/* userId を渡します */}
         <ReservationHeader currentStep={activeStep} userId={userId} />
         {getStepContent(activeStep)}

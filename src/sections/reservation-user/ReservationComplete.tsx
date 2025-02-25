@@ -171,9 +171,17 @@ export default function ReservationComplete({
         throw new Error("予約日時が選択されていません");
       }
 
+      // メインメニュー（最初のメニュー）のIDを取得
+      const mainMenuId = selectedMenus[0]?.id;
+      
+      // 追加メニュー（2番目以降のメニュー）のみを抽出
+      const additionalMenus = selectedMenus.length > 1 
+        ? selectedMenus.slice(1) 
+        : [];
+        
       const reservationData = {
         userId,
-        menuId: selectedMenus[0]?.id,
+        menuId: mainMenuId,
         staffId: selectedStaff?.id,
         startTime: selectedDateTime.start.toISOString(),
         endTime: selectedDateTime.end.toISOString(),
@@ -186,6 +194,7 @@ export default function ReservationComplete({
         paymentMethodId: paymentInfo?.paymentMethodId,
         customerEmail: customerInfo.email,
         customerId: customerInfo.customerId,
+        selectedMenus: additionalMenus, // メインメニュー以外の追加メニューのみを送信
       };
 
       console.log("予約情報です:", reservationData);

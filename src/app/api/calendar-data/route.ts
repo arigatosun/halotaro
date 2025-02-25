@@ -56,6 +56,8 @@ function formatReservation(reservation: any) {
     is_staff_schedule: reservation.is_staff_schedule || false,
     editable: reservation.is_staff_schedule === true,
     is_hair_sync: reservation.is_hair_sync || false,
+    // 複数メニュー情報を含める
+    reservation_menu_items: reservation.reservation_menu_items || [],
     // memo フィールドを追加（なければ空文字）
     memo: reservation.memo || "",
   };
@@ -99,7 +101,7 @@ export async function GET(request: Request) {
     // 表示対象のステータスリスト
     const includedStatuses = ["confirmed", "paid", "staff"];
 
-    // 予約データの取得（memo カラムも含む）
+    // 予約データの取得（memo カラムと複数メニュー情報も含む）
     const { data: reservations, error: reservationError } = await supabase
       .from("reservations")
       .select(
@@ -113,6 +115,7 @@ export async function GET(request: Request) {
         menu_items (id, name, duration, price),
         staff (id, name, schedule_order),
         coupons!fk_coupon (id, name, duration, price),
+        reservation_menu_items (id, menu_id, coupon_id, name, price, duration),
         memo
       `
       )

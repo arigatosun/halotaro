@@ -681,7 +681,8 @@ const DateSelection: React.FC<DateSelectionProps> = ({
       string,
       Record<string, string | null>
     > = {};
-    const duration = selectedMenus[0]?.duration || 60;
+    // 複数メニューの合計所要時間を計算
+    const duration = selectedMenus.reduce((total, menu) => total + menu.duration, 0) || 60;
 
     // 全スタッフの予約から時間スロットごとの予約数を計算
     // すべての予約のリストを取得
@@ -881,7 +882,8 @@ const DateSelection: React.FC<DateSelectionProps> = ({
       "YYYY-MM-DD HH:mm",
       "Asia/Tokyo"
     );
-    const duration = selectedMenus[0]?.duration || 60;
+    // 複数メニューの合計所要時間を計算
+    const duration = selectedMenus.reduce((total, menu) => total + menu.duration, 0) || 60;
     const endDateTime = moment(startDateTime).add(duration, "minutes");
 
     // 全ての予約を取得

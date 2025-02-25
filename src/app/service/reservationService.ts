@@ -182,6 +182,7 @@ export async function getMaxCancelPolicyDays(userId: string): Promise<number> {
 /**
  * create_reservation RPC を呼び出し予約を作成し、
  * reservation_id と reservation_customer_id を返す
+ * selectedMenus が複数ある場合は追加のメニューを reservation_menu_items に保存
  */
 export async function createReservation(
   body: CreateReservationBody
@@ -189,7 +190,7 @@ export async function createReservation(
   const { userId, startTime, endTime, totalPrice, customerInfo, paymentInfo } =
     body;
 
-  // メニュー or クーポンの判定
+  // メインメニュー or クーポンの判定
   const { menuId: p_menu_id, couponId: p_coupon_id } =
     await fetchMenuOrCouponInfo(body.menuId);
 
@@ -264,9 +265,53 @@ export async function createReservation(
     throw new Error("予約IDまたは予約顧客IDの取得に失敗しました");
   }
 
+  const reservationId = data[0].reservation_id as string;
+  const reservationCustomerId = data[0].reservation_customer_id as string;
+
+  // 追加メニューがある場合、reservation_menu_items テーブルに保存
+  if (body.selectedMenus && body.selectedMenus.length > 0) {
+    try {
+      // セーフティチェック: フロントエンドで除外されるはずだが、念のためメインメニューと同じIDを持つものを除外
+      const mainMenuId = body.menuId;
+      const additionalMenus = body.selectedMenus.filter(menu => menu.id !== mainMenuId);
+      
+      if (additionalMenus.length > 0) {
+        console.log(`Processing ${additionalMenus.length} additional menu items`);
+        
+        // 追加メニュー内の各メニューを処理
+        const menuItems = additionalMenus.map(menu => ({
+          reservation_id: reservationId,
+          menu_id: /^\d+$/.test(menu.id) ? parseInt(menu.id, 10) : null,
+          coupon_id: /^\d+$/.test(menu.id) ? null : menu.id,
+          name: menu.name,
+          price: menu.price,
+          duration: menu.duration
+        }));
+
+        // reservation_menu_itemsテーブルに一括挿入
+        const { error: insertError } = await supabase
+          .from("reservation_menu_items")
+          .insert(menuItems);
+
+        if (insertError) {
+          console.error("Error inserting menu items:", insertError);
+        } else {
+          console.log(`Successfully inserted ${menuItems.length} additional menu items`);
+        }
+      } else {
+        console.log("No additional menu items to insert after filtering");
+      }
+    } catch (menuError) {
+      console.error("Failed to save additional menu items:", menuError);
+      // メニュー保存のエラーは予約作成自体を失敗させない
+    }
+  } else {
+    console.log("No additional menu items provided");
+  }
+
   return {
-    reservationId: data[0].reservation_id as string,
-    reservationCustomerId: data[0].reservation_customer_id as string,
+    reservationId,
+    reservationCustomerId,
   };
 }
 

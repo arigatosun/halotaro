@@ -47,7 +47,7 @@ export async function GET(
 
     const userId = userData.user.id;
 
-    // reservationsテーブルから予約情報を取得し、menu_items、staff、reservation_customersをリレーション
+    // reservationsテーブルから予約情報を取得し、menu_items、staff、reservation_customers、reservation_menu_itemsをリレーション
     const { data: reservation, error } = await supabase
       .from("reservations")
       .select(
@@ -75,6 +75,14 @@ export async function GET(
           id,
           name,
           name_kana
+        ),
+        reservation_menu_items (
+          id,
+          menu_id,
+          coupon_id,
+          name,
+          price,
+          duration
         )
       `
       )

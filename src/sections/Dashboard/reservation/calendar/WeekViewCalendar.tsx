@@ -17,18 +17,26 @@ const DayViewCalendar: React.FC<DayViewCalendarProps> = ({
   staffList,
   onEventClick,
 }) => {
-  const events: EventInput[] = reservations.map(reservation => ({
-    id: reservation.id,
-    resourceId: reservation.staff_id ?? undefined, // null の場合は undefined に変換
-    start: new Date(reservation.start_time),
-    end: new Date(reservation.end_time),
-    title: reservation.customer_name,
-    extendedProps: {
-      menuName: reservation.menu_name,
-      staffName: reservation.staff_name,
-      // その他の必要な情報
-    },
-  }));
+  const events: EventInput[] = reservations.map(reservation => {
+    // すべてのメニュー項目の名前を連結
+    const allMenuNames = [
+      reservation.menu_name,
+      ...(reservation.reservation_menu_items?.map(item => item.name) || [])
+    ].filter(Boolean).join(', ');
+    
+    return {
+      id: reservation.id,
+      resourceId: reservation.staff_id ?? undefined, // null の場合は undefined に変換
+      start: new Date(reservation.start_time),
+      end: new Date(reservation.end_time),
+      title: reservation.customer_name,
+      extendedProps: {
+        menuName: allMenuNames, // すべてのメニュー名を含める
+        staffName: reservation.staff_name,
+        // その他の必要な情報
+      },
+    };
+  });
 
   const calendarOptions: CalendarOptions = {
     plugins: [resourceTimelinePlugin],

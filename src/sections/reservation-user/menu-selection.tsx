@@ -1,31 +1,36 @@
 import React, { useState, useMemo } from "react";
 import Image from "next/image";
-import { Card, CardContent } from "@/components/ui/card";
+import { 
+  Card, 
+  CardContent, 
+  CardHeader, 
+  CardTitle, 
+  CardFooter 
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useReservation } from "@/contexts/reservationcontext";
 import { useMenuItems } from "@/hooks/useMenuItems";
 import { useCoupons } from "@/hooks/useCoupons";
 import { MenuItem } from "@/types/menuItem";
-import { Search, Tag, ChevronRight, ImageOff, Clock } from "lucide-react";
+import { Search, Tag, ChevronRight, ImageOff, Clock, Plus, X, ShoppingCart, ChevronDown, ChevronUp } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { CircularProgress } from "@mui/material";
+import { Separator } from "@/components/ui/separator";
+import { Badge } from "@/components/ui/badge";
 
 interface MenuSelectionProps {
-  onSelectMenu: (
-    menuId: string,
-    name: string,
-    price: number,
-    duration: number
-  ) => void;
+  onNext: () => void;
+  onBack?: () => void;
   userId: string;
 }
 
 export default function MenuSelection({
-  onSelectMenu,
+  onNext,
+  onBack,
   userId,
 }: MenuSelectionProps) {
-  const { setSelectedMenus } = useReservation();
+  const { selectedMenus, setSelectedMenus, calculateTotalAmount } = useReservation();
   const {
     menuItems,
     loading: menuLoading,
@@ -43,12 +48,13 @@ export default function MenuSelection({
   // 検索ワード
   const [searchTerm, setSearchTerm] = useState("");
 
+  // 合計時間を計算する関数
+  const calculateTotalDuration = (menus) => {
+    return menus.reduce((total, menu) => total + menu.duration, 0);
+  };
+
   // メニュー + クーポンをまとめる
   const allItems = useMemo(() => {
-    // もしクーポン側のアイテムに "isCoupon = true" などを付与しておきたい場合は、フック内などで付与するか、
-    // ここで map して付与することもできます
-    // 例: coupons.map(item => ({ ...item, isCoupon: true }))
-    // ただし useCoupons の実装によって変わります
     const mappedCoupons = coupons.map((c) => ({
       ...c,
       isCoupon: true, // クーポンを判別するために付与
@@ -64,15 +70,17 @@ export default function MenuSelection({
   // メニュー or クーポンを選択したときのハンドラ
   const handleItemSelect = (item: MenuItem) => {
     console.log("Selected item:", item);
-    setSelectedMenus([
-      {
-        id: item.id.toString(),
-        name: item.name,
-        price: item.price,
-        duration: item.duration,
-      },
-    ]);
-    onSelectMenu(item.id.toString(), item.name, item.price, item.duration);
+    setSelectedMenus(prev => [...prev, {
+      id: item.id.toString(),
+      name: item.name,
+      price: item.price,
+      duration: item.duration,
+    }]);
+  };
+
+  // メニューを削除するハンドラ
+  const handleRemoveItem = (index: number) => {
+    setSelectedMenus(prev => prev.filter((_, i) => i !== index));
   };
 
   // タブや検索ワードに応じて表示するリストをフィルタリング
@@ -124,9 +132,146 @@ export default function MenuSelection({
     );
   }
 
+  // 選択したメニュー一覧コンポーネント（モバイルとPC向け）
+  const SelectedMenusList = () => (
+    <Card className="mb-6 border-orange-200 shadow-md">
+      <CardHeader className="bg-orange-50 pb-2">
+        <CardTitle className="text-lg flex items-center">
+          <ShoppingCart className="mr-2 h-5 w-5 text-orange-500" />
+          選択したメニュー
+          {selectedMenus.length > 0 && (
+            <Badge className="ml-2 bg-orange-500">{selectedMenus.length}</Badge>
+          )}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="pt-4">
+        {selectedMenus.length === 0 ? (
+          <p className="text-gray-500 text-center py-2">メニューを選択してください</p>
+        ) : (
+          <div className="space-y-3">
+            {selectedMenus.map((menu, index) => (
+              <div key={index} className="flex justify-between items-center pb-2 border-b last:border-b-0">
+                <div className="flex-1">
+                  <p className="font-medium">{menu.name}</p>
+                  <p className="text-sm text-gray-500">{menu.duration}分</p>
+                </div>
+                <div className="flex items-center">
+                  <p className="font-semibold mr-3">¥{menu.price.toLocaleString()}</p>
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    className="h-8 w-8 p-0 text-gray-500 hover:text-red-500"
+                    onClick={() => handleRemoveItem(index)}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+            
+            <Separator className="my-3" />
+            
+            <div className="space-y-1">
+              <div className="flex justify-between font-bold">
+                <span>合計金額</span>
+                <span className="text-orange-600">¥{calculateTotalAmount(selectedMenus).toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between text-sm text-gray-600">
+                <span>合計時間</span>
+                <span>{calculateTotalDuration(selectedMenus)}分</span>
+              </div>
+            </div>
+          </div>
+        )}
+      </CardContent>
+      <CardFooter className="bg-gray-50">
+        <Button 
+          className="w-full bg-orange-500 hover:bg-orange-600"
+          disabled={selectedMenus.length === 0}
+          onClick={onNext}
+        >
+          選択を完了して次へ進む
+          <ChevronRight className="ml-1 w-4 h-4" />
+        </Button>
+      </CardFooter>
+    </Card>
+  );
+  
+  // 固定メニュー選択バー（画面下部に固定表示）
+  const FixedMenuSelectionBar = () => {
+    const [isExpanded, setIsExpanded] = useState(false);
+    
+    // メニューが選択されていなければ表示しない
+    if (selectedMenus.length === 0) return null;
+    
+    return (
+      <div className="fixed bottom-0 left-0 w-full bg-white border-t border-gray-200 shadow-lg z-50">
+        {/* 常に表示される部分 */}
+        <div className="flex items-center justify-between p-3 md:p-4">
+          <button 
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="flex items-center space-x-2 text-gray-700"
+          >
+            <ShoppingCart className="h-5 w-5 text-orange-500" />
+            <Badge className="ml-2 bg-orange-500">{selectedMenus.length}</Badge>
+            <span className="font-medium hidden md:inline ml-2">選択済みメニュー</span>
+            {isExpanded ? (
+              <ChevronDown className="h-4 w-4 ml-1" />
+            ) : (
+              <ChevronUp className="h-4 w-4 ml-1" />
+            )}
+          </button>
+          
+          <div className="flex items-center space-x-3 md:space-x-4">
+            <div className="text-right">
+              <p className="text-xs md:text-sm text-gray-500">{calculateTotalDuration(selectedMenus)}分</p>
+              <p className="font-bold text-orange-600 text-sm md:text-base">¥{calculateTotalAmount(selectedMenus).toLocaleString()}</p>
+            </div>
+            
+            <Button 
+              className="bg-orange-500 hover:bg-orange-600 text-xs md:text-sm py-1 px-3 md:py-2 md:px-4 h-auto"
+              onClick={onNext}
+            >
+              次へ進む
+              <ChevronRight className="ml-1 w-3 h-3 md:w-4 md:h-4" />
+            </Button>
+          </div>
+        </div>
+        
+        {/* 展開したときのみ表示される詳細 */}
+        {isExpanded && (
+          <div className="px-3 md:px-4 pb-3 md:pb-4 max-h-60 overflow-y-auto bg-gray-50">
+            <Separator className="my-2" />
+            <div className="space-y-2">
+              {selectedMenus.map((menu, index) => (
+                <div key={index} className="flex justify-between items-center py-1">
+                  <div className="flex-1">
+                    <p className="font-medium text-sm">{menu.name}</p>
+                    <p className="text-xs text-gray-500">{menu.duration}分</p>
+                  </div>
+                  <div className="flex items-center">
+                    <p className="font-semibold mr-2 text-sm">¥{menu.price.toLocaleString()}</p>
+                    <Button 
+                      variant="ghost" 
+                      size="sm"
+                      className="h-6 w-6 p-0 text-gray-500 hover:text-red-500"
+                      onClick={() => handleRemoveItem(index)}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   // 個別のメニュー/クーポンカードを描画する関数
   const renderItem = (item: MenuItem) => (
-    <Card key={item.id} className="mb-4">
+    <Card key={item.id} className="mb-4 hover:shadow-md transition-shadow duration-200">
       <CardContent className="p-0 overflow-hidden">
         <div className="flex flex-col md:flex-row">
           {/* 画像部分 */}
@@ -172,8 +317,8 @@ export default function MenuSelection({
                   onClick={() => handleItemSelect(item)}
                   className="bg-orange-500 hover:bg-orange-600 text-white text-xs py-1 px-2 h-auto md:text-sm md:py-2 md:px-4"
                 >
-                  選択
-                  <ChevronRight className="ml-1 w-3 h-3 md:w-4 md:h-4" />
+                  追加
+                  <Plus className="ml-1 w-3 h-3 md:w-4 md:h-4" />
                 </Button>
               </div>
             </div>
@@ -184,10 +329,13 @@ export default function MenuSelection({
   );
 
   return (
-    <div className="space-y-4 p-2 md:p-4">
+    <div className="space-y-4 p-2 md:p-4 pb-28">
       <h2 className="text-2xl font-bold mb-4">
         クーポン・メニューを選択してください
       </h2>
+
+      {/* 選択済みメニュー一覧 */}
+      <SelectedMenusList />
 
       {/* 検索入力 */}
       <div className="mb-4">
@@ -224,6 +372,9 @@ export default function MenuSelection({
           {filteredItems.map(renderItem)}
         </TabsContent>
       </Tabs>
+      
+      {/* 固定メニュー選択バー */}
+      <FixedMenuSelectionBar />
     </div>
   );
 }

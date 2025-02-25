@@ -9,7 +9,6 @@ interface ReservationConfirmationAndPaymentProps {
   onBack: () => void;
   onPaymentComplete: (status: string, paymentIntent?: any) => void;
   userId: string;
-  selectedMenuId: string;
 }
 
 const ReservationConfirmationAndPayment: React.FC<ReservationConfirmationAndPaymentProps> = ({
@@ -17,7 +16,6 @@ const ReservationConfirmationAndPayment: React.FC<ReservationConfirmationAndPaym
   onBack,
   onPaymentComplete,
   userId,
-  selectedMenuId,
 }) => {
   const [showPayment, setShowPayment] = useState(false);
   const { selectedDateTime, reservationCustomerId, customerInfo, selectedMenus } = useReservation();
@@ -51,9 +49,7 @@ const ReservationConfirmationAndPayment: React.FC<ReservationConfirmationAndPaym
             onPaymentComplete(status, paymentIntent);
           }}
           userId={userId}
-          //selectedMenuId={selectedMenuId}
           isOver30Days={isOver30Days}
-          //reservationCustomerId={reservationCustomerId}
           totalAmount={totalAmount}
         />
       )}

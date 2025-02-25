@@ -28,6 +28,14 @@ export interface Reservation {
     duration: number;
     price: number;
   };
+  reservation_menu_items?: {
+    id: string;
+    menu_id?: number;
+    coupon_id?: string;
+    name: string;
+    price: number;
+    duration: number;
+  }[];
   scraped_menu?: string;
   memo?: string | null;
 }
