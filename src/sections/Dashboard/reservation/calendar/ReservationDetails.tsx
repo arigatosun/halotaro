@@ -87,18 +87,14 @@ const ReservationDetails: React.FC<ReservationDetailsProps> = ({
                       ? reservation.coupons?.name
                       : ""}
                   </span>
-                  {reservation.menu_id && reservation.menu_items?.duration && (
-                    <span className="text-gray-500 text-sm ml-2">({reservation.menu_items.duration}分)</span>
+                  {reservation.menu_id && reservation.reservation_menu_items && reservation.reservation_menu_items.length > 0 && reservation.reservation_menu_items[0]?.duration && (
+                    <span className="text-gray-500 text-sm ml-2">({reservation.reservation_menu_items[0].duration}分)</span>
                   )}
                   {reservation.coupon_id && reservation.coupons?.duration && (
                     <span className="text-gray-500 text-sm ml-2">({reservation.coupons.duration}分)</span>
                   )}
                   <span className="font-semibold ml-auto">
-                    ¥{(reservation.menu_id && reservation.menu_items?.price 
-                      ? reservation.menu_items.price 
-                      : reservation.coupon_id && reservation.coupons?.price 
-                      ? reservation.coupons.price 
-                      : 0).toLocaleString()}
+                    ¥{(reservation.menu_id && reservation.reservation_menu_items && reservation.reservation_menu_items.length > 0 && reservation.reservation_menu_items[0]?.price ? reservation.reservation_menu_items[0].price : 0).toLocaleString()}
                   </span>
                 </div>
               ) : (
@@ -138,9 +134,9 @@ const ReservationDetails: React.FC<ReservationDetailsProps> = ({
                   <span>総合計金額:</span>
                   <span className="text-orange-600">
                     ¥{(
-                      (reservation.menu_id && reservation.menu_items?.price ? reservation.menu_items.price : 0) +
+                      (reservation.menu_id && reservation.reservation_menu_items && reservation.reservation_menu_items.length > 0 && reservation.reservation_menu_items[0]?.price ? reservation.reservation_menu_items[0].price : 0) +
                       (reservation.coupon_id && reservation.coupons?.price ? reservation.coupons.price : 0) +
-                      reservation.reservation_menu_items.reduce((sum, item) => sum + item.price, 0)
+                      (reservation.reservation_menu_items ? reservation.reservation_menu_items.reduce((sum, item) => sum + item.price, 0) : 0)
                     ).toLocaleString()}
                   </span>
                 </div>

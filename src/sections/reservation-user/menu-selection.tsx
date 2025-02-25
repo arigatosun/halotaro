@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { CircularProgress } from "@mui/material";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
+import { SelectedMenuItem } from "@/lib/types";
 
 interface MenuSelectionProps {
   onNext: () => void;
@@ -49,7 +50,7 @@ export default function MenuSelection({
   const [searchTerm, setSearchTerm] = useState("");
 
   // 合計時間を計算する関数
-  const calculateTotalDuration = (menus) => {
+  const calculateTotalDuration = (menus: SelectedMenuItem[]) => {
     return menus.reduce((total, menu) => total + menu.duration, 0);
   };
 

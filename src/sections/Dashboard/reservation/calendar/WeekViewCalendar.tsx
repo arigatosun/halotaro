@@ -18,11 +18,8 @@ const DayViewCalendar: React.FC<DayViewCalendarProps> = ({
   onEventClick,
 }) => {
   const events: EventInput[] = reservations.map(reservation => {
-    // すべてのメニュー項目の名前を連結
-    const allMenuNames = [
-      reservation.menu_name,
-      ...(reservation.reservation_menu_items?.map(item => item.name) || [])
-    ].filter(Boolean).join(', ');
+    // メニュー名を取得
+    const menuName = reservation.menu_name;
     
     return {
       id: reservation.id,
@@ -31,7 +28,7 @@ const DayViewCalendar: React.FC<DayViewCalendarProps> = ({
       end: new Date(reservation.end_time),
       title: reservation.customer_name,
       extendedProps: {
-        menuName: allMenuNames, // すべてのメニュー名を含める
+        menuName: menuName,
         staffName: reservation.staff_name,
         // その他の必要な情報
       },
