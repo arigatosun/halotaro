@@ -2,6 +2,7 @@
 
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import moment from "moment-timezone";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -88,7 +89,7 @@ export async function GET(request: Request) {
     // 予約の取得（対応可能なスタッフのみ）
     let query = supabase
       .from("reservations")
-      .select("staff_id, start_time, end_time, is_staff_schedule")
+      .select("staff_id, start_time, end_time, is_staff_schedule, status")
       .in("staff_id", availableStaffIds)
       .gte("start_time", `${startDate}T00:00:00`)
       .lte("end_time", `${endDate}T23:59:59`);
@@ -115,9 +116,10 @@ export async function GET(request: Request) {
         endTime: reservation.end_time,
         staffId: reservation.staff_id,
         is_staff_schedule: reservation.is_staff_schedule,
+        status: reservation.status,
       });
       return acc;
-    }, {} as Record<string, { startTime: string; endTime: string; staffId: string; is_staff_schedule: boolean }[]>);
+    }, {} as Record<string, { startTime: string; endTime: string; staffId: string; is_staff_schedule: boolean; status: string }[]>);
 
     return NextResponse.json(reservationsByDate);
   } catch (error) {
