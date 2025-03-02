@@ -83,7 +83,7 @@ export async function GET(request: Request) {
               category_id,
               categories:categories!fk_category ( id, name )
             ),
-            coupon:coupons!fk_coupon_id ( id, name, price, category, description ),
+            coupon:coupons!fk_coupon ( id, name, price, category, description ),
             accounting_information:accounting_information!accounting_information_reservation_fkey (
               items,
               total_price

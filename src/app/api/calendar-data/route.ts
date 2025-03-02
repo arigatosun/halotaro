@@ -643,28 +643,96 @@ export async function PUT(request: Request) {
     }
 
     if (customerId) {
-      const customerUpdateData: any = {};
-      if (updateFields.customer_name !== undefined)
-        customerUpdateData.name = updateFields.customer_name;
-      if (updateFields.customer_email !== undefined)
-        customerUpdateData.email = updateFields.customer_email;
-      if (updateFields.customer_phone !== undefined)
-        customerUpdateData.phone = updateFields.customer_phone;
-      if (updateFields.customer_name_kana !== undefined)
-        customerUpdateData.name_kana = updateFields.customer_name_kana;
-      if (updateFields.coupon_id !== undefined)
-        customerUpdateData.coupon_id = updateFields.coupon_id;
+      // Update customer information if provided
+      // Extract customer fields from updateFields
+      const {
+        customer_last_name,
+        customer_first_name,
+        customer_last_name_kana,
+        customer_first_name_kana,
+        customer_email,
+        customer_phone,
+      } = updateFields;
 
-      const { error: customerUpdateError } = await supabase
-        .from("reservation_customers")
-        .update(customerUpdateData)
-        .eq("id", customerId);
+      // Log update fields for debugging
+      console.log("[calendar-data:PUT] Customer update fields:", {
+        customerId,
+        customer_last_name,
+        customer_first_name,
+        customer_last_name_kana,
+        customer_first_name_kana,
+        customer_email,
+        customer_phone,
+      });
 
-      if (customerUpdateError) {
-        console.warn(
-          "Warning: Could not update customer information:",
-          customerUpdateError
-        );
+      // Build the customer update data object
+      const customerUpdateData: Record<string, any> = {};
+
+      // Set name if both last_name and first_name exist
+      if (
+        customer_last_name !== undefined ||
+        customer_first_name !== undefined
+      ) {
+        const lastName = customer_last_name || "";
+        const firstName = customer_first_name || "";
+        customerUpdateData.name = `${lastName} ${firstName}`.trim();
+      }
+
+      // Set name_kana if both last_name_kana and first_name_kana exist
+      if (
+        customer_last_name_kana !== undefined ||
+        customer_first_name_kana !== undefined
+      ) {
+        const lastNameKana = customer_last_name_kana || "";
+        const firstNameKana = customer_first_name_kana || "";
+        customerUpdateData.name_kana =
+          `${lastNameKana} ${firstNameKana}`.trim();
+      }
+
+      // Add other customer fields if they exist
+      if (customer_email !== undefined) {
+        customerUpdateData.email = customer_email;
+      }
+
+      if (customer_phone !== undefined) {
+        customerUpdateData.phone = customer_phone;
+      }
+
+      // Always update the updated_at timestamp
+      customerUpdateData.updated_at = new Date().toISOString();
+
+      // Log customer update data
+      console.log(
+        "[calendar-data:PUT] Customer update data:",
+        customerUpdateData
+      );
+
+      // Only update if there are fields to update
+      if (Object.keys(customerUpdateData).length > 0) {
+        try {
+          const { data: customerData, error: customerError } = await supabase
+            .from("reservation_customers")
+            .update(customerUpdateData)
+            .eq("id", customerId)
+            .select();
+
+          if (customerError) {
+            console.error(
+              "[calendar-data:PUT] Error updating customer:",
+              customerError
+            );
+          } else {
+            console.log(
+              "[calendar-data:PUT] Updated customer data:",
+              customerData
+            );
+          }
+        } catch (error) {
+          console.error(
+            "[calendar-data:PUT] Exception updating customer:",
+            error
+          );
+        }
       }
     }
 

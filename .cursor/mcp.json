@@ -1,0 +1,7 @@
+{
+    "mcpServers": {
+        "supabase": {
+            "command": "C:\\Users\\kkttu\\supabase-mcp-server\\.venv\\Scripts\\supabase-mcp-server.exe"
+        }
+    }
+}
